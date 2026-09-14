@@ -1,0 +1,7 @@
+#!/bin/sh
+# Alloy reads the certificate for its own listener once at startup, so this is
+# a restart. The journal cursor is persisted under /var/lib/alloy/data, so
+# nothing is lost or re-sent; Prometheus misses at most one scrape.
+#
+# 15: after node-exporter (10), before the heavier service restarts (20).
+exec systemctl try-restart alloy

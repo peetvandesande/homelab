@@ -73,6 +73,35 @@ scrape_configs:
       - targets: ['192.168.1.61:9100']
         labels: {role: navidrome }
 
+  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same ten
+  # targets as `node` - keep the two lists identical; a host in one and not
+  # the other is either unmonitored or unlogged.
+  - job_name: alloy
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.21:12345']
+        labels: {role: pve-host }
+      - targets: ['192.168.1.50:12345']
+        labels: {role: themis }
+      - targets: ['192.168.1.51:12345']
+        labels: {role: delphi }
+      - targets: ['192.168.1.52:12345']
+        labels: {role: pythia }
+      - targets: ['192.168.1.53:12345']
+        labels: {role: prometheus }
+      - targets: ['192.168.1.54:12345']
+        labels: {role: grafana }
+      - targets: ['192.168.1.55:12345']
+        labels: {role: pistis }
+      - targets: ['192.168.1.56:12345']
+        labels: {role: loki }
+      - targets: ['192.168.1.60:12345']
+        labels: {role: jellyfin }
+      - targets: ['192.168.1.61:12345']
+        labels: {role: navidrome }
+
   # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
   # on 127.0.0.1:9221. Pre-existing.
   - job_name: pve

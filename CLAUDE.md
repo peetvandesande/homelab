@@ -109,7 +109,9 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 
 Prometheus (192.168.1.53) is used for **all** monitoring; Grafana
 (192.168.1.54) for dashboards and alerting. Loki (192.168.1.56) is the log
-store, wired into Grafana as a datasource — nothing ships logs to it yet.
+store, wired into Grafana as a datasource. Every enrolled host ships its
+systemd journal to it via Grafana Alloy (`alloy/`, one directory for all ten
+hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
 `/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the
@@ -127,7 +129,9 @@ service is not finished:
    `FLEET` in `ca/scripts/enrol.sh` — the `node` job for host metrics, plus a
    service-specific job if it exports its own. Give it `scheme: https` and the
    `tls_config` block if the service holds a lab certificate.
-4. `prometheus/scripts/deploy.sh`, then `prometheus/scripts/verify.sh`.
+4. Ship its logs: `alloy/scripts/deploy.sh <ip>`, and add the host to the
+   `alloy` job in `prometheus.yml` alongside its `node` entry.
+5. `prometheus/scripts/deploy.sh`, then `prometheus/scripts/verify.sh`.
 
 Prometheus targets are static and hand-maintained, so they rot when a service
 moves. They have been wrong before — the `node` job was scraping .50/.51 as
@@ -153,8 +157,8 @@ plus lenora.
   the cutover, not before.
 - **Per-service TLS config lives in that service's own top-level directory**
   (`grafana/`, `jellyfin/`, `loki/`, `navidrome/`, `prometheus/`), one per
-  container. `node-exporter/` is the exception: one service on ten hosts, so one
-  directory rather than ten copies.
+  container. `node-exporter/` and `alloy/` are the exceptions: one service on
+  ten hosts, so one directory rather than ten copies.
 - **Deploy order is load-bearing**: `node-exporter/` → `prometheus/` →
   everything else. The exporters go TLS first and Prometheus learns to speak
   TLS second, so there is a window where scrapes fail. Do them together.

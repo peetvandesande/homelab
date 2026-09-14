@@ -1,0 +1,82 @@
+// Grafana Alloy: ship this host's journal to Loki. Managed from homelab/alloy -
+// edit there, not on the host. Byte-identical on all ten hosts; the only
+// per-host value is the hostname, which Alloy reads at runtime.
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+// Alloy's own HTTP server (/metrics, /-/ready and the debug UI) over TLS off
+// the lab certificate. The listen address is a flag, not config - see
+// /etc/default/alloy. Alloy runs as user alloy and reads the key through the
+// tlscert group named in the systemd drop-in.
+http {
+  tls {
+    cert_file   = "/etc/homelab-tls/host.crt"
+    key_file    = "/etc/homelab-tls/host.key"
+    min_version = "TLS12"
+  }
+}
+
+// The journal is the single log source: no host runs rsyslog, and everything
+// on Debian 13 logs through systemd. path is left empty so sd_journal opens
+// the default set, which covers a persistent /var/log/journal (the
+// containers) and a volatile /run/log/journal (lenora) alike.
+loki.source.journal "host" {
+  // Just under Loki's reject_old_samples_max_age (168h): on the first run
+  // Alloy backfills everything the journal still holds without the oldest
+  // batch being rejected at the boundary. After that the cursor in
+  // /var/lib/alloy/data takes over and this only matters after a long outage.
+  max_age       = "166h"
+  labels        = { host = constants.hostname }
+  relabel_rules = loki.relabel.journal.rules
+  forward_to    = [loki.write.loki.receiver]
+}
+
+// Three labels besides host, all bounded: the unit, the syslog identifier
+// (kernel, audit and cron lines have no unit) and the priority keyword. Do
+// not promote PID, message fields or anything else unbounded - every value
+// is a Loki stream.
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  // Login sessions are session-c<N>.scope with N incrementing forever, so
+  // every ssh login would otherwise be a new stream. Collapse them; the
+  // identifier (sshd-session, CRON) still says what the session was.
+  rule {
+    source_labels = ["unit"]
+    regex         = "session-.+\\.scope"
+    replacement   = "session.scope"
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    target_label  = "identifier"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+// The IP, not loki.home: nothing on this LAN resolves .home until the DHCP
+// cutover to Themis. Loki's certificate carries an IP SAN for this. Verified
+// against the lab root explicitly rather than the system store, so a push can
+// never silently trust some unrelated public CA.
+loki.write "loki" {
+  endpoint {
+    url = "https://192.168.1.56:3100/loki/api/v1/push"
+
+    tls_config {
+      ca_file = "/etc/homelab-tls/root_ca.crt"
+    }
+  }
+}

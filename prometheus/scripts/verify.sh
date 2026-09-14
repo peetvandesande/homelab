@@ -35,9 +35,9 @@ done
 # Anchored to indented config lines: an unanchored grep also matches the
 # explanatory comment at the top of the file and reports five.
 # Every job except `pve` should be https. pve targets a local exporter that
-# was never migrated (and is not running), so 6 of 7 is the correct answer.
+# was never migrated (and is not running), so 7 of 8 is the correct answer.
 n=$(ssh -o BatchMode=yes root@$HOST "grep -cE '^[[:space:]]+scheme: https' /etc/prometheus/prometheus.yml" 2>/dev/null)
-if [[ "$n" == 6 ]]; then pass "6 jobs configured with scheme: https (prometheus, node, jellyfin, navidrome, dns, loki)"
-else bad "6 jobs configured with scheme: https" "found $n - did a job lose its scheme?"; fi
+if [[ "$n" == 7 ]]; then pass "7 jobs configured with scheme: https (prometheus, node, alloy, jellyfin, navidrome, dns, loki)"
+else bad "7 jobs configured with scheme: https" "found $n - did a job lose its scheme?"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

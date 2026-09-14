@@ -33,8 +33,8 @@ the certificate and Loki will not start without it.
 5. **gRPC (`:9096`) is loopback-only.** Nothing outside the container needs it
    in single-binary mode, and it is not TLS.
 
-## Not done yet
+## Shippers
 
-Nothing ships logs to it. `verify.sh` pushes one line itself so the round-trip
-is proven, but the fleet-wide shipper (Alloy or promtail, one directory like
-`node-exporter/`) is the next piece.
+Every enrolled host runs Grafana Alloy (`alloy/`) and pushes its journal here
+over TLS. `limits_config.reject_old_samples_max_age` (168h) and Alloy's
+`max_age` (166h) are a pair — change one, change the other.

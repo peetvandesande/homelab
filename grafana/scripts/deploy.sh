@@ -18,4 +18,16 @@ $SSH "root@$HOST" '
   systemctl daemon-reload
 '
 restart_assert "$HOST" grafana-server
-echo "   grafana restarted"
+
+# restart_assert is not enough here. A provisioning error (a datasource file
+# Grafana cannot reconcile) makes it exit after a few seconds and
+# Restart=on-failure brings it straight back, so is-active flickers true while
+# the UI is in fact down. Only a 200 from the API means it came up.
+for _ in $(seq 1 24); do
+  curl -sS --max-time 5 --cacert ../ca/rootca/certs/root.crt -o /dev/null -f \
+    "https://$HOST:3000/api/health" 2>/dev/null && { echo "   grafana restarted and serving"; exit 0; }
+  sleep 5
+done
+echo "!! grafana is not serving after 2 minutes - crash-looping? check:"
+$SSH "root@$HOST" 'systemctl show grafana-server -p NRestarts; journalctl -u grafana-server --no-pager -n 200 -o cat | grep -i "provisioning error" | tail -2'
+exit 1

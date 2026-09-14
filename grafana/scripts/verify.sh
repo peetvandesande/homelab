@@ -26,7 +26,28 @@ else
 fi
 
 if ssh -o BatchMode=yes root@$HOST 'grep -q "url: https://192.168.1.53:9090" /etc/grafana/provisioning/datasources/prometheus.yaml' 2>/dev/null; then
-  pass "datasource is provisioned against https"
-else bad "datasource is provisioned against https" "still http, or the file moved"; fi
+  pass "prometheus datasource is provisioned against https"
+else bad "prometheus datasource is provisioned against https" "still http, or the file moved"; fi
+
+echo "== loki datasource"
+if ssh -o BatchMode=yes -o ConnectTimeout=5 root@$HOST \
+     'curl -sS --max-time 10 -o /dev/null https://192.168.1.56:3100/ready' 2>/dev/null; then
+  pass "grafana host reaches Loki over TLS using the system trust store"
+else
+  bad "grafana host reaches Loki over TLS using the system trust store" \
+      "the G2 root is not trusted on $HOST, or loki is down"
+fi
+
+# What Grafana actually loaded, read from its own database rather than the
+# provisioning file: exactly one loki datasource at the https URL, and no
+# hand-made stragglers (a provisioned datasource is read-only in the UI, and
+# "add data source" there creates an empty second one instead).
+ds=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
+import sqlite3
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+print(*[\"%s|%s\" % r for r in c.execute(\"select name,url from data_source where type=\x27loki\x27\")], sep=\"\n\")"' 2>/dev/null)
+if [[ "$ds" == "Loki|https://192.168.1.56:3100" ]]; then
+  pass "exactly one loki datasource: Loki at https://192.168.1.56:3100"
+else bad "exactly one loki datasource: Loki at https://192.168.1.56:3100" "got: ${ds:-none}"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

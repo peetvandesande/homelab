@@ -34,3 +34,19 @@ so doing it first leaves every dashboard broken in between.
 grafana's own container — does a plain `curl` with no `--cacert` reach
 Prometheus over TLS? — because that is the same system trust store Grafana
 uses. A pass there means the datasource can connect.
+
+4. **Never add or change `uid:` on a provisioned datasource that already
+   exists.** Grafana 13 looks the existing one up by that uid, fails with
+   "data source not found", and refuses to start — the whole UI goes down,
+   and `is-active` still flickers true because `Restart=on-failure` keeps
+   relaunching it. `deploy.sh` therefore waits for a 200 from `/api/health`
+   before reporting success. To pin a uid, delete the datasource in the UI
+   first so provisioning creates it fresh.
+
+## Datasources
+
+Both are provisioned from `root/etc/grafana/provisioning/datasources/` and
+read-only in the UI. "Add data source" there does not edit a provisioned one;
+it creates an empty duplicate (`loki-1`) beside it. Edit the file and deploy.
+`verify.sh` reads Grafana's own database to assert exactly one Loki datasource
+exists at the https URL, so a straggler fails the check.

@@ -3,12 +3,29 @@
 # Same shape as prometheus.yaml: https off the lab CA, verified against the
 # system trust store (tlsSkipVerify false), and an IP rather than loki.home
 # because nothing on this LAN resolves .home until the DHCP cutover to Themis.
+#
+# Provisioned datasources are read-only in the UI. "Add data source" there
+# does not edit this one; it creates a second, empty "loki-1" beside it.
+# Edit here and deploy instead.
+#
+# No uid, deliberately. Grafana 13 looks an existing provisioned datasource up
+# by the uid in this file, and if the one in its database was created without
+# one it fails with "data source not found" and REFUSES TO START - the whole
+# UI goes down, not just this datasource. To pin a uid, delete the Loki
+# datasource in the UI first, then add `uid:` here and deploy; provisioning
+# creates it fresh with that uid. Never add a uid to a live one.
 apiVersion: 1
+
 datasources:
   - name: Loki
     type: loki
     access: proxy
     url: https://192.168.1.56:3100
     isDefault: false
+    editable: false
     jsonData:
       tlsSkipVerify: false
+      # Explore and dashboards return at most this many lines per query.
+      maxLines: 1000
+      # Alloy stamps every line with host, unit, identifier and level - see
+      # alloy/root/etc/alloy/config.alloy.
