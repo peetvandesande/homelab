@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Pull SMART health from esther (ESXi) over SSH and push it to Loki.
+
+Runs hourly from esxi-smart.timer on the loki container. ESXi has no exporter
+and cannot run one, so this asks esxcli over SSH and pushes one logfmt line
+per disk straight to Loki's API, labelled as though esther had shipped it:
+
+    {host="esther", job="esxi-smart", device="<esxi device id>"}
+    model="WDC WD40EFRX" health_status=OK drive_temperature=38 power_on_hours=57 ...
+
+`esxcli storage core device smart get` on 8.0.3 prints Value, Threshold,
+Worst and Raw per attribute. Value is only *normalised* (ATA 1-253, failing
+at or below Threshold) for some attributes; for most it repeats Raw, and on
+NVMe the thresholds are maxima. So every attribute goes out as <key>=Value,
+plus <key>_raw= where Raw differs and <key>_threshold= where there is one,
+and below_threshold= lists only the attributes that are demonstrably
+normalised (Raw present and different) and at or below their threshold.
+"""
+import json
+import re
+import ssl
+import subprocess
+import sys
+import time
+import urllib.request
+
+ESXI = "root@192.168.1.20"
+HOST = "esther"
+STATE = "/var/lib/esxi-smart"
+LOKI = "https://192.168.1.56:3100/loki/api/v1/push"
+CA = "/etc/homelab-tls/root_ca.crt"
+
+SSH = [
+    "ssh", "-i", f"{STATE}/id_ecdsa",
+    "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", f"UserKnownHostsFile={STATE}/known_hosts",
+    ESXI,
+]
+
+
+def esx(cmd):
+    return subprocess.run(SSH + [cmd], capture_output=True, text=True, timeout=90)
+
+
+def key(name):
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def quote(v):
+    return '"' + v.replace('"', '\\"') + '"'
+
+
+def devices():
+    """{device_id: model} for every local, non-USB disk esxcli lists.
+
+    Direct-Access only: the optical drive has no SMART and errors out.
+    """
+    r = esx("esxcli storage core device list")
+    if r.returncode != 0:
+        sys.exit(f"device list failed: {r.stderr.strip() or r.stdout.strip()}")
+    out, cur = {}, None
+    for line in r.stdout.splitlines():
+        if line and not line[0].isspace():
+            cur = line.strip()
+            out[cur] = {}
+        elif cur and ":" in line:
+            k, _, v = line.strip().partition(":")
+            out[cur][k.strip()] = v.strip()
+    return {
+        d: a.get("Model", "?")
+        for d, a in out.items()
+        if a.get("Is Local", "true") == "true" and a.get("Is USB", "false") != "true"
+        and a.get("Device Type", "Direct-Access") == "Direct-Access"
+    }
+
+
+def smart(dev):
+    r = esx(f"esxcli storage core device smart get -d {dev}")
+    if r.returncode != 0 or not r.stdout.startswith("Parameter"):
+        msg = (r.stderr.strip() or r.stdout.strip()).splitlines()
+        return None, msg[-1] if msg else "unknown"
+    rows = []
+    for line in r.stdout.splitlines()[2:]:  # header, dashes
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        rows.append((" ".join(parts[:-4]), *parts[-4:]))  # name, value, threshold, worst, raw
+    return rows, None
+
+
+def num(v):
+    return re.fullmatch(r"-?\d+", v) is not None
+
+
+def fmt(v):
+    return v if re.fullmatch(r"[A-Za-z0-9.+-]+", v) else quote(v)
+
+
+def line_for(model, rows, err):
+    if err:
+        return f'model={quote(model)} smart="unavailable" error={quote(err)}'
+    fields, failing = [f"model={quote(model)}"], []
+    for name, value, threshold, _worst, raw in rows:
+        k = key(name)
+        fields.append(f"{k}={fmt(value)}")
+        normalised = num(value) and num(raw) and raw != value
+        if normalised:
+            fields.append(f"{k}_raw={raw}")
+        if num(threshold) and int(threshold) > 0:
+            fields.append(f"{k}_threshold={threshold}")
+            if normalised and int(value) <= int(threshold):
+                failing.append(name)
+    if failing:
+        fields.append(f"below_threshold={quote(','.join(failing))}")
+    return " ".join(fields)
+
+
+def main():
+    ts = str(time.time_ns())
+    streams = []
+    for dev, model in devices().items():
+        rows, err = smart(dev)
+        streams.append({
+            "stream": {"host": HOST, "job": "esxi-smart", "device": dev},
+            "values": [[ts, line_for(model, rows, err)]],
+        })
+    if not streams:
+        sys.exit("esxcli listed no local devices")
+    body = json.dumps({"streams": streams}).encode()
+    req = urllib.request.Request(LOKI, data=body, headers={"Content-Type": "application/json"})
+    ctx = ssl.create_default_context(cafile=CA)
+    with urllib.request.urlopen(req, context=ctx, timeout=20) as resp:
+        if resp.status != 204:
+            sys.exit(f"loki push returned {resp.status}")
+    print(f"pushed SMART for {len(streams)} device(s)")
+
+
+if __name__ == "__main__":
+    main()

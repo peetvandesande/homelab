@@ -36,5 +36,7 @@ the certificate and Loki will not start without it.
 ## Shippers
 
 Every enrolled host runs Grafana Alloy (`alloy/`) and pushes its journal here
-over TLS. `limits_config.reject_old_samples_max_age` (168h) and Alloy's
+over TLS. This container's Alloy additionally receives ESXi syslog on `:1514`
+and pulls SMART from esther — `esxi/`, which owns `/etc/alloy/esxi.alloy`
+and `esxi-smart.timer` here. `limits_config.reject_old_samples_max_age` (168h) and Alloy's
 `max_age` (166h) are a pair — change one, change the other.

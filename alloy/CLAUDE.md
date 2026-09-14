@@ -41,13 +41,21 @@ push both need the certificate material. Loki must be up, or deploy refuses.
    loopback, so the file is replaced wholesale — it has no per-host content,
    which is why this is not an `ExecStart` override like node-exporter's.
 
-5. **The package is pinned and held** (`ALLOY_VER` in `deploy.sh`,
+5. **Alloy loads the directory `/etc/alloy`, not one file.** `config.alloy`
+   there is the fleet file and stays byte-identical everywhere. A host that
+   needs more drops a second `*.alloy` beside it from its own stack — the
+   loki container has `esxi.alloy` from `esxi/` — and the fleet deploy
+   validates the whole directory. Component names must be unique across
+   files; a per-host file forwards into the fleet file's `loki.write.loki`
+   rather than declaring its own writer.
+
+6. **The package is pinned and held** (`ALLOY_VER` in `deploy.sh`,
    `apt-mark hold`), like Loki. The config language moves between minors;
    bump the pin and the config together and let `alloy validate` on the
    deploy prove the pair. Deploying adds the Grafana apt repo to the eight
    hosts that did not have it, lenora included.
 
-6. **`max_age` is 166h, just under Loki's 168h `reject_old_samples_max_age`.**
+7. **`max_age` is 166h, just under Loki's 168h `reject_old_samples_max_age`.**
    A fresh host backfills up to a week; anything older is rejected with a 400
    that Alloy does not retry. Keep the two in step if either changes.
 

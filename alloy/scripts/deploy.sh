@@ -74,21 +74,29 @@ for ip in "${FLEET[@]}"; do
     # them too - see root/etc/systemd/system/alloy.service.d/homelab.conf.
     usermod -aG systemd-journal,adm,tlscert alloy
     chmod +x /etc/homelab-tls/post-renew.d/15-alloy
-    chown root:alloy /etc/alloy/config.alloy && chmod 0640 /etc/alloy/config.alloy
+    chown root:alloy /etc/alloy/*.alloy && chmod 0640 /etc/alloy/*.alloy
     install -d -o alloy -g alloy -m 0750 /var/lib/alloy /var/lib/alloy/data
-    # Parses the config without starting anything. Runs as root, so it proves
-    # the syntax, not that alloy can read the key - the restart proves that.
-    alloy validate /etc/alloy/config.alloy >/dev/null
+    # Parses the whole directory without starting anything - the fleet file
+    # plus whatever this host added (loki has esxi.alloy). Runs as root, so
+    # it proves the syntax, not that alloy can read the key - the restart
+    # proves that.
+    alloy validate /etc/alloy >/dev/null
     systemctl daemon-reload
     systemctl enable alloy >/dev/null
   '
   restart_assert "$ip" alloy
 
-  # Prove it is serving TLS off our root, not merely running.
-  if $CURL -o /dev/null -f "https://$ip:12345/-/ready"; then
+  # Prove it is serving TLS off our root, not merely running. is-active
+  # comes true before the listener does, so give it a few seconds.
+  ok=0
+  for _ in $(seq 1 10); do
+    $CURL -o /dev/null -f "https://$ip:12345/-/ready" 2>/dev/null && { ok=1; break; }
+    sleep 3
+  done
+  if [[ $ok -eq 1 ]]; then
     echo "   $ip:12345 ready, serving TLS, verifies against the G2 root"
   else
-    echo "   $ip:12345 FAILED TLS check"; exit 1
+    echo "   $ip:12345 FAILED TLS check"; $SSH "root@$ip" 'journalctl -u alloy --no-pager -n 20'; exit 1
   fi
 
   # Prove lines from this host are landing in Loki. A fresh Alloy backfills up

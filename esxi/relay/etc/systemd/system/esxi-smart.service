@@ -1,0 +1,10 @@
+# Pull SMART from esther (ESXi) and push it to Loki. Fired by esxi-smart.timer.
+# Managed from homelab/esxi.
+[Unit]
+Description=Push ESXi SMART health to Loki
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/esxi-smart

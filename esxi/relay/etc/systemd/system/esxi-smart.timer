@@ -1,0 +1,12 @@
+# Hourly is plenty for SMART - the counters that matter move over days.
+# Managed from homelab/esxi.
+[Unit]
+Description=Hourly ESXi SMART pull
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

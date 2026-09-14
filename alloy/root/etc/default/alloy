@@ -1,10 +1,17 @@
 # Read by alloy.service. Managed from homelab/alloy - edit there, not here.
 #
-# The package ships this file with CUSTOM_ARGS empty, which makes Alloy listen
-# on 127.0.0.1:12345. Prometheus scrapes it from .53, so it has to bind the
+# CONFIG_FILE is the DIRECTORY /etc/alloy, not config.alloy in it: Alloy loads
+# every *.alloy file there as one configuration. The fleet file config.alloy
+# is byte-identical on all ten hosts; a host that needs more (the loki
+# container receives ESXi syslog, see homelab/esxi) drops a second file
+# beside it from its own stack, and neither deploy has to know about the
+# other. Component names must be unique across the directory.
+#
+# The package ships CUSTOM_ARGS empty, which makes Alloy listen on
+# 127.0.0.1:12345. Prometheus scrapes it from .53, so it has to bind the
 # wildcard - and binding the wildcard rather than the host's own IP is also
 # what spares it a wait-for-address drop-in. TLS on that listener is in
-# /etc/alloy/config.alloy, not a flag.
-CONFIG_FILE="/etc/alloy/config.alloy"
+# config.alloy, not a flag.
+CONFIG_FILE="/etc/alloy"
 CUSTOM_ARGS="--server.http.listen-addr=0.0.0.0:12345 --disable-reporting"
 RESTART_ON_UPGRADE=true

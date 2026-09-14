@@ -11,3 +11,7 @@
 .DS_Store
 *.swp
 *~
+
+# Python bytecode from syntax-checking scripts in relay/ trees
+__pycache__/
+*.pyc
