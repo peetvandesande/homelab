@@ -29,15 +29,17 @@ while read -r job inst health err; do
 done < /tmp/hl-targets.txt
 
 echo "== scrapes that must be TLS actually are"
-for j in node jellyfin navidrome prometheus loki; do
+for j in node jellyfin prometheus loki; do
   if grep -q "\"$j\"" <<<"$($CURL "https://$HOST:9090/api/v1/status/config" 2>/dev/null)"; then :; fi
 done
 # Anchored to indented config lines: an unanchored grep also matches the
 # explanatory comment at the top of the file and reports five.
-# Every job except `pve` should be https. pve targets a local exporter that
-# was never migrated (and is not running), so 7 of 8 is the correct answer.
+# Every job except `pve` and `navidrome` should be https. pve targets a local
+# exporter that was never migrated (and is not running); navidrome is plain
+# HTTP on purpose, its single listener also being the deliberately unencrypted
+# UI. So 6 of 8 is the correct answer.
 n=$(ssh -o BatchMode=yes root@$HOST "grep -cE '^[[:space:]]+scheme: https' /etc/prometheus/prometheus.yml" 2>/dev/null)
-if [[ "$n" == 7 ]]; then pass "7 jobs configured with scheme: https (prometheus, node, alloy, jellyfin, navidrome, dns, loki)"
-else bad "7 jobs configured with scheme: https" "found $n - did a job lose its scheme?"; fi
+if [[ "$n" == 6 ]]; then pass "6 jobs configured with scheme: https (prometheus, node, alloy, jellyfin, dns, loki)"
+else bad "6 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

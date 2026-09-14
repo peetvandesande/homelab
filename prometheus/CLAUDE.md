@@ -34,10 +34,14 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    enrolled but not listed here is unmonitored; a host listed here but not
    enrolled fails its scrape the moment node-exporter goes TLS.
 
-5. **Every scrape job is now TLS.** The `dns` job reaches nginx, not the
-   PowerDNS webservers directly — none of those can serve TLS, so each backend
-   binds loopback behind an nginx that allows only .53. The target addresses
-   are unchanged. A 403 from anywhere else is that ACL working.
+5. **Every scrape job is TLS except `navidrome` (and the broken `pve`).**
+   Navidrome has one listener for both UI and `/metrics`, and the UI is
+   deliberately plain HTTP because media streaming is LAN-only — see
+   `navidrome/CLAUDE.md`. Jellyfin keeps `:8920` HTTPS alongside its plain UI
+   for exactly this scrape. The `dns` job reaches nginx, not the PowerDNS
+   webservers directly — none of those can serve TLS, so each backend binds
+   loopback behind an nginx that allows only .53. The target addresses are
+   unchanged. A 403 from anywhere else is that ACL working.
 
 ## Known broken, pre-existing
 

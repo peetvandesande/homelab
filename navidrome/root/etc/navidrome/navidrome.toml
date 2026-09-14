@@ -1,13 +1,12 @@
 # Managed from homelab/navidrome - edit there, not on 192.168.1.61.
 #
-# TLSCert/TLSKey switch port 4533 from HTTP to HTTPS in place; there is no
-# second port and no redirect, so any client still using http://...:4533 stops
-# working rather than being redirected. That is the trade for a single port.
+# Plain HTTP on 4533, deliberately. Media streaming is LAN-only, and Navidrome
+# has a single listener - TLSCert/TLSKey would switch the UI to HTTPS too, and
+# every client pointed at http://...:4533 would stop working. Prometheus
+# scrapes /metrics on this same plain port; put an nginx in front if that ever
+# needs to be TLS again.
 DataFolder = "/var/lib/navidrome"
 MusicFolder = "/var/media/music"
-
-TLSCert = "/etc/homelab-tls/host.crt"
-TLSKey = "/etc/homelab-tls/host.key"
 
 [Prometheus]
 Enabled = true

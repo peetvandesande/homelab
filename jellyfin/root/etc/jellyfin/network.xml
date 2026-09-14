@@ -11,14 +11,15 @@
   this very file, so a password here protects the bundle from nobody while
   adding a second thing to keep in sync.
 
-  RequireHttps redirects 8096 to 8920. Note it does NOT close 8096 - Jellyfin
-  always binds it. Prometheus therefore scrapes 8920 directly rather than
-  chasing the redirect.
+  The UI is plain HTTP on 8096, deliberately: media streaming is LAN-only.
+  RequireHttps stays off so nothing is ever redirected to 8920. HTTPS stays
+  enabled on 8920 purely so Prometheus can scrape /metrics over TLS; the two
+  ports are served side by side by the same process.
 -->
 <NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <BaseUrl />
   <EnableHttps>true</EnableHttps>
-  <RequireHttps>true</RequireHttps>
+  <RequireHttps>false</RequireHttps>
   <CertificatePath>/etc/homelab-tls/jellyfin.pfx</CertificatePath>
   <CertificatePassword />
   <InternalHttpPort>8096</InternalHttpPort>

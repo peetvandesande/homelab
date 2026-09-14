@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Jellyfin (192.168.1.60): HTTPS on 8920, with 8096 redirecting to it.
+# Jellyfin (192.168.1.60): UI on plain HTTP 8096; HTTPS on 8920 for Prometheus.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091

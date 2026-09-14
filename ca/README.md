@@ -48,8 +48,7 @@ serve TLS off the G3 intermediate:
 | all nine | prometheus-node-exporter | 9100 |
 | .53 | Prometheus API | 9090 |
 | .54 | Grafana UI | 3000 |
-| .60 | Jellyfin | 8920 (8096 still plain) |
-| .61 | Navidrome | 4533 |
+| .60 | Jellyfin `/metrics` for Prometheus | 8920 (UI is plain HTTP on 8096) |
 | .50 | dnsdist DoT / DoH | 853 / 443 |
 | .50/.51/.52 | PowerDNS metrics, via nginx | 8083 / 8082 / 8081 |
 | .21 | Proxmox VE web GUI | 8006 |
