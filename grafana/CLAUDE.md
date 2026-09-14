@@ -50,3 +50,31 @@ read-only in the UI. "Add data source" there does not edit a provisioned one;
 it creates an empty duplicate (`loki-1`) beside it. Edit the file and deploy.
 `verify.sh` reads Grafana's own database to assert exactly one Loki datasource
 exists at the https URL, so a straggler fails the check.
+
+## Dashboards
+
+Provisioned from files too: the provider is
+`root/etc/grafana/provisioning/dashboards/homelab.yaml`, the JSON is one file
+per dashboard under `root/var/lib/grafana/dashboards/`, and they land in the
+"Homelab" folder, read-only in the UI. Edit the JSON and deploy; Grafana
+re-reads the directory every 30 s, so a changed dashboard only needs the push
+(a *new provider* needs the restart `deploy.sh` does anyway). To prototype in
+the UI, "Save as" a copy, export its JSON model, paste it back over the file
+and keep the `uid` - the uid is the URL (`/d/esxi`).
+
+5. **Dashboards reference the Loki datasource through a hidden `${loki}`
+   datasource variable, not by uid.** The provisioned datasource has no
+   pinned uid (invariant 4 says why one must never be added to a live one),
+   so a hard-coded uid would be a guess that breaks on the next reinstall.
+
+6. **Grafana 13 stores dashboards in unified storage** - the `resource`
+   table in `grafana.db`, one JSON document per object - and the legacy
+   `dashboard` table stays empty. `verify.sh` reads the former. A JSON file
+   the provider rejects is logged as a provisioning error and skipped, and
+   the file being on disk proves nothing, so `verify.sh` lists each uid it
+   expects to find.
+
+| uid    | Title          | Source                            |
+|--------|----------------|-----------------------------------|
+| `esxi` | ESXi - esther  | Loki only: `esxi-smart` + syslog  |
+

@@ -1,0 +1,28 @@
+# Dashboards provisioned from files. Managed from homelab/grafana.
+#
+# The JSON lives in root/var/lib/grafana/dashboards/, one file per dashboard,
+# and deploy.sh pushes it alongside this provider. Grafana re-reads the
+# directory every updateIntervalSeconds, so a changed dashboard needs a push
+# but not a restart; a new *provider* does need the restart deploy.sh does.
+#
+# Provisioned dashboards are read-only in the UI (allowUiUpdates false). Edit
+# the JSON here and deploy - or prototype in the UI, export the JSON model and
+# paste it back, keeping the uid. The uid is the URL: /d/esxi.
+#
+# The datasource is not referenced by uid. The provisioned Loki datasource has
+# no pinned uid (see datasources/loki.yaml for why one must never be added to a
+# live one), so each dashboard carries a hidden datasource variable that
+# resolves it by type.
+apiVersion: 1
+
+providers:
+  - name: homelab
+    orgId: 1
+    folder: Homelab
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

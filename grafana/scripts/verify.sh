@@ -50,4 +50,20 @@ if [[ "$ds" == "Loki|https://192.168.1.56:3100" ]]; then
   pass "exactly one loki datasource: Loki at https://192.168.1.56:3100"
 else bad "exactly one loki datasource: Loki at https://192.168.1.56:3100" "got: ${ds:-none}"; fi
 
+echo "== provisioned dashboards"
+# Same trick: what Grafana loaded, from its own database. A JSON file the
+# provider rejects is logged and skipped, so the file being on disk proves
+# nothing. Grafana 13 keeps dashboards in unified storage - the `resource`
+# table, one JSON document per object - not the legacy `dashboard` table,
+# which stays empty.
+for uid in esxi; do
+  title=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
+import sqlite3, json
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+r=c.execute(\"select value from resource where \\\"group\\\"=\x27dashboard.grafana.app\x27 and resource=\x27dashboards\x27 and name=?\", (\"'"$uid"'\",)).fetchone()
+print(json.loads(r[0])[\"spec\"][\"title\"] if r else \"\")"' 2>/dev/null)
+  if [[ -n "$title" ]]; then pass "dashboard '$uid' provisioned as \"$title\" (https://$HOST:3000/d/$uid)"
+  else bad "dashboard '$uid' provisioned" "not in Grafana's database - journalctl -u grafana-server | grep -i provisioning"; fi
+done
+
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

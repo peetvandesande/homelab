@@ -30,6 +30,18 @@ container's own stack is `loki/`; its fleet Alloy file is `alloy/`.
 Order: `alloy/scripts/deploy.sh` (once, for directory mode) → `deploy.sh` →
 `configure-host.sh` → `verify.sh`.
 
+## Dashboard
+
+`grafana/root/var/lib/grafana/dashboards/esxi.json`, at
+https://192.168.1.54:3000/d/esxi. Loki-only, because esther has no exporter:
+SMART health, drive temperature (with the drive's own limit where esxcli
+reports one), bad-sector totals, power-on time and a below-threshold counter
+from the `esxi-smart` job, plus severity/source volume and error, vmkernel
+and smartd log panels from the syslog job. The SMART stats read
+`last_over_time(... [2h])`, so one missed hourly run is tolerated and the
+second shows as "no data" - which is the correct thing for it to show.
+Deploy with `grafana/scripts/deploy.sh`.
+
 ## Invariants
 
 1. **`?formatter=RFC_5424` on the loghost is not optional.** ESXi's default
