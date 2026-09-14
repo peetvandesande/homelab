@@ -1,0 +1,19 @@
+#!/bin/sh
+# Rebuild the PKCS#12 bundle Jellyfin needs, then restart it.
+#
+# host.crt is a bundle (leaf + G3 intermediate). Passing it whole to -certfile
+# would put the leaf in the chain twice, so split: first certificate is the
+# leaf, the rest is the chain.
+set -eu
+DIR=/etc/homelab-tls
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} {print > ("'"$TMP"'/c" n ".pem")}' "$DIR/host.crt"
+cat "$TMP"/c2.pem > "$TMP/chain.pem" 2>/dev/null || : > "$TMP/chain.pem"
+
+openssl pkcs12 -export \
+  -inkey "$DIR/host.key" -in "$TMP/c1.pem" -certfile "$TMP/chain.pem" \
+  -passout pass: -out "$TMP/jellyfin.pfx"
+
+install -o root -g tlscert -m 0640 "$TMP/jellyfin.pfx" "$DIR/jellyfin.pfx"
+exec systemctl try-restart jellyfin

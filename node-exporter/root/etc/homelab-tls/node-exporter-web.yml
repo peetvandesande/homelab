@@ -1,0 +1,11 @@
+# TLS for prometheus-node-exporter on :9100. Identical on all ten hosts - the
+# certificate it points at is per-host, this file is not.
+#
+# No client_auth_type: Prometheus authenticates the exporter, not the reverse.
+# mTLS both ways would mean issuing Prometheus a client certificate and
+# teaching every exporter to trust it, which is not worth it on a flat LAN
+# where the scrape target is already only reachable from inside.
+tls_server_config:
+  cert_file: /etc/homelab-tls/host.crt
+  key_file: /etc/homelab-tls/host.key
+  min_version: TLS12

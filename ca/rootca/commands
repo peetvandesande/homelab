@@ -1,0 +1,2 @@
+# Sign intermediate CA certificate
+openssl ca -config openssl.cnf -extensions v3_intermediate_ca -days 3652 -notext -md sha256 -in ../intermediate-ca/csr/intermediate-ca.csr -out certs/intermediate-ca.crt

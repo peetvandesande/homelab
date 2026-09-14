@@ -1,0 +1,29 @@
+# X.509 extensions stamped onto the G3 intermediate at signing time.
+#
+# Kept here rather than as a section in rootca/openssl.cnf on purpose: the
+# root's own [ v3_intermediate_ca ] hardcodes the g2 CRL URL, and the root
+# config is historical record that we do not rewrite. `openssl ca -extfile`
+# takes this file instead.
+#
+# pathlen:0 - G3 signs leaf certificates only, never another CA. If a further
+# tier is ever wanted this number is what has to change, and every leaf issued
+# under the old value keeps working.
+
+[ v3_intermediate_ca_g3 ]
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always,issuer
+basicConstraints        = critical, CA:true, pathlen:0
+keyUsage                = critical, digitalSignature, cRLSign, keyCertSign
+
+# Both URLs describe the *root*, because the root is what issued this
+# certificate: root.crl is where G3 would be revoked, and caIssuers points at
+# the G2 root cert so a verifier holding only a leaf can build the full chain.
+#
+# The hostname is deliberately a domain we own outright and NOT the machine
+# that happens to serve it today. These two strings are frozen into the
+# certificate for its full ten years and cannot be changed without reissuing
+# it and everything under it - so they must outlive pistis, step-ca, and any
+# other implementation choice. A name we control can be repointed; a hostname
+# tied to one container cannot. The /g3/ path continues the g2 convention.
+crlDistributionPoints   = URI:http://ca.peetvandesande.com/g3/root.crl
+authorityInfoAccess     = caIssuers;URI:http://ca.peetvandesande.com/g3/root.crt

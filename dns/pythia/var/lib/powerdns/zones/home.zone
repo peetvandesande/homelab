@@ -1,0 +1,36 @@
+; Forward zone for the lab.
+; Bump the serial on every edit, then: pdns_control bind-reload-now home
+$TTL 3600
+$ORIGIN home.
+
+@       IN  SOA pythia.home. hostmaster.home. (
+                2026091401  ; serial
+                3600        ; refresh
+                900         ; retry
+                604800      ; expire
+                3600 )      ; negative TTL
+
+@       IN  NS      pythia.home.
+
+; --- infrastructure -------------------------------------------------
+gw          IN  A   192.168.1.1
+lenora      IN  A   192.168.1.21     ; Proxmox host
+themis      IN  A   192.168.1.50     ; dnsdist - the LAN's resolver
+delphi      IN  A   192.168.1.51     ; recursor + filtering
+pythia      IN  A   192.168.1.52     ; this server
+prometheus  IN  A   192.168.1.53
+grafana     IN  A   192.168.1.54
+pistis      IN  A   192.168.1.55     ; step-ca private CA
+loki        IN  A   192.168.1.56     ; log store
+
+; --- production -----------------------------------------------------
+jellyfin    IN  A   192.168.1.60
+navidrome   IN  A   192.168.1.61
+
+; --- non-production -------------------------------------------------
+lexie       IN  A   192.168.1.26
+
+; --- aliases --------------------------------------------------------
+dns         IN  CNAME themis.home.
+ca          IN  CNAME pistis.home.
+pve         IN  CNAME lenora.home.

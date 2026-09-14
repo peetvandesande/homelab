@@ -1,0 +1,91 @@
+{
+  "//": [
+    "step-ca configuration. This file is the source of truth: scripts/deploy.sh",
+    "pushes it, and it must never be edited on pistis.",
+    "",
+    "authority.enableAdmin is false on purpose. With it true, provisioners move",
+    "into the badger DB and `step ca provisioner add` becomes the only way to",
+    "change them - which would quietly make this file a lie.",
+    "",
+    "The JWK provisioner slot below is filled in by deploy.sh from secrets.env.",
+    "It is minted once on first deploy and kept there: re-minting would change",
+    "the kid on every run and invalidate anyone's bootstrapped client config."
+  ],
+
+  "root": "/etc/step-ca/certs/root_ca.crt",
+  "federatedRoots": [],
+  "crt": "/etc/step-ca/certs/intermediate_ca.crt",
+  "key": "/etc/step-ca/secrets/intermediate_ca_key",
+
+  "address": "192.168.1.55:8443",
+  "insecureAddress": "",
+  "dnsNames": [
+    "pistis.home",
+    "ca.home",
+    "192.168.1.55"
+  ],
+
+  "logger": { "format": "text" },
+
+  "db": {
+    "type": "badgerv2",
+    "dataSource": "/var/lib/step-ca/db"
+  },
+
+  "crl": {
+    "//": "Serves the leaf CRL at /1.0/crl. The CRL named in the G3 certificate itself is the *root's*, published as a static file by nginx.",
+    "enabled": true,
+    "generateOnRevoke": true,
+    "cacheDuration": "24h"
+  },
+
+  "authority": {
+    "enableAdmin": false,
+    "backdate": "1m0s",
+    "claims": {
+      "//": "Applies to the JWK provisioner: 30 days by default, a year at most, for things that cannot do ACME.",
+      "minTLSCertDuration": "5m",
+      "maxTLSCertDuration": "8760h",
+      "defaultTLSCertDuration": "720h",
+      "disableRenewal": false,
+      "allowRenewalAfterExpiry": false
+    },
+    "provisioners": [
+      @@JWK_PROVISIONER@@,
+      {
+        "//": [
+          "One provisioner offering all three challenge types: http-01 for hosts",
+          "with a reachable port 80, tls-alpn-01 for port 443, dns-01 for hosts",
+          "with neither.",
+          "",
+          "dns-01 needs no credentials on this side - step-ca only *reads* the",
+          "_acme-challenge TXT record. It is the ACME client that needs the",
+          "PowerDNS API key to write it into the home. zone on Pythia; that key",
+          "lives in homelab/dns/secrets.env, not here.",
+          "",
+          "Lifetimes are deliberately Let's Encrypt shaped. Anything on ACME",
+          "renews unattended, so a long lifetime buys nothing and costs you a",
+          "slow revocation story."
+        ],
+        "type": "ACME",
+        "name": "acme",
+        "challenges": ["http-01", "tls-alpn-01", "dns-01"],
+        "claims": {
+          "minTLSCertDuration": "5m",
+          "maxTLSCertDuration": "2160h",
+          "defaultTLSCertDuration": "24h"
+        }
+      }
+    ]
+  },
+
+  "tls": {
+    "cipherSuites": [
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305"
+    ],
+    "minVersion": 1.2,
+    "maxVersion": 1.3,
+    "renegotiation": false
+  }
+}

@@ -1,0 +1,47 @@
+[Unit]
+Description=step-ca private certificate authority
+Documentation=https://smallstep.com/docs/step-ca
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=30
+StartLimitBurst=3
+# Refuse to start rather than half-start if deploy.sh has not run yet.
+ConditionFileNotEmpty=/etc/step-ca/config/ca.json
+
+[Service]
+Type=simple
+User=step
+Group=step
+Environment=STEPPATH=/etc/step-ca
+WorkingDirectory=/var/lib/step-ca
+ExecStart=/usr/bin/step-ca /etc/step-ca/config/ca.json --password-file /etc/step-ca/secrets/password
+ExecReload=/bin/kill --signal HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Hardening. RestrictAddressFamilies here is why the wait-for-address drop-in
+# needs its leading "+": it blocks AF_NETLINK, which `ip` requires.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitNOFILE=1048576
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/step-ca
+
+[Install]
+WantedBy=multi-user.target

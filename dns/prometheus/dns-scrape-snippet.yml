@@ -1,0 +1,21 @@
+# Reference copy of the Prometheus changes this stack needs. The live file is
+# /etc/prometheus/prometheus.yml on 192.168.1.53 (prometheus.yml.pre-dns.bak
+# alongside it is the pre-change original).
+#
+# All three /metrics endpoints are unauthenticated but ACL'd to the Prometheus
+# container only - dnsdist via setWebserverConfig{acl=...} with
+# statsRequireAuthentication=false, the other two via webserver-allow-from.
+
+  - job_name: dns
+    static_configs:
+      - targets: ['192.168.1.50:8083']
+        labels: {role: themis, component: dnsdist }
+      - targets: ['192.168.1.51:8082']
+        labels: {role: delphi, component: recursor }
+      - targets: ['192.168.1.52:8081']
+        labels: {role: pythia, component: auth }
+
+# The node job also needs the three new containers added, and its existing
+# 192.168.1.50/.51 entries corrected: jellyfin and navidrome moved to .60/.61
+# some time ago, so those two targets were pointing at whatever now holds
+# .50/.51 - which is this DNS stack.

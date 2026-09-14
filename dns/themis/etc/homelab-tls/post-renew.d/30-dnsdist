@@ -1,0 +1,12 @@
+#!/bin/sh
+# dnsdist holds the DoT/DoH certificates in memory. reloadAllCertificates()
+# swaps them without dropping a single query - a restart here would take the
+# LAN's only resolver down, so try the console first and only fall back to a
+# restart if that fails.
+set -eu
+if dnsdist -e 'reloadAllCertificates()' >/dev/null 2>&1; then
+  echo "  dnsdist certificates reloaded via console"
+else
+  echo "  console reload failed, restarting dnsdist" >&2
+  systemctl restart dnsdist
+fi

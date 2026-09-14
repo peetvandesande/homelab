@@ -1,0 +1,5 @@
+#!/bin/sh
+# Loki reads its certificate once at startup, so this has to be a restart.
+# Ingesters flush on shutdown; a few seconds of refused pushes, which the
+# shippers retry.
+exec systemctl try-restart loki

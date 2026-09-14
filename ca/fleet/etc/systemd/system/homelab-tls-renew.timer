@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily homelab CA certificate renewal check
+
+[Timer]
+# Daily, with a wide jitter so nine hosts do not hit the CA in the same second.
+OnCalendar=daily
+RandomizedDelaySec=2h
+# A host that was off overnight checks as soon as it is back, rather than
+# waiting for the next midnight - which matters most for exactly the hosts
+# most likely to have drifted close to expiry.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

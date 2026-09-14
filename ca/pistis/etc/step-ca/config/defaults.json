@@ -1,0 +1,8 @@
+{
+  "//": "Client defaults for `step` run as root on pistis itself, so admin commands need no flags. Clients elsewhere get their own via `step ca bootstrap`.",
+  "ca-url": "https://pistis.home:8443",
+  "ca-config": "/etc/step-ca/config/ca.json",
+  "fingerprint": "@@ROOT_FINGERPRINT@@",
+  "root": "/etc/step-ca/certs/root_ca.crt",
+  "redirect-url": ""
+}

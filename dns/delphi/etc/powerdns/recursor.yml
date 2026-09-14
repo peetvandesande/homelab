@@ -1,0 +1,72 @@
+# Delphi - recursion and filtering.
+#
+# Receives every query from Themis over PROXY protocol, which carries both the
+# real client IP and the policy tag Themis stamped. The RPZ feeds are declared
+# in recursor.lua; policy.lua decides which of them apply to each query.
+#
+# Recursor 5.x rejects the old key=value recursor.conf unless started with
+# --enable-old-settings, so this is YAML. `rec_control show-yaml <oldfile>`
+# converts an old-style file if you ever need to.
+#
+# Managed from homelab/dns - edit there, not here.
+
+incoming:
+  listen:
+    - 192.168.1.51
+  port: 53
+  # Themis is the only thing that talks to us directly, but once the PROXY
+  # header is decoded allow_from is matched against the *real* client, so this
+  # has to be the client range - not 192.168.1.50.
+  allow_from:
+    - 192.168.1.0/24
+    - 127.0.0.0/8
+  proxy_protocol_from:
+    - 192.168.1.50/32
+
+recursor:
+  threads: 2
+
+  # Our own zones live on Pythia. recurse:false sends these with RD=0, which is
+  # correct for an authoritative server and guarantees these names are never
+  # looked up on the internet.
+  forward_zones:
+    - zone: home.
+      recurse: false
+      forwarders:
+        - 192.168.1.52
+    - zone: 1.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.1.52
+    # Split-horizon: this one name resolves to pistis inside the lab, not to
+    # the public VPS. Only the single name is forwarded - the rest of
+    # peetvandesande.com still recurses to the internet normally. Requires the
+    # matching addNTA() in recursor.lua; the domain is signed.
+    - zone: ca.peetvandesande.com.
+      recurse: false
+      forwarders:
+        - 192.168.1.52
+
+  lua_config_file: /etc/powerdns/recursor.lua
+  lua_dns_script: /etc/powerdns/policy.lua
+
+dnssec:
+  validation: validate
+
+# The threat feed alone is ~500k names; give the caches room.
+recordcache:
+  max_entries: 2000000
+packetcache:
+  max_entries: 500000
+
+webservice:
+  # Loopback only: the recursor cannot serve TLS - there is no certificate
+  # setting anywhere in its configuration. nginx terminates TLS on :8082 and
+  # proxies here, so allow_from only ever sees 127.0.0.1 and real access
+  # control lives in the nginx vhost.
+  webserver: true
+  address: 127.0.0.1
+  port: 8282
+  allow_from:
+    - 127.0.0.1
+  api_key: "@@RECURSOR_API_KEY@@"

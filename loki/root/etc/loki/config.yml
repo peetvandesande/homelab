@@ -1,0 +1,67 @@
+# Loki, single binary, filesystem storage. Managed from homelab/loki - edit
+# there, not on 192.168.1.56.
+#
+# Everything lives under /var/lib/loki on the container's rootfs (ssdpool).
+# At lab scale 30 days of logs is a few GB, not bulk data; if that ever stops
+# being true, mount an hddpool dataset at /var/lib/loki rather than growing the
+# rootfs.
+auth_enabled: false
+
+server:
+  # Wildcard bind, deliberately - so no wait-for-address drop-in is needed.
+  http_listen_address: 0.0.0.0
+  http_listen_port: 3100
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 9096
+  # TLS off the lab CA. Loki reads the key as user loki, via the tlscert group
+  # named in the systemd drop-in.
+  http_tls_config:
+    cert_file: /etc/homelab-tls/host.crt
+    key_file: /etc/homelab-tls/host.key
+  # Server-wide, not inside http_tls_config - dskit rejects min_version there.
+  tls_min_version: VersionTLS12
+  log_level: info
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /var/lib/loki
+  storage:
+    filesystem:
+      chunks_directory: /var/lib/loki/chunks
+      rules_directory: /var/lib/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 30d
+  # Logs shipped from journald arrive with timestamps; be forgiving about
+  # a container whose clock is a little behind.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /var/lib/loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /var/lib/loki/rules
+  alertmanager_url: http://localhost:9093
+
+analytics:
+  reporting_enabled: false

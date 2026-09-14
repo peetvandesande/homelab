@@ -1,0 +1,3 @@
+#!/bin/sh
+# Grafana reads its certificate once at startup, so this has to be a restart.
+exec systemctl try-restart grafana-server

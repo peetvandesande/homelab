@@ -1,0 +1,13 @@
+[Unit]
+Description=Renew this host's homelab CA certificate
+Documentation=https://smallstep.com/docs/step-cli/reference/ca/renew
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/homelab-tls/host.crt
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/homelab-tls-renew
+# Runs as root: it rewrites the key in place and the post-renew hook restarts
+# services. The key stays root:tlscert 0640 throughout.
+User=root

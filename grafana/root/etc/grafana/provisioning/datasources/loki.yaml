@@ -1,0 +1,14 @@
+# Loki datasource. Managed from homelab/grafana.
+#
+# Same shape as prometheus.yaml: https off the lab CA, verified against the
+# system trust store (tlsSkipVerify false), and an IP rather than loki.home
+# because nothing on this LAN resolves .home until the DHCP cutover to Themis.
+apiVersion: 1
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: https://192.168.1.56:3100
+    isDefault: false
+    jsonData:
+      tlsSkipVerify: false

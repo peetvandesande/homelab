@@ -1,0 +1,28 @@
+; Split-horizon zone for ca.peetvandesande.com.
+;
+; This name exists publicly as a CNAME to an OVH VPS. Inside the lab it must
+; resolve to pistis instead, because that is what serves the CRL and AIA files
+; named in the G3 intermediate certificate - see homelab/ca.
+;
+; The zone is deliberately the SINGLE NAME, not peetvandesande.com. Taking the
+; whole domain would shadow mail, www and everything else in it with an empty
+; internal zone, and break them for the entire LAN.
+;
+; peetvandesande.com is DNSSEC-signed, so this override needs a matching
+; addNTA() on Delphi or every lookup here SERVFAILs. See delphi's recursor.lua.
+;
+; Bump the serial on every edit, then:
+;   pdns_control bind-reload-now ca.peetvandesande.com
+$TTL 3600
+$ORIGIN ca.peetvandesande.com.
+
+@       IN  SOA pythia.home. hostmaster.home. (
+                2026091001  ; serial
+                3600        ; refresh
+                900         ; retry
+                604800      ; expire
+                3600 )      ; negative TTL
+
+@       IN  NS      pythia.home.
+
+@       IN  A       192.168.1.55     ; pistis - serves /g3/ over plain HTTP

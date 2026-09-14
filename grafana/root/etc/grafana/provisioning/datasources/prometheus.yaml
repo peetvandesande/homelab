@@ -1,0 +1,18 @@
+# Prometheus datasource. Managed from homelab/grafana.
+#
+# https now, because Prometheus serves TLS off the lab CA. Grafana verifies it
+# against the system trust store, into which ca/scripts/enrol.sh installed the
+# G2 root - so tlsSkipVerify stays false and this is a real check, not theatre.
+#
+# The URL is an IP, not prometheus.home: nothing on this LAN resolves .home
+# until the DHCP cutover to Themis, which is why the certificate carries an IP
+# SAN. Switch to the name after the cutover.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: https://192.168.1.53:9090
+    isDefault: true
+    jsonData:
+      tlsSkipVerify: false

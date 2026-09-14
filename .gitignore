@@ -1,0 +1,13 @@
+# Secrets - deploy scripts substitute these into the templated configs.
+**/secrets.env
+
+# Private keys. The root CA key is passphrase-encrypted but still never
+# leaves the workstation (see ca/README.md); the intermediate key lives on
+# pistis. Nothing under a private/ directory belongs in the repo.
+**/private/*
+!**/private/.gitkeep
+
+# OS / editor noise
+.DS_Store
+*.swp
+*~

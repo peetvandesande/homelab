@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh PowerDNS RPZ filtering feeds daily
+
+[Timer]
+# Upstream regenerates a few times a day; daily is plenty and stays polite.
+OnCalendar=daily
+RandomizedDelaySec=2h
+# Catch up if the box was off at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Refresh the RPZ feeds listed in /etc/powerdns/rpz-feeds.conf, then ask the
+# recursor to reload them.
+#
+# Deliberately conservative: a feed is only installed if it downloads cleanly,
+# looks like a zone file and is at least as long as its configured tripwire.
+# Anything else leaves the previous copy in place - stale filtering beats no
+# filtering.
+set -uo pipefail
+
+FEEDS=/etc/powerdns/rpz-feeds.conf
+DEST=/var/lib/powerdns/rpz
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+mkdir -p "$DEST"
+changed=0
+failed=0
+
+log() { echo "[rpz-update] $*"; }
+
+while read -r name minlines url; do
+  [[ -z "${name:-}" || "$name" == \#* ]] && continue
+
+  out="$TMP/$name"
+  if ! curl -fsSL --max-time 300 --retry 2 --retry-delay 5 -o "$out" "$url"; then
+    log "FAIL  $name: download error from $url"
+    failed=1
+    continue
+  fi
+
+  lines=$(wc -l < "$out")
+  if (( lines < minlines )); then
+    log "FAIL  $name: $lines lines, expected >= $minlines - refusing to install"
+    failed=1
+    continue
+  fi
+  if ! grep -qi 'SOA' "$out"; then
+    log "FAIL  $name: no SOA record, does not look like a zone file"
+    failed=1
+    continue
+  fi
+
+  if [[ -f "$DEST/$name.rpz" ]] && cmp -s "$out" "$DEST/$name.rpz"; then
+    log "ok    $name: unchanged ($lines lines)"
+    continue
+  fi
+
+  install -o pdns -g pdns -m 0644 "$out" "$DEST/$name.rpz.new"
+  mv -f "$DEST/$name.rpz.new" "$DEST/$name.rpz"
+  log "ok    $name: updated ($lines lines)"
+  changed=1
+done < "$FEEDS"
+
+if (( changed )); then
+  if rec_control reload-lua-config >/dev/null 2>&1; then
+    log "recursor reloaded"
+  else
+    log "WARN  rec_control reload-lua-config failed - recursor may not be running yet"
+  fi
+else
+  log "no changes, skipping reload"
+fi
+
+exit $failed

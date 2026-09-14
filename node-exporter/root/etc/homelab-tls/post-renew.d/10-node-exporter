@@ -1,0 +1,4 @@
+#!/bin/sh
+# Re-read the renewed certificate. node-exporter has no reload signal for it,
+# so this is a restart - cheap, and a scrape gap of under a second.
+exec systemctl try-restart prometheus-node-exporter

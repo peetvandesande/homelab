@@ -1,0 +1,12 @@
+# Merged by hand into /etc/prometheus/prometheus.yml on 192.168.1.53.
+# Kept here so the change is reviewable; Prometheus targets in this lab are
+# static and hand-maintained, and they rot when a service moves.
+#
+# Only the node job. step-ca 0.30 has no Prometheus endpoint of its own, so
+# there is deliberately no `ca` job - see README.md "Not done yet" for what
+# would actually be worth monitoring (certificate expiry, via blackbox_exporter).
+
+  - job_name: node
+    static_configs:
+      - targets: ['192.168.1.55:9100']
+        labels: {role: pistis }

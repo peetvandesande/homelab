@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Managed from homelab/jellyfin - edit there, not on 192.168.1.60.
+
+  Jellyfin will not take a PEM pair: CertificatePath must be a PKCS#12 bundle.
+  /etc/homelab-tls/jellyfin.pfx is built from host.crt and host.key by the
+  post-renew hook, which therefore has to run at enrolment AND after every
+  renewal, or Jellyfin keeps serving the old certificate until it expires.
+
+  CertificatePassword is empty on purpose. Jellyfin stores it in cleartext in
+  this very file, so a password here protects the bundle from nobody while
+  adding a second thing to keep in sync.
+
+  RequireHttps redirects 8096 to 8920. Note it does NOT close 8096 - Jellyfin
+  always binds it. Prometheus therefore scrapes 8920 directly rather than
+  chasing the redirect.
+-->
+<NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <BaseUrl />
+  <EnableHttps>true</EnableHttps>
+  <RequireHttps>true</RequireHttps>
+  <CertificatePath>/etc/homelab-tls/jellyfin.pfx</CertificatePath>
+  <CertificatePassword />
+  <InternalHttpPort>8096</InternalHttpPort>
+  <InternalHttpsPort>8920</InternalHttpsPort>
+  <PublicHttpPort>8096</PublicHttpPort>
+  <PublicHttpsPort>8920</PublicHttpsPort>
+  <AutoDiscovery>true</AutoDiscovery>
+  <EnableUPnP>false</EnableUPnP>
+  <EnableIPv4>true</EnableIPv4>
+  <EnableIPv6>false</EnableIPv6>
+  <EnableRemoteAccess>true</EnableRemoteAccess>
+  <LocalNetworkSubnets />
+  <LocalNetworkAddresses />
+  <KnownProxies />
+  <IgnoreVirtualInterfaces>true</IgnoreVirtualInterfaces>
+  <VirtualInterfaceNames>
+    <string>veth</string>
+  </VirtualInterfaceNames>
+  <EnablePublishedServerUriByRequest>false</EnablePublishedServerUriByRequest>
+  <PublishedServerUriBySubnet />
+  <RemoteIPFilter />
+  <IsRemoteIPFilterBlacklist>false</IsRemoteIPFilterBlacklist>
+</NetworkConfiguration>

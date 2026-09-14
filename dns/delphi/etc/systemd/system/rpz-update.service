@@ -1,0 +1,13 @@
+[Unit]
+Description=Refresh PowerDNS RPZ filtering feeds
+Documentation=file:///etc/powerdns/rpz-feeds.conf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rpz-update
+# The feeds are tens of megabytes; don't let a stalled mirror wedge the timer.
+TimeoutStartSec=900
+Nice=10
+IOSchedulingClass=idle

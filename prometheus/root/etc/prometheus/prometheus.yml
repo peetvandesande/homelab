@@ -1,0 +1,133 @@
+# Prometheus configuration. Managed from homelab/prometheus - edit there, not
+# on 192.168.1.53.
+#
+# Targets are static and hand-maintained, so they rot when a service moves.
+# They have been wrong before: the `node` job scraped .50/.51 as
+# "jellyfin"/"navidrome" long after both moved to .60/.61. If you renumber
+# anything, grep this file.
+#
+# TLS: every job below that carries `scheme: https` is talking to a service
+# holding a certificate from the lab's own CA (homelab/ca). Targets stay as IP
+# addresses rather than names because no host on this LAN can resolve .home
+# until the DHCP cutover to Themis - which is why every issued certificate
+# carries an IP SAN. Switch these to names only after that cutover.
+
+global:
+  scrape_interval:     30s
+  evaluation_interval: 30s
+
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets: ['localhost:9093']
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Note on the repetition below: `tls_config` is spelled out in full on each
+# job rather than hoisted into a YAML anchor. Prometheus parses this file
+# strictly and rejects any unrecognised top-level key, so an anchor block fails
+# with "field tls_defaults not found in type config.plain". Four copies of two
+# lines is the price.
+#
+# The root is named explicitly rather than relying on the system trust store,
+# so a scrape cannot start silently trusting some unrelated public CA.
+
+scrape_configs:
+  # Prometheus scraping itself, now over TLS. 'localhost' is in this host's
+  # certificate SANs precisely so this job keeps working without a DNS lookup.
+  - job_name: 'prometheus'
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Every enrolled host. Keep in step with FLEET in ca/scripts/enrol.sh - a
+  # host there but not here is unmonitored, and a host here but not enrolled
+  # will fail once node-exporter goes TLS.
+  - job_name: node
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.21:9100']
+        labels: {role: pve-host }
+      - targets: ['192.168.1.50:9100']
+        labels: {role: themis }
+      - targets: ['192.168.1.51:9100']
+        labels: {role: delphi }
+      - targets: ['192.168.1.52:9100']
+        labels: {role: pythia }
+      - targets: ['192.168.1.53:9100']
+        labels: {role: prometheus }
+      - targets: ['192.168.1.54:9100']
+        labels: {role: grafana }
+      - targets: ['192.168.1.55:9100']
+        labels: {role: pistis }
+      - targets: ['192.168.1.56:9100']
+        labels: {role: loki }
+      - targets: ['192.168.1.60:9100']
+        labels: {role: jellyfin }
+      - targets: ['192.168.1.61:9100']
+        labels: {role: navidrome }
+
+  # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
+  # on 127.0.0.1:9221. Pre-existing.
+  - job_name: pve
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ['1']
+      node: ['1']
+    static_configs:
+      - targets: ['192.168.1.21']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9221
+
+  # 8920, not 8096. Jellyfin cannot drop plain HTTP, so 8096 stays bound but
+  # redirects (RequireHttps); scraping it would just chase a 302 to here.
+  - job_name: jellyfin
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.60:8920']
+
+  - job_name: navidrome
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.61:4533']
+
+  # Loki exposes its own metrics on the same TLS port as its API.
+  - job_name: loki
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.56:3100']
+
+  # TLS, terminated by nginx on each DNS container. None of the three PowerDNS
+  # components can serve TLS itself, so the backend binds loopback and nginx
+  # fronts it on the same port this job has always used - the target addresses
+  # did not change. nginx allows only .53, so these URLs return 403 from
+  # anywhere else, which is intentional.
+  - job_name: dns
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.50:8083']
+        labels: {role: themis, component: dnsdist }
+      - targets: ['192.168.1.51:8082']
+        labels: {role: delphi, component: recursor }
+      - targets: ['192.168.1.52:8081']
+        labels: {role: pythia, component: auth }

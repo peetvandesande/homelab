@@ -1,0 +1,24 @@
+#!/bin/sh
+# Install the renewed certificate where pveproxy looks for it, then restart it.
+#
+# ONLY pveproxy-ssl.*. Do not touch pve-ssl.pem/pve-ssl.key in the same
+# directory: those are issued by Proxmox's own internal CA and are what the
+# cluster and API use to talk to themselves. Replacing them breaks the node's
+# API rather than its web GUI, and the failure looks nothing like a TLS problem.
+#
+# No chown/chmod: /etc/pve is pmxcfs, which forces root:www-data 0640 on
+# everything written to it. Explicit ownership calls are silently ignored, so
+# leaving them in would be cargo cult.
+set -eu
+NODE=$(hostname)
+DIR="/etc/pve/nodes/$NODE"
+
+[ -d "$DIR" ] || { echo "no such node directory: $DIR" >&2; exit 1; }
+
+cp /etc/homelab-tls/host.crt "$DIR/pveproxy-ssl.pem"
+cp /etc/homelab-tls/host.key "$DIR/pveproxy-ssl.key"
+
+# Restart, not reload: pveproxy re-reads the certificate only on start. The web
+# GUI is unavailable for a second or two; running VMs and containers are not
+# affected, because nothing in their data path goes through pveproxy.
+exec systemctl restart pveproxy

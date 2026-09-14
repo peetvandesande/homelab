@@ -1,0 +1,4 @@
+#!/bin/sh
+# Prometheus rereads its certificate from disk per connection, so a reload is
+# enough - no need to drop the TSDB's in-flight scrapes for a cert swap.
+exec systemctl try-reload-or-restart prometheus

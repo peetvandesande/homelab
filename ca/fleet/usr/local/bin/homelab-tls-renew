@@ -1,0 +1,49 @@
+#!/bin/sh
+# Renew this host's certificate if it is close to expiry, then run the
+# host-specific post-renew hook if - and only if - the certificate changed.
+#
+# Renewal is mTLS: the existing certificate authenticates the request. No
+# provisioner password is needed, and none is stored on this host. That is the
+# whole point of enrolling with a one-time token rather than a shared secret.
+#
+# Consequence worth knowing: a host that stays off past its expiry cannot renew
+# itself (the CA has allowRenewalAfterExpiry false). Re-run ca/scripts/enrol.sh
+# for it - that mints a fresh token and starts over.
+set -eu
+
+DIR=/etc/homelab-tls
+CRT=$DIR/host.crt
+KEY=$DIR/host.key
+CA=$DIR/root_ca.crt
+
+# The IP, not pistis.home: no container on this LAN can resolve .home until the
+# DHCP cutover to Themis. step-ca's own leaf carries an IP SAN for exactly this.
+CA_URL=https://192.168.1.55:8443
+
+# Certificates are 30 days; renew once under 10 days remain. With a daily timer
+# that leaves nine chances to recover from a CA outage before anything expires.
+EXPIRES_IN=240h
+
+[ -f "$CRT" ] || { echo "no certificate at $CRT - host not enrolled" >&2; exit 1; }
+
+before=$(sha256sum "$CRT" | cut -d' ' -f1)
+
+# Not an error if it is simply too early to renew, so do not let set -e kill us.
+step ca renew --force --expires-in "$EXPIRES_IN" \
+  --ca-url "$CA_URL" --root "$CA" "$CRT" "$KEY" || true
+
+after=$(sha256sum "$CRT" | cut -d' ' -f1)
+[ "$before" = "$after" ] && exit 0
+
+echo "certificate renewed; running post-renew hooks"
+
+# A directory rather than a single file: a host can run several services off
+# the one certificate (node-exporter is on all nine), and each stack drops in
+# its own hook without knowing about the others. Numbered so node-exporter's
+# reload lands before a heavier service restart.
+for hook in "$DIR"/post-renew.d/*; do
+  [ -x "$hook" ] || continue
+  echo "  hook: $hook"
+  "$hook" || echo "  hook failed: $hook" >&2
+done
+exit 0
