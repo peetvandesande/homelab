@@ -8,8 +8,9 @@ It also carries **192.168.1.73 and .74** as extra addresses on `eth0`, because
 the stacks that came from the old moby publish their ports on them.
 
 Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
-traefik). They came from the old moby (192.168.1.25, a machine this repo has
-never managed) on 21 September 2026.
+traefik), which came from the old moby (192.168.1.25, a machine this repo has
+never managed) on 21 September 2026, and **home assistant** (.79), which is
+this repo's own.
 
 ## Working on this
 
@@ -33,7 +34,10 @@ of the metrics names the certificate and will not start without it.
 
 2. **Container workloads are Docker's, not Proxmox's.** A stack gets a
    directory under `/opt/stacks/<name>` with its own `compose.yaml` and named
-   volumes under `/var/lib/docker`; it does not get its own LXC. The rootfs is
+   volumes under `/var/lib/docker`; it does not get its own LXC. A stack this
+   repo owns lives in `root/opt/stacks/` and `deploy.sh` converges it; the
+   three that came from the old moby are host-owned, carry their own secrets,
+   and nothing here starts or stops them. The rootfs is
    80G on `ssdpool` and holds images, volumes and build cache alike — grow the
    rootfs rather than bind-mounting bulk storage, unless a stack genuinely
    consumes the media library.
@@ -74,6 +78,37 @@ of the metrics names the certificate and will not start without it.
    and .74, which are in the range `../CLAUDE.md` pencils in for
    Non-Production: they are inherited from the old host, and every compose
    file here names them literally.
+
+## Home Assistant
+
+`/opt/stacks/homeassistant`, pinned to a release rather than `:stable` — the
+Nextcloud upgrade below is why. The app binds `127.0.0.1:8123` and the host
+nginx serves it on **192.168.1.79:443** off the lab CA; `ca/scripts/enrol.sh`
+carries `homeassistant.home` and `.79` as extra SANs on moby's certificate
+(they are in `FLEET`, after the shortname).
+
+Three things to know before changing it:
+
+1. **`http:` in `configuration.yaml` is ignored.** Home Assistant 2026.9 keeps
+   its HTTP settings in `.storage/http` (`yaml_migration_done: true`) and
+   raises a `yaml_still_present_after_migration` repair if the YAML key is
+   there at all. A `server_port` or `use_x_forwarded_for` written to YAML is
+   silently dropped — the app keeps its stored value and nothing in the log
+   says why. Change these in the UI.
+2. **nginx therefore does not send `X-Forwarded-For`.** Until
+   `use_x_forwarded_for` is on in the UI, a request carrying that header gets
+   `400 Bad Request` from Home Assistant, with one error line in its log and
+   nothing on the nginx side. The header lines are in the site file,
+   commented, with the UI path to enable them first.
+3. **The websocket is the application.** `Upgrade`/`Connection` come from the
+   `map` in `conf.d/websocket-upgrade.conf`, and `proxy_read_timeout` is a
+   day, not the default minute. Without those the page loads and then sits
+   there unable to connect.
+
+Not wired into Prometheus: its `/api/prometheus` endpoint needs a long-lived
+access token, which means completing onboarding in the browser first. The
+container's logs reach Loki like everything else —
+`{host="moby", container="homeassistant-homeassistant-1"}`.
 
 ## What came from the old moby, and what did not
 

@@ -35,7 +35,10 @@ FLEET=(
   "192.168.1.54 grafana"
   "192.168.1.55 pistis"
   "192.168.1.56 loki"
-  "192.168.1.27 moby"
+  # moby carries extra addresses for the stacks it publishes; the nginx in
+  # front of Home Assistant on .79 serves this certificate, so the name and
+  # the address have to be in it. Words after the shortname are extra SANs.
+  "192.168.1.27 moby homeassistant.home homeassistant 192.168.1.79"
   "192.168.1.60 jellyfin"
   "192.168.1.61 navidrome"
 )
@@ -123,8 +126,9 @@ enrol_one() { # enrol_one <ip> <name> [extra sans...]
 
 if [[ "${1:-}" == "--all" ]]; then
   for entry in "${FLEET[@]}"; do
-    read -r ip name <<<"$entry"
-    enrol_one "$ip" "$name"
+    read -r ip name extra <<<"$entry"
+    # shellcheck disable=SC2086  # extra is split on purpose - it is a SAN list
+    enrol_one "$ip" "$name" $extra
   done
 else
   [[ $# -ge 2 ]] || { echo "usage: $0 <ip> <shortname> [extra-san ...] | --all"; exit 1; }

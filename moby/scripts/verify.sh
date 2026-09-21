@@ -75,7 +75,7 @@ echo "== extra addresses and the stacks that publish on them"
 # The addresses arrived with the stacks from the old moby; docker.service
 # Requires= the unit that adds them, so a container binding .73 or .74 cannot
 # start before they exist.
-for a in 192.168.1.73 192.168.1.74; do
+for a in 192.168.1.73 192.168.1.74 192.168.1.79; do
   $SSH "root@$HOST" "ip -4 addr show dev eth0 | grep -q 'inet $a/'" \
     && pass "$a is on eth0" || bad "$a is on eth0" "address missing - is homelab-extra-addresses running?"
 done
@@ -104,6 +104,24 @@ case "$code" in
   202)     warn "xwiki through traefik" "202 - tomcat is still starting" ;;
   *)       bad  "xwiki serves through traefik" "http=$code" ;;
 esac
+
+echo "== home assistant"
+https_ok "home assistant on 192.168.1.79" "https://192.168.1.79/manifest.json"
+chain_ok "moby:443 (.79)" "192.168.1.79:443"
+# The UI is a websocket application: a proxy that serves the page and drops
+# the upgrade looks like a broken backend, not a broken proxy. HTTP/1.1 on
+# purpose - an upgrade over h2 is refused before nginx ever sees it.
+if curl -sS --http1.1 --cacert "$CA_ROOT" -i --max-time 10 \
+     -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+     -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+     --resolve homeassistant.home:443:192.168.1.79 \
+     https://homeassistant.home/api/websocket 2>/dev/null | grep -q '101 Switching Protocols'; then
+  pass "websocket upgrades through nginx (101)"
+else bad "websocket upgrades through nginx" "no 101 - check the Upgrade/Connection headers"; fi
+# 8123 belongs to the app and must stay on loopback; nginx is the only way in.
+if nc -z -G 2 192.168.1.79 8123 2>/dev/null; then
+  bad "home assistant backend is loopback-only" "8123 is reachable from the LAN"
+else pass "home assistant backend is loopback-only"; fi
 
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \

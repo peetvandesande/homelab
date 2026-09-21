@@ -28,10 +28,14 @@ $SSH "root@$HOST" '
   # The packaged default site is a second `default_server` on :80 and serves
   # the nginx splash page to the LAN. Nothing here wants it.
   rm -f /etc/nginx/sites-enabled/default
-  ln -sf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-enabled/metrics.conf
+  for site in metrics homeassistant; do
+    ln -sf "/etc/nginx/sites-available/$site.conf" "/etc/nginx/sites-enabled/$site.conf"
+  done
   nginx -t
   systemctl enable nginx >/dev/null
-  systemctl reload-or-restart nginx
+  # A restart, not a reload: the drop-in that makes nginx wait for .79 only
+  # takes effect on one, and a reload would leave it listening on the old set.
+  systemctl restart nginx
   # Validates daemon.json without restarting anything: dockerd rejects an
   # unknown key outright, so a typo here would otherwise take the engine down
   # with every container on it.
@@ -44,3 +48,13 @@ $SSH "root@$HOST" '
 # the second the daemon is down.
 restart_assert "$HOST" docker
 echo "   docker restarted"
+
+# Stacks under root/opt/stacks are the repo's and get converged here. The
+# three that came from the old moby are not: they are host-owned, they carry
+# their own secrets, and nothing in this repo should start or stop them.
+$SSH "root@$HOST" '
+  set -e
+  cd /opt/stacks/homeassistant
+  docker compose up -d
+'
+echo "   homeassistant converged"

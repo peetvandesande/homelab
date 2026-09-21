@@ -1,0 +1,38 @@
+# Home Assistant. Managed from homelab/moby - edit there, not on
+# 192.168.1.27; scripts/deploy.sh pushes this file and converges the stack.
+#
+# Unlike nextcloud, traefik and xwiki - which came from the old moby and stay
+# host-owned - this stack is the repo's, so it lives under root/.
+#
+# Bridge networking with the port published on the container's own address.
+# Home Assistant's own advice is network_mode: host, which is how mDNS/SSDP
+# discovery finds devices; that would bind every address moby holds, including
+# the ones nextcloud and traefik publish on, and discovery does not cross the
+# LXC bridge anyway. Integrations that are given an address work fine.
+#
+# The app binds loopback only and the host nginx serves it on .79:443 - the
+# same shape as the engine metrics and the PowerDNS webservers. See
+# moby/CLAUDE.md.
+services:
+  homeassistant:
+    # Pinned rather than :stable. Home Assistant releases monthly and its
+    # config format moves with it; a restart should not be an upgrade. Bump
+    # deliberately, and read the release notes for breaking changes first.
+    image: ghcr.io/home-assistant/home-assistant:2026.9.3
+    restart: unless-stopped
+    environment:
+      # The container is UTC otherwise, which makes every automation that
+      # depends on local time an hour or two wrong.
+      - TZ=Europe/Paris
+    volumes:
+      - config:/config
+      # Read-only: Home Assistant reads the host clock through this.
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      # Loopback only: nginx on the host terminates TLS on .79:443 and proxies
+      # here. Publishing on .79 as well would serve the UI unencrypted to the
+      # LAN beside the TLS one.
+      - "127.0.0.1:8123:8123"
+
+volumes:
+  config:

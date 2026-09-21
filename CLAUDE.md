@@ -84,7 +84,7 @@ Two things to be aware of:
   allocation before it bites.
 - **`lexie` (CT 100) sits at 192.168.1.26 and `moby` (CT 108) at
   192.168.1.27**, both outside the Infrastructure range they are pooled into.
-  Moby additionally answers on .73 and .74 for two migrated stacks, which is
+  Moby additionally answers on .73, .74 and .79 for the stacks it publishes,
   inside the range pencilled in for Non-Production. Existing anomalies —
   don't take them as precedent, and don't "tidy" them without asking.
 
@@ -115,10 +115,11 @@ Container workloads that are not worth an LXC run on `moby` (CT 108,
 from the old moby at 192.168.1.25 (a machine this repo does not manage) in
 September 2026; the rest of that host's stacks are still there.
 
-Moby also holds **192.168.1.73 and .74** as extra addresses on `eth0`, one per
-published stack, carried over so the compose files did not have to be
-rewritten. They are applied by a unit that `docker.service` requires, not by
-interface config — Proxmox rewrites that on every container start.
+Moby also holds **192.168.1.73, .74 and .79** as extra addresses on `eth0`,
+one per published stack — .73 and .74 carried over so the migrated compose
+files did not have to be rewritten, .79 for Home Assistant, which the host
+nginx serves over TLS. They are applied by a unit that `docker.service`
+requires, not by interface config — Proxmox rewrites that on every start.
 
 Reach for a container on moby when a service ships as an image and wants
 nothing from the host; reach for an LXC when it wants to look like a machine.
