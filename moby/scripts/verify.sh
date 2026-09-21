@@ -59,7 +59,7 @@ echo "== node-exporter"
 https_ok "node-exporter on $HOST:9100" "https://$HOST:9100/metrics"
 
 echo "== scraped by prometheus"
-for job in node alloy docker traefik; do
+for job in node alloy docker traefik homeassistant; do
   $CURL "https://$PROM:9090/api/v1/targets" 2>/dev/null | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -118,6 +118,16 @@ if curl -sS --http1.1 --cacert "$CA_ROOT" -i --max-time 10 \
      https://homeassistant.home/api/websocket 2>/dev/null | grep -q '101 Switching Protocols'; then
   pass "websocket upgrades through nginx (101)"
 else bad "websocket upgrades through nginx" "no 101 - check the Upgrade/Connection headers"; fi
+# nginx passes X-Forwarded-For, which Home Assistant answers with 400 unless
+# 172.20.0.0/14 is a trusted proxy in its UI. A plain request proves the pair
+# still agree; the manifest check above would pass either way, since curl
+# sends no such header of its own.
+code=$(curl -sS --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' --max-time 10 https://192.168.1.79/ 2>/dev/null || echo 000)
+[[ "$code" == 200 ]] \
+  && pass "home assistant accepts the proxy's X-Forwarded-For (200)" \
+  || bad "home assistant accepts the proxy's X-Forwarded-For" \
+        "http=$code - 400 means trusted_proxies/use_x_forwarded_for is off in its UI"
+
 # 8123 belongs to the app and must stay on loopback; nginx is the only way in.
 if nc -z -G 2 192.168.1.79 8123 2>/dev/null; then
   bad "home assistant backend is loopback-only" "8123 is reachable from the LAN"

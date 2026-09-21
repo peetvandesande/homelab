@@ -38,9 +38,9 @@ done
 # targets a local exporter that was never migrated (and is not running);
 # navidrome is plain HTTP on purpose, its single listener also being the
 # deliberately unencrypted UI; traefik is a stack migrated from the old moby
-# that carries its own certificates. So 7 of 10 is the correct answer.
+# that carries its own certificates. So 8 of 11 is the correct answer.
 n=$(ssh -o BatchMode=yes root@$HOST "grep -cE '^[[:space:]]+scheme: https' /etc/prometheus/prometheus.yml" 2>/dev/null)
-if [[ "$n" == 7 ]]; then pass "7 jobs configured with scheme: https (prometheus, node, alloy, jellyfin, dns, loki, docker)"
-else bad "7 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
+if [[ "$n" == 8 ]]; then pass "8 jobs configured with scheme: https (prometheus, node, alloy, jellyfin, dns, loki, docker, homeassistant)"
+else bad "8 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

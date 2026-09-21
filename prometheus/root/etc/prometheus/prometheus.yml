@@ -159,6 +159,21 @@ scrape_configs:
       - targets: ['192.168.1.74:8080']
         labels: {role: moby }
 
+  # Home Assistant on moby's .79, through the same nginx that serves its UI.
+  # The endpoint needs a long-lived access token; it is a file rather than an
+  # inline value because this config is world-readable on the host.
+  # prometheus/scripts/deploy.sh installs it from secrets.env.
+  - job_name: homeassistant
+    scheme: https
+    metrics_path: /api/prometheus
+    authorization:
+      credentials_file: /etc/prometheus/homeassistant.token
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.79:443']
+        labels: {role: moby }
+
   # Loki exposes its own metrics on the same TLS port as its API.
   - job_name: loki
     scheme: https

@@ -95,19 +95,27 @@ Three things to know before changing it:
    there at all. A `server_port` or `use_x_forwarded_for` written to YAML is
    silently dropped — the app keeps its stored value and nothing in the log
    says why. Change these in the UI.
-2. **nginx therefore does not send `X-Forwarded-For`.** Until
-   `use_x_forwarded_for` is on in the UI, a request carrying that header gets
-   `400 Bad Request` from Home Assistant, with one error line in its log and
-   nothing on the nginx side. The header lines are in the site file,
-   commented, with the UI path to enable them first.
+2. **nginx sends `X-Forwarded-For`, and that only works because the UI says
+   so.** `172.20.0.0/14` is a trusted proxy and `use_x_forwarded_for` is on,
+   both under Settings → System → Network, both stored in `.storage/http`.
+   Turn either off and every request through nginx gets a bare
+   `400 Bad Request`, with one error line in Home Assistant's log and nothing
+   at all on the nginx side. `verify.sh` checks the pair still agree.
 3. **The websocket is the application.** `Upgrade`/`Connection` come from the
    `map` in `conf.d/websocket-upgrade.conf`, and `proxy_read_timeout` is a
    day, not the default minute. Without those the page loads and then sits
    there unable to connect.
 
-Not wired into Prometheus: its `/api/prometheus` endpoint needs a long-lived
-access token, which means completing onboarding in the browser first. The
-container's logs reach Loki like everything else —
+Scraped by Prometheus at `/api/prometheus`, which needs two things that are
+easy to miss. The endpoint only exists when `prometheus:` is in
+`configuration.yaml` — it is a normal YAML integration, unlike `http:` — and
+it needs a long-lived access token, created on the user's profile page. The
+token is the only secret in `prometheus/`: it lives in its gitignored
+`secrets.env` and `prometheus/scripts/deploy.sh` installs it as
+`/etc/prometheus/homeassistant.token`, owned by `prometheus` and mode 0400,
+because the unit's `PrivateUsers=true` leaves group membership unmapped.
+
+The container's logs reach Loki like everything else —
 `{host="moby", container="homeassistant-homeassistant-1"}`.
 
 ## What came from the old moby, and what did not
