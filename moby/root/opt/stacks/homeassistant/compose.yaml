@@ -28,6 +28,11 @@ services:
       - config:/config
       # Read-only: Home Assistant reads the host clock through this.
       - /etc/localtime:/etc/localtime:ro
+      # The media library, for the media browser. /media is Home Assistant's
+      # default media directory when it exists, so no media_dirs needed.
+      # /var/media is the host's ZFS dataset, bind-mounted into the container
+      # by Proxmox (mp0) - read-only all the way down.
+      - /var/media/video/movies:/media/movies:ro
     ports:
       # Loopback only: nginx on the host terminates TLS on .79:443 and proxies
       # here. Publishing on .79 as well would serve the UI unencrypted to the

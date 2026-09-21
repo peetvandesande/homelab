@@ -87,6 +87,16 @@ nginx serves it on **192.168.1.79:443** off the lab CA; `ca/scripts/enrol.sh`
 carries `homeassistant.home` and `.79` as extra SANs on moby's certificate
 (they are in `FLEET`, after the shortname).
 
+The movie library is at `/media/movies`, which is `/var/media/video/movies`
+on the container and `/hddpool/media/video/movies` on lenora — the repo's
+usual `mp0` bind mount, read-only, exactly as jellyfin and navidrome get it.
+**Not** the NFS export lenora also offers: an unprivileged LXC cannot mount
+NFS at all, and mounting it would be a network round trip to the machine the
+container is already running on. `/media` is Home Assistant's default media
+directory when it exists, so nothing needed configuring — it appears under
+"My media" in the media browser. Add another library by mounting it next to
+this one, not by adding `media_dirs`.
+
 Three things to know before changing it:
 
 1. **`http:` in `configuration.yaml` is ignored.** Home Assistant 2026.9 keeps

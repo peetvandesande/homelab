@@ -128,6 +128,16 @@ code=$(curl -sS --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' --max-time 10
   || bad "home assistant accepts the proxy's X-Forwarded-For" \
         "http=$code - 400 means trusted_proxies/use_x_forwarded_for is off in its UI"
 
+# The media library: bind-mounted from the host by Proxmox (mp0) and into the
+# container read-only. A missing mount is an empty directory, not an error,
+# so count entries rather than trusting that the path exists.
+ro=$($SSH "root@$HOST" "findmnt -no OPTIONS /var/media 2>/dev/null | grep -c '^ro,' || true")
+[[ "${ro:-0}" == 1 ]] && pass "/var/media is mounted read-only on moby" \
+  || bad "/var/media is mounted read-only on moby" "not mounted ro - check mp0 on CT 108"
+n=$($SSH "root@$HOST" "docker exec homeassistant-homeassistant-1 sh -c 'ls /media/movies 2>/dev/null | wc -l'" 2>/dev/null)
+[[ ${n:-0} -gt 0 ]] && pass "home assistant sees the movie library ($n entries)" \
+  || bad "home assistant sees the movie library" "/media/movies is empty inside the container"
+
 # 8123 belongs to the app and must stay on loopback; nginx is the only way in.
 if nc -z -G 2 192.168.1.79 8123 2>/dev/null; then
   bad "home assistant backend is loopback-only" "8123 is reachable from the LAN"

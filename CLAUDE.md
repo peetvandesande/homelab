@@ -121,6 +121,10 @@ files did not have to be rewritten, .79 for Home Assistant, which the host
 nginx serves over TLS. They are applied by a unit that `docker.service`
 requires, not by interface config — Proxmox rewrites that on every start.
 
+Moby mounts `/hddpool/media` at `/var/media` read-only (`mp0`), like the media
+containers, and Home Assistant browses `video/movies` through it. Use the bind
+mount, not lenora's NFS export: an unprivileged LXC cannot mount NFS.
+
 Reach for a container on moby when a service ships as an image and wants
 nothing from the host; reach for an LXC when it wants to look like a machine.
 
