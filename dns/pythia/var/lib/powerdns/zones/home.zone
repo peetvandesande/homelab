@@ -4,7 +4,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026091401  ; serial
+                2026092102  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -22,6 +22,9 @@ prometheus  IN  A   192.168.1.53
 grafana     IN  A   192.168.1.54
 pistis      IN  A   192.168.1.55     ; step-ca private CA
 loki        IN  A   192.168.1.56     ; log store
+moby        IN  A   192.168.1.27     ; Docker host - outside the .50-.59 range
+nextcloud   IN  A   192.168.1.73     ; on moby, published on its own address
+traefik     IN  A   192.168.1.74     ; on moby, published on its own address
 
 ; --- production -----------------------------------------------------
 jellyfin    IN  A   192.168.1.60

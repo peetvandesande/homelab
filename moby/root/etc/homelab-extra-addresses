@@ -1,0 +1,17 @@
+# Extra LAN addresses on eth0, one per line, read by
+# /usr/local/sbin/homelab-extra-addresses.
+#
+# These came across with the stacks from the old moby (192.168.1.25), which
+# held .72-.78 as secondary addresses on one NIC and published each stack's
+# ports on its own address. The compose files bind those addresses by name, so
+# the addresses moved with them rather than every stack being rewritten.
+#
+# They sit in the range ../CLAUDE.md pencils in for Non-Production while this
+# container is pooled Infrastructure. That is inherited, not a new convention -
+# see moby/CLAUDE.md.
+#
+# pct only carries one address per interface, and Proxmox rewrites
+# /etc/network/interfaces in the container on every start, so this cannot live
+# in either. Adding an address here needs a DNS record too (dns/).
+192.168.1.73    # nextcloud: web publishes :80 and :443
+192.168.1.74    # traefik: publishes :80, :443 and the :8080 dashboard

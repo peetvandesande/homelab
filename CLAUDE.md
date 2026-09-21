@@ -82,9 +82,11 @@ Two things to be aware of:
 - **The Infrastructure IP range is nearly gone** (.50-.56 used) while its ID
   range has 93 free slots. The ranges are badly matched in size; widen the IP
   allocation before it bites.
-- **`lexie` (CT 100) sits at 192.168.1.26**, outside the Infrastructure range
-  it is pooled into. Existing anomaly — don't take it as precedent, and don't
-  "tidy" it without asking.
+- **`lexie` (CT 100) sits at 192.168.1.26 and `moby` (CT 108) at
+  192.168.1.27**, both outside the Infrastructure range they are pooled into.
+  Moby additionally answers on .73 and .74 for two migrated stacks, which is
+  inside the range pencilled in for Non-Production. Existing anomalies —
+  don't take them as precedent, and don't "tidy" them without asking.
 
 ## DNS
 
@@ -105,13 +107,29 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   points at the gateway. The DNS containers themselves must stay on
   192.168.1.1 regardless, or Delphi cannot resolve at boot.
 
+## Docker
+
+Container workloads that are not worth an LXC run on `moby` (CT 108,
+192.168.1.27) — Docker Engine with compose v2, one directory per stack under
+`/opt/stacks`. See `moby/CLAUDE.md`. Nextcloud, Traefik and XWiki moved here
+from the old moby at 192.168.1.25 (a machine this repo does not manage) in
+September 2026; the rest of that host's stacks are still there.
+
+Moby also holds **192.168.1.73 and .74** as extra addresses on `eth0`, one per
+published stack, carried over so the compose files did not have to be
+rewritten. They are applied by a unit that `docker.service` requires, not by
+interface config — Proxmox rewrites that on every container start.
+
+Reach for a container on moby when a service ships as an image and wants
+nothing from the host; reach for an LXC when it wants to look like a machine.
+
 ## Monitoring
 
 Prometheus (192.168.1.53) is used for **all** monitoring; Grafana
 (192.168.1.54) for dashboards and alerting. Loki (192.168.1.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
-systemd journal to it via Grafana Alloy (`alloy/`, one directory for all ten
-hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana. The
+systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
+eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana. The
 ESXi host `esther` (192.168.1.20, not enrolled, cannot run Alloy) reaches it
 via a syslog/TLS relay and an hourly SMART pull, both on the loki container —
 see `esxi/`.
@@ -147,7 +165,7 @@ prometheus-pve-exporter on 127.0.0.1:9221 is not running.
 ## TLS
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS
-off the lab's own CA (`ca/`). Ten hosts are enrolled — all nine containers
+off the lab's own CA (`ca/`). Eleven hosts are enrolled — all ten containers
 plus lenora.
 
 - **Get a certificate with `ca/scripts/enrol.sh <ip> <name>`.** It installs the
@@ -159,9 +177,9 @@ plus lenora.
   containers included, since they inherit the router. Switch to names after
   the cutover, not before.
 - **Per-service TLS config lives in that service's own top-level directory**
-  (`grafana/`, `jellyfin/`, `loki/`, `navidrome/`, `prometheus/`), one per
-  container. `node-exporter/` and `alloy/` are the exceptions: one service on
-  ten hosts, so one directory rather than ten copies.
+  (`grafana/`, `jellyfin/`, `loki/`, `moby/`, `navidrome/`, `prometheus/`),
+  one per container. `node-exporter/` and `alloy/` are the exceptions: one
+  service on eleven hosts, so one directory rather than eleven copies.
 - **Deploy order is load-bearing**: `node-exporter/` → `prometheus/` →
   everything else. The exporters go TLS first and Prometheus learns to speak
   TLS second, so there is a window where scrapes fail. Do them together.

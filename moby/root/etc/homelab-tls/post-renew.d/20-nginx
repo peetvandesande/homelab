@@ -1,0 +1,3 @@
+#!/bin/sh
+# nginx rereads certificates on reload; no need to drop connections.
+exec systemctl reload nginx

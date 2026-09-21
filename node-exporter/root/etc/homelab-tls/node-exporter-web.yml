@@ -1,4 +1,4 @@
-# TLS for prometheus-node-exporter on :9100. Identical on all ten hosts - the
+# TLS for prometheus-node-exporter on :9100. Identical on all eleven hosts - the
 # certificate it points at is per-host, this file is not.
 #
 # No client_auth_type: Prometheus authenticates the exporter, not the reverse.

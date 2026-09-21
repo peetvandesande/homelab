@@ -1,0 +1,29 @@
+#!/bin/sh
+# Put the addresses listed in /etc/homelab-extra-addresses on eth0.
+#
+# Docker publishes container ports on specific addresses, and a bind to an
+# address that is not there yet fails outright - the container exits and
+# compose reports it as a crash, naming neither the address nor the reason.
+# So this runs before docker.service and waits for eth0's own address first:
+# in an LXC with ifupdown, network-online.target is reached before eth0 has
+# one, the same race the DNS containers' wait-for-address drop-ins handle.
+set -eu
+CONF=/etc/homelab-extra-addresses
+PRIMARY=192.168.1.27
+
+n=0
+while [ $n -lt 120 ]; do
+  ip -4 addr show dev eth0 | grep -q "inet $PRIMARY/" && break
+  n=$((n+1)); sleep 0.5
+done
+if [ $n -ge 120 ]; then
+  echo "$PRIMARY never appeared on eth0" >&2; exit 1
+fi
+
+# `replace` rather than `add`: this unit is also how the addresses are applied
+# on a redeploy, and adding one twice is an error.
+sed 's/#.*//' "$CONF" | while read -r addr _; do
+  [ -n "$addr" ] || continue
+  ip addr replace "$addr/24" dev eth0
+  echo "eth0: $addr"
+done

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Turn on TLS for prometheus-node-exporter across the whole fleet.
 #
-# node-exporter is one service on ten hosts, so it gets one directory rather
-# than ten copies of the same two files. That is the reason this does not
+# node-exporter is one service on eleven hosts, so it gets one directory rather
+# than eleven copies of the same two files. That is the reason this does not
 # follow the one-directory-per-container shape the service stacks use.
 #
 # ORDER MATTERS: this breaks every `node` scrape until prometheus/scripts/
@@ -19,9 +19,10 @@ source ../ca/scripts/lib.sh
 FLEET=(
   192.168.1.21 192.168.1.50 192.168.1.51 192.168.1.52 192.168.1.53
   192.168.1.54 192.168.1.55 192.168.1.56 192.168.1.60 192.168.1.61
+  192.168.1.27
 )
 # deploy.sh <ip> does one host - for bringing a new container into the fleet
-# without bouncing the other nine exporters.
+# without bouncing the other ten exporters.
 [[ $# -gt 0 ]] && FLEET=("$@")
 
 for ip in "${FLEET[@]}"; do

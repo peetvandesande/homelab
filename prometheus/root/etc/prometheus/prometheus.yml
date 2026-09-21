@@ -54,6 +54,8 @@ scrape_configs:
     static_configs:
       - targets: ['192.168.1.21:9100']
         labels: {role: pve-host }
+      - targets: ['192.168.1.27:9100']
+        labels: {role: moby }
       - targets: ['192.168.1.50:9100']
         labels: {role: themis }
       - targets: ['192.168.1.51:9100']
@@ -73,7 +75,7 @@ scrape_configs:
       - targets: ['192.168.1.61:9100']
         labels: {role: navidrome }
 
-  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same ten
+  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same eleven
   # targets as `node` - keep the two lists identical; a host in one and not
   # the other is either unmonitored or unlogged.
   - job_name: alloy
@@ -83,6 +85,8 @@ scrape_configs:
     static_configs:
       - targets: ['192.168.1.21:12345']
         labels: {role: pve-host }
+      - targets: ['192.168.1.27:12345']
+        labels: {role: moby }
       - targets: ['192.168.1.50:12345']
         labels: {role: themis }
       - targets: ['192.168.1.51:12345']
@@ -134,6 +138,26 @@ scrape_configs:
   - job_name: navidrome
     static_configs:
       - targets: ['192.168.1.61:4533']
+
+  # The Docker Engine on moby. The engine serves /metrics as plain HTTP on
+  # 127.0.0.1:9324 and cannot do TLS itself, so nginx on the container fronts
+  # it on 9323 - the usual engine metrics port - and allows only this host.
+  - job_name: docker
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.1.27:9323']
+        labels: {role: moby }
+
+  # Traefik, on moby's .74. Plain HTTP on purpose: the dashboard entrypoint
+  # serves /metrics and the whole thing is a migrated stack that predates this
+  # repo's TLS posture - it keeps its own certificates for the sites it
+  # fronts. Put it behind nginx like the engine metrics if that changes.
+  - job_name: traefik
+    static_configs:
+      - targets: ['192.168.1.74:8080']
+        labels: {role: moby }
 
   # Loki exposes its own metrics on the same TLS port as its API.
   - job_name: loki

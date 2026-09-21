@@ -1,0 +1,14 @@
+[Unit]
+Description=Extra LAN addresses on eth0 for published container ports
+Documentation=file:/etc/homelab-extra-addresses
+After=network-online.target
+Wants=network-online.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/homelab-extra-addresses
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,5 @@
 // Grafana Alloy: ship this host's journal to Loki. Managed from homelab/alloy -
-// edit there, not on the host. Byte-identical on all ten hosts; the only
+// edit there, not on the host. Byte-identical on all eleven hosts; the only
 // per-host value is the hostname, which Alloy reads at runtime.
 
 logging {
@@ -64,6 +64,15 @@ loki.relabel "journal" {
   rule {
     source_labels = ["__journal_priority_keyword"]
     target_label  = "level"
+  }
+
+  // Docker on moby logs containers through journald, tagged with the
+  // container name (moby/root/etc/docker/daemon.json). Promote it so a stack
+  // can be read as {host="moby", container="..."}. Bounded by the number of
+  // containers, and empty on every other host - the field is simply absent.
+  rule {
+    source_labels = ["__journal_container_name"]
+    target_label  = "container"
   }
 }
 

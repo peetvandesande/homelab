@@ -1,17 +1,17 @@
 # node-exporter
 
-TLS for `prometheus-node-exporter` on `:9100`, across **all ten enrolled
-hosts** — the nine containers plus lenora.
+TLS for `prometheus-node-exporter` on `:9100`, across **all eleven enrolled
+hosts** — the ten containers plus lenora.
 
-One directory rather than ten, because this is one service replicated, not a
-per-container concern. It is the exception to the one-directory-per-container
+One directory rather than eleven, because this is one service replicated, not
+a per-container concern. It is the exception to the one-directory-per-container
 shape the service stacks use.
 
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth; the same
 two files go to every host. `scripts/deploy.sh` pushes them,
-`scripts/verify.sh` checks all ten. `scripts/deploy.sh <ip>` does one host,
+`scripts/verify.sh` checks all eleven. `scripts/deploy.sh <ip>` does one host,
 for bringing a new container in without bouncing the rest.
 
 Hosts must be enrolled first (`ca/scripts/enrol.sh --all`) — deploy refuses
