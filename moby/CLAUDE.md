@@ -9,8 +9,8 @@ the stacks that came from the old moby publish their ports on them.
 
 Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
 traefik), which came from the old moby (192.168.1.25, a machine this repo has
-never managed) on 21 September 2026, and **home assistant** (.79), which is
-this repo's own.
+never managed) on 21 September 2026. Every stack on this host is one of those
+three — the repo owns none of them.
 
 ## Working on this
 
@@ -79,54 +79,31 @@ of the metrics names the certificate and will not start without it.
    Non-Production: they are inherited from the old host, and every compose
    file here names them literally.
 
-## Home Assistant
+## Home Assistant is gone
 
-`/opt/stacks/homeassistant`, pinned to a release rather than `:stable` — the
-Nextcloud upgrade below is why. The app binds `127.0.0.1:8123` and the host
-nginx serves it on **192.168.1.79:443** off the lab CA; `ca/scripts/enrol.sh`
-carries `homeassistant.home` and `.79` as extra SANs on moby's certificate
-(they are in `FLEET`, after the shortname).
+It ran here as `/opt/stacks/homeassistant` on **192.168.1.79**, behind the
+host nginx, from September 2026 until 24 September 2026, when it was removed
+in favour of a dedicated VM. Deleted with it: the stack and its config volume,
+the nginx site and the `map` in `conf.d/websocket-upgrade.conf`, .79 from
+`root/etc/homelab-extra-addresses` and from moby's SANs in
+`ca/scripts/enrol.sh`, the `homeassistant` Prometheus job and its token, and
+the `homeassistant.home` A and PTR records.
 
-The movie library is at `/media/movies`, which is `/var/media/video/movies`
-on the container and `/hddpool/media/video/movies` on lenora — the repo's
-usual `mp0` bind mount, read-only, exactly as jellyfin and navidrome get it.
-**Not** the NFS export lenora also offers: an unprivileged LXC cannot mount
-NFS at all, and mounting it would be a network round trip to the machine the
-container is already running on. `/media` is Home Assistant's default media
-directory when it exists, so nothing needed configuring — it appears under
-"My media" in the media browser. Add another library by mounting it next to
-this one, not by adding `media_dirs`.
+Why it moved: the compose file claimed mDNS/SSDP discovery "does not cross the
+LXC bridge". That is wrong — `vmbr0` is a plain bridge and a `tcpdump` on
+moby's `eth0` sees mDNS on both v4 and v6. What actually blocked discovery was
+Docker's bridge network: HA sat in a NAT'd namespace whose only route pointed
+at the Docker bridge, so it neither sent to nor received from `224.0.0.251`.
+`network_mode: host` would have fixed it in the LXC. The VM was chosen anyway.
 
-Three things to know before changing it:
-
-1. **`http:` in `configuration.yaml` is ignored.** Home Assistant 2026.9 keeps
-   its HTTP settings in `.storage/http` (`yaml_migration_done: true`) and
-   raises a `yaml_still_present_after_migration` repair if the YAML key is
-   there at all. A `server_port` or `use_x_forwarded_for` written to YAML is
-   silently dropped — the app keeps its stored value and nothing in the log
-   says why. Change these in the UI.
-2. **nginx sends `X-Forwarded-For`, and that only works because the UI says
-   so.** `172.20.0.0/14` is a trusted proxy and `use_x_forwarded_for` is on,
-   both under Settings → System → Network, both stored in `.storage/http`.
-   Turn either off and every request through nginx gets a bare
-   `400 Bad Request`, with one error line in Home Assistant's log and nothing
-   at all on the nginx side. `verify.sh` checks the pair still agree.
-3. **The websocket is the application.** `Upgrade`/`Connection` come from the
-   `map` in `conf.d/websocket-upgrade.conf`, and `proxy_read_timeout` is a
-   day, not the default minute. Without those the page loads and then sits
-   there unable to connect.
-
-Scraped by Prometheus at `/api/prometheus`, which needs two things that are
-easy to miss. The endpoint only exists when `prometheus:` is in
-`configuration.yaml` — it is a normal YAML integration, unlike `http:` — and
-it needs a long-lived access token, created on the user's profile page. The
-token is the only secret in `prometheus/`: it lives in its gitignored
-`secrets.env` and `prometheus/scripts/deploy.sh` installs it as
-`/etc/prometheus/homeassistant.token`, owned by `prometheus` and mode 0400,
-because the unit's `PrivateUsers=true` leaves group membership unmapped.
-
-The container's logs reach Loki like everything else —
-`{host="moby", container="homeassistant-homeassistant-1"}`.
+Removed with it, in the restart on 24 September 2026: **`mp0`**, which
+mounted `/hddpool/media` at `/var/media` read-only for the media browser, and
+**`dev0`**, the Sonoff Zigbee 3.0 USB Dongle Plus V2 on `/dev/ttyUSB0`. CT 108
+now has neither a mountpoint nor a passed-through device. The dongle is
+`10c4:ea60` on lenora, stable as
+`/dev/serial/by-id/usb-Itead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_V2_4473157d6d32f1118879f330984367d3-if00-port0`
+— a VM takes it as a `qm set --usb0 host=10c4:ea60` passthrough, not a `dev`
+entry.
 
 ## What came from the old moby, and what did not
 

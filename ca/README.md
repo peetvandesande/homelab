@@ -54,7 +54,6 @@ serve TLS off the G3 intermediate:
 | .50/.51/.52 | PowerDNS metrics, via nginx | 8083 / 8082 / 8081 |
 | .56 | Loki API and `/metrics` | 3100 |
 | .27 | Docker Engine `/metrics`, via nginx | 9323 |
-| .79 | Home Assistant, via nginx (moby's second address) | 443 |
 | .21 | Proxmox VE web GUI | 8006 |
 
 Each lives in its own directory at the top of `homelab/`, with the fleet-wide

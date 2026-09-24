@@ -47,16 +47,6 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    .74:8080 — a migrated stack that predates this repo's TLS posture and
    carries its own certificates for the sites it fronts.
 
-6. **The `homeassistant` job is the only one with a secret.** Home
-   Assistant's `/api/prometheus` needs a long-lived access token. It is *not*
-   inlined into `prometheus.yml`, which is world-readable on the host, but
-   written to
-   `/etc/prometheus/homeassistant.token` by `deploy.sh` from the gitignored
-   `secrets.env`, owned by `prometheus` and mode 0400 because
-   `PrivateUsers=true` leaves group membership unmapped (invariant 2). A
-   checkout without `secrets.env` still deploys, as long as the token is
-   already on the host.
-
 ## Known broken, pre-existing
 
 The `pve` job is down because `prometheus-pve-exporter` is not running on

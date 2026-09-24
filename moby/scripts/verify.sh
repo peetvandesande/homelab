@@ -59,7 +59,7 @@ echo "== node-exporter"
 https_ok "node-exporter on $HOST:9100" "https://$HOST:9100/metrics"
 
 echo "== scraped by prometheus"
-for job in node alloy docker traefik homeassistant; do
+for job in node alloy docker traefik; do
   $CURL "https://$PROM:9090/api/v1/targets" 2>/dev/null | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -75,7 +75,7 @@ echo "== extra addresses and the stacks that publish on them"
 # The addresses arrived with the stacks from the old moby; docker.service
 # Requires= the unit that adds them, so a container binding .73 or .74 cannot
 # start before they exist.
-for a in 192.168.1.73 192.168.1.74 192.168.1.79; do
+for a in 192.168.1.73 192.168.1.74; do
   $SSH "root@$HOST" "ip -4 addr show dev eth0 | grep -q 'inet $a/'" \
     && pass "$a is on eth0" || bad "$a is on eth0" "address missing - is homelab-extra-addresses running?"
 done
@@ -104,44 +104,6 @@ case "$code" in
   202)     warn "xwiki through traefik" "202 - tomcat is still starting" ;;
   *)       bad  "xwiki serves through traefik" "http=$code" ;;
 esac
-
-echo "== home assistant"
-https_ok "home assistant on 192.168.1.79" "https://192.168.1.79/manifest.json"
-chain_ok "moby:443 (.79)" "192.168.1.79:443"
-# The UI is a websocket application: a proxy that serves the page and drops
-# the upgrade looks like a broken backend, not a broken proxy. HTTP/1.1 on
-# purpose - an upgrade over h2 is refused before nginx ever sees it.
-if curl -sS --http1.1 --cacert "$CA_ROOT" -i --max-time 10 \
-     -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
-     -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-     --resolve homeassistant.home:443:192.168.1.79 \
-     https://homeassistant.home/api/websocket 2>/dev/null | grep -q '101 Switching Protocols'; then
-  pass "websocket upgrades through nginx (101)"
-else bad "websocket upgrades through nginx" "no 101 - check the Upgrade/Connection headers"; fi
-# nginx passes X-Forwarded-For, which Home Assistant answers with 400 unless
-# 172.20.0.0/14 is a trusted proxy in its UI. A plain request proves the pair
-# still agree; the manifest check above would pass either way, since curl
-# sends no such header of its own.
-code=$(curl -sS --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' --max-time 10 https://192.168.1.79/ 2>/dev/null || echo 000)
-[[ "$code" == 200 ]] \
-  && pass "home assistant accepts the proxy's X-Forwarded-For (200)" \
-  || bad "home assistant accepts the proxy's X-Forwarded-For" \
-        "http=$code - 400 means trusted_proxies/use_x_forwarded_for is off in its UI"
-
-# The media library: bind-mounted from the host by Proxmox (mp0) and into the
-# container read-only. A missing mount is an empty directory, not an error,
-# so count entries rather than trusting that the path exists.
-ro=$($SSH "root@$HOST" "findmnt -no OPTIONS /var/media 2>/dev/null | grep -c '^ro,' || true")
-[[ "${ro:-0}" == 1 ]] && pass "/var/media is mounted read-only on moby" \
-  || bad "/var/media is mounted read-only on moby" "not mounted ro - check mp0 on CT 108"
-n=$($SSH "root@$HOST" "docker exec homeassistant-homeassistant-1 sh -c 'ls /media/movies 2>/dev/null | wc -l'" 2>/dev/null)
-[[ ${n:-0} -gt 0 ]] && pass "home assistant sees the movie library ($n entries)" \
-  || bad "home assistant sees the movie library" "/media/movies is empty inside the container"
-
-# 8123 belongs to the app and must stay on loopback; nginx is the only way in.
-if nc -z -G 2 192.168.1.79 8123 2>/dev/null; then
-  bad "home assistant backend is loopback-only" "8123 is reachable from the LAN"
-else pass "home assistant backend is loopback-only"; fi
 
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \

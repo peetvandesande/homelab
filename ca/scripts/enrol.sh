@@ -35,10 +35,10 @@ FLEET=(
   "192.168.1.54 grafana"
   "192.168.1.55 pistis"
   "192.168.1.56 loki"
-  # moby carries extra addresses for the stacks it publishes; the nginx in
-  # front of Home Assistant on .79 serves this certificate, so the name and
-  # the address have to be in it. Words after the shortname are extra SANs.
-  "192.168.1.27 moby homeassistant.home homeassistant 192.168.1.79"
+  # Words after the shortname would be extra SANs. moby needed them while it
+  # fronted Home Assistant on .79; the stacks it publishes now carry their own
+  # certificates, so it is back to the plain form.
+  "192.168.1.27 moby"
   "192.168.1.60 jellyfin"
   "192.168.1.61 navidrome"
 )

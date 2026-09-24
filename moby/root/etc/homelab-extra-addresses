@@ -15,4 +15,3 @@
 # in either. Adding an address here needs a DNS record too (dns/).
 192.168.1.73    # nextcloud: web publishes :80 and :443
 192.168.1.74    # traefik: publishes :80, :443 and the :8080 dashboard
-192.168.1.79    # home assistant: nginx serves it on :443, app binds loopback

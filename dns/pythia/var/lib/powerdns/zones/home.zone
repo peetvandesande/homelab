@@ -4,7 +4,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026092103  ; serial
+                2026092401  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -25,7 +25,6 @@ loki        IN  A   192.168.1.56     ; log store
 moby        IN  A   192.168.1.27     ; Docker host - outside the .50-.59 range
 nextcloud   IN  A   192.168.1.73     ; on moby, published on its own address
 traefik     IN  A   192.168.1.74     ; on moby, published on its own address
-homeassistant IN A  192.168.1.79     ; on moby, nginx fronts it with TLS
 
 ; --- production -----------------------------------------------------
 jellyfin    IN  A   192.168.1.60

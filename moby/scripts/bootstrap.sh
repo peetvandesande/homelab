@@ -20,11 +20,11 @@ CORES=8
 MEM=16384
 DISK=80                        # images, volumes and build cache all live here
 
-# The media dataset, read-only: Home Assistant browses it, nothing here writes
-# to it. Bind-mounted from the host rather than NFS-mounted inside - an
-# unprivileged container cannot mount NFS, and the export would be a network
-# round trip to the machine the container is already running on.
-MEDIA="/hddpool/media,mp=/var/media,backup=0,ro=1"
+# No mountpoint. Home Assistant browsed /hddpool/media here as mp0; it left
+# for a VM in September 2026 and the mount went with it. A stack that wants
+# bulk storage gets it the same way - bind-mounted from the host, not
+# NFS-mounted inside, because an unprivileged container cannot mount NFS and
+# the export would be a network round trip to the machine it runs on.
 
 # nesting is the fleet default; keyctl is what Docker adds. Without it the
 # kernel keyring calls containerd makes inside an unprivileged container fail,
@@ -45,7 +45,6 @@ else
     --searchdomain "$SEARCH" \
     --ostype debian --arch amd64 \
     --unprivileged 1 --features "$FEATURES" \
-    --mp0 "$MEDIA" \
     --onboot 1 \
     --pool "$POOL" \
     --ssh-public-keys "$KEY" \
@@ -60,13 +59,6 @@ if [ "$(pct config "$VMID" | sed -n 's/^features: //p')" != "$FEATURES" ]; then
   pct status "$VMID" | grep -q running && pct reboot "$VMID"
 fi
 pct config "$VMID" | grep -q '^onboot: 1' || pct set "$VMID" --onboot 1
-# Asserted on every run, like the features: the container predates this, and a
-# mountpoint only appears after a restart.
-if ! pct config "$VMID" | grep -q "^mp0: $MEDIA\$"; then
-  echo "== adding mp0 $MEDIA (needs a restart to appear)"
-  pct set "$VMID" --mp0 "$MEDIA"
-  pct status "$VMID" | grep -q running && pct reboot "$VMID"
-fi
 
 pct status "$VMID" | grep -q running || pct start "$VMID"
 
