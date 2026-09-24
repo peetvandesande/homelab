@@ -77,7 +77,7 @@ Pool names are **case-sensitive and exact** — `Non-Production`, not
 .60/.61 in practice, and Non-Production is currently empty with no range ever
 written down. Confirm before relying on these.
 
-Two things to be aware of:
+Three things to be aware of:
 
 - **The Infrastructure IP range is nearly gone** (.50-.56 used) while its ID
   range has 93 free slots. The ranges are badly matched in size; widen the IP
@@ -87,6 +87,13 @@ Two things to be aware of:
   Moby additionally answers on .73 and .74 for the stacks it publishes,
   inside the range pencilled in for Non-Production. Existing anomalies —
   don't take them as precedent, and don't "tidy" them without asking.
+- **`homeassistant` (VM 302) is at 192.168.1.90**, pooled into Production
+  but outside its range, by choice. It is the lab's only VM: Home Assistant
+  OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will not boot with
+  them), with the Sonoff Zigbee dongle passed through as `usb0`. Its address
+  is set inside HAOS (`ha network update`), not by Proxmox. Music Assistant
+  runs there as a Supervisor app (`d5369777_music_assistant`, host network,
+  :8095).
 
 ## DNS
 

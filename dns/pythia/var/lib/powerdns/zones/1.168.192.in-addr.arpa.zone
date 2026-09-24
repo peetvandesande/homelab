@@ -5,7 +5,7 @@ $TTL 3600
 $ORIGIN 1.168.192.in-addr.arpa.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026092401  ; serial
+                2026092402  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -29,3 +29,4 @@ $ORIGIN 1.168.192.in-addr.arpa.
 56      IN  PTR loki.home.
 60      IN  PTR jellyfin.home.
 61      IN  PTR navidrome.home.
+90      IN  PTR homeassistant.home.
