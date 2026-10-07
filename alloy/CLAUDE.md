@@ -43,9 +43,8 @@ push both need the certificate material. Loki must be up, or deploy refuses.
 
 5. **Alloy loads the directory `/etc/alloy`, not one file.** `config.alloy`
    there is the fleet file and stays byte-identical everywhere. A host that
-   needs more drops a second `*.alloy` beside it from its own stack — the
-   loki container has `esxi.alloy` from `esxi/` — and the fleet deploy
-   validates the whole directory. Component names must be unique across
+   needs more drops a second `*.alloy` beside it from its own stack, and the
+   fleet deploy validates the whole directory. Component names must be unique across
    files; a per-host file forwards into the fleet file's `loki.write.loki`
    rather than declaring its own writer.
 

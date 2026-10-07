@@ -162,10 +162,7 @@ Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
 (192.168.8.54) for dashboards and alerting. Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
-eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana. The
-ESXi host `esther` (192.168.1.20, not enrolled, cannot run Alloy) reaches it
-via a syslog/TLS relay and an hourly SMART pull, both on the loki container —
-see `esxi/`.
+eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
 `/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the

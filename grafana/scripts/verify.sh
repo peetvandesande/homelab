@@ -56,7 +56,8 @@ echo "== provisioned dashboards"
 # nothing. Grafana 13 keeps dashboards in unified storage - the `resource`
 # table, one JSON document per object - not the legacy `dashboard` table,
 # which stays empty.
-for uid in esxi; do
+DASHBOARD_UIDS=()   # none since esther was retired; add uids as dashboards land
+for uid in ${DASHBOARD_UIDS[@]+"${DASHBOARD_UIDS[@]}"}; do
   title=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
 import sqlite3, json
 c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)

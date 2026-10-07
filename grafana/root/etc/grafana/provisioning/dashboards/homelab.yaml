@@ -7,7 +7,7 @@
 #
 # Provisioned dashboards are read-only in the UI (allowUiUpdates false). Edit
 # the JSON here and deploy - or prototype in the UI, export the JSON model and
-# paste it back, keeping the uid. The uid is the URL: /d/esxi.
+# paste it back, keeping the uid. The uid is the URL: /d/<uid>.
 #
 # The datasource is not referenced by uid. The provisioned Loki datasource has
 # no pinned uid (see datasources/loki.yaml for why one must never be added to a

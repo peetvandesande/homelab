@@ -78,7 +78,7 @@ for ip in "${FLEET[@]}"; do
     chown root:alloy /etc/alloy/*.alloy && chmod 0640 /etc/alloy/*.alloy
     install -d -o alloy -g alloy -m 0750 /var/lib/alloy /var/lib/alloy/data
     # Parses the whole directory without starting anything - the fleet file
-    # plus whatever this host added (loki has esxi.alloy). Runs as root, so
+    # plus whatever this host added. Runs as root, so
     # it proves the syntax, not that alloy can read the key - the restart
     # proves that.
     alloy validate /etc/alloy >/dev/null

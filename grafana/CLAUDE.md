@@ -60,7 +60,7 @@ per dashboard under `root/var/lib/grafana/dashboards/`, and they land in the
 re-reads the directory every 30 s, so a changed dashboard only needs the push
 (a *new provider* needs the restart `deploy.sh` does anyway). To prototype in
 the UI, "Save as" a copy, export its JSON model, paste it back over the file
-and keep the `uid` - the uid is the URL (`/d/esxi`).
+and keep the `uid` - the uid is the URL (`/d/<uid>`).
 
 5. **Dashboards reference the Loki datasource through a hidden `${loki}`
    datasource variable, not by uid.** The provisioned datasource has no
@@ -74,7 +74,8 @@ and keep the `uid` - the uid is the URL (`/d/esxi`).
    the file being on disk proves nothing, so `verify.sh` lists each uid it
    expects to find.
 
-| uid    | Title          | Source                            |
-|--------|----------------|-----------------------------------|
-| `esxi` | ESXi - esther  | Loki only: `esxi-smart` + syslog  |
+No dashboards are provisioned at present. The `esxi` dashboard was the only
+one and went with esther in October 2026; the provider and the folder stay, so
+adding a JSON file under `root/var/lib/grafana/dashboards/` is all it takes.
+List its uid in `verify.sh`'s `DASHBOARD_UIDS` when you do.
 
