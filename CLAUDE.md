@@ -145,10 +145,23 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.
-- **Clients are intended to use Themis (192.168.8.50) as their only resolver**,
-  via DHCP on the router. This cutover has not happened yet — everything still
-  points at the gateway. The DNS containers themselves must stay on
-  192.168.8.1 regardless, or Delphi cannot resolve at boot.
+- **Clients use Themis (192.168.8.50) as their only resolver.** The DHCP
+  cutover happened in October 2026: the router hands out `6,192.168.8.50` on
+  the LAN, so every client's queries go through dnsdist and its RPZ filtering.
+- **The DNS stack itself stays on the router (192.168.8.1)**, via a dnsmasq
+  `dnsinfra` tag on the themis, delphi and pythia reservations. Pointing Delphi
+  at Themis would loop, and it could not resolve at boot. The tagged option
+  wins over the LAN-wide one because it is more specific — verify that with a
+  throwaway `dhclient -1 -sf /bin/true -lf ...` if you ever change it.
+- **Pythia is the only authority for `home.`** The router forwards `home.` and
+  `8.168.192.in-addr.arpa` to it and no longer names its own DHCP leases into
+  the zone. It did both for a while, and odhcpd was injecting AAAA records for
+  addresses pythia had never heard of. The cost is that dynamic clients get no
+  automatic `.home` name; give anything that needs one a record in `dns/`.
+- **No resolver is advertised over IPv6, deliberately.** dnsdist listens on
+  IPv4 only (`192.168.8.50:53`), so an IPv6 resolver could only ever be a
+  silent bypass of Themis. DHCPv6 is disabled on the LAN and `ra_flags` is
+  `none`; addressing is still SLAAC from RA, which is all `ip6=auto` needs.
 
 ## Docker
 
@@ -217,10 +230,14 @@ plus lenora.
   trust anchors, mints a single-use token on pistis and has the target redeem
   it, so the private key is generated on the host and never moves. Renewal is
   a daily timer authenticated by the certificate itself.
-- **Certificates carry IP SANs, and consumers address hosts by IP**, because
-  nothing on this LAN resolves `.home` until the DHCP cutover to Themis —
-  containers included, since they inherit the router. Switch to names after
-  the cutover, not before.
+- **Certificates carry IP SANs, and consumers address hosts by IP.** This
+  began as a necessity — nothing resolved `.home` — and since the DHCP cutover
+  to Themis it is merely a choice: names do now resolve, from any host whose
+  resolver is Themis or the router. Moving a consumer to a name is therefore
+  possible but is not a comment change: the certificate already carries the
+  DNS SAN, but a container still resolves **its own** FQDN to `127.0.1.1` (see
+  Container defaults), so anything addressing itself by name breaks.
+  Per-service files still carry comments citing the pre-cutover rationale.
 - **Per-service TLS config lives in that service's own top-level directory**
   (`grafana/`, `jellyfin/`, `loki/`, `moby/`, `navidrome/`, `prometheus/`),
   one per container. `node-exporter/` and `alloy/` are the exceptions: one
