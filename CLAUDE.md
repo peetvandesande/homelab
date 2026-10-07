@@ -32,6 +32,12 @@ than fought.
   the same uplink as the untagged LAN**, so a guest joins it with `tag=10` on
   `vmbr0` and Proxmox builds `vmbr0v10` for it — vmbr0 itself is a traditional
   bridge and must stay that way unless you are ready to bounce every container.
+  Nothing in the lab uses `tag=10` today. Two things to know if you add one:
+  Proxmox applies a `net` change to the config but **not to the running VM**, so
+  the guest needs `echo 1 > /sys/bus/pci/rescan` or a power cycle to see an
+  added NIC and keeps a removed one until it restarts; and the guest keeps the
+  NetworkManager profile after the NIC goes, which is what lets a restored NIC
+  come straight back up.
 - The router is not otherwise managed from here.
 
 ## Storage
@@ -127,9 +133,8 @@ Three things to be aware of:
   them), with the Sonoff Zigbee dongle passed through as `usb0`. Its address
   is set inside HAOS (`ha network update`), not by Proxmox. Music Assistant
   runs there as a Supervisor app (`d5369777_music_assistant`, host network,
-  :8095). It has a **second NIC on VLAN 10** (`net1`, `tag=10`) for the IoT
-  devices, reserved at **192.168.10.90**; that address is set in the HAOS GUI,
-  so Proxmox's reservation is only half the story on both interfaces.
+  :8095). It is **on the LAN only** — a second NIC on VLAN 10 was tried in
+  October 2026 and removed again, by choice.
 
 ## DNS
 
