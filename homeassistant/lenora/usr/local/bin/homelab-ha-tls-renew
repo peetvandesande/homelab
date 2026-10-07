@@ -1,0 +1,97 @@
+#!/bin/sh
+# Renew Home Assistant's certificate, from lenora, over the guest agent.
+#
+# Why it runs here and not inside Home Assistant: HAOS has no step-cli and no
+# openssl, /ssl is read-only to the core container, and - the part that
+# actually decides it - a renewal that lives inside Home Assistant cannot
+# recover Home Assistant. If the certificate lapses and HA will not serve, an
+# HA automation never fires. This has no dependency on HA being healthy.
+#
+# The private key never leaves the VM. The renewal is mTLS: the existing
+# certificate authenticates the request, exactly as homelab-tls-renew does for
+# the rest of the fleet. Nothing here holds a provisioner password.
+set -eu
+
+VMID=302
+HELPER=/usr/local/share/homelab/ha-tls.py
+CONFIG=/mnt/data/supervisor/homeassistant   # /config inside the core container
+SSLDIR=/mnt/data/supervisor/ssl             # /ssl    inside the core container
+EXPIRES_IN_HOURS=240                        # 30-day certs; renew under 10 days
+RESTART=yes
+
+for a in "$@"; do
+  case "$a" in
+    --no-restart) RESTART=no ;;
+    --force)      EXPIRES_IN_HOURS=100000 ;;   # renew regardless of time left
+    *) echo "usage: $0 [--no-restart] [--force]" >&2; exit 2 ;;
+  esac
+done
+
+# Run a shell command in the guest and propagate ITS exit code, which
+# `qm guest exec` reports in JSON rather than as its own status.
+qexec() {
+  out=$(qm guest exec "$VMID" --timeout 120 -- /bin/sh -c "$1" 2>&1) || {
+    echo "guest agent call failed: $out" >&2; return 111
+  }
+  printf '%s' "$out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+sys.stdout.write(d.get("out-data", "") + d.get("err-data", ""))
+sys.exit(int(d.get("exitcode") or 0))
+'
+}
+
+cleanup() {
+  qexec "rm -f $CONFIG/ha-tls.py $CONFIG/ha-tls.crt.new" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+[ -f "$HELPER" ] || { echo "missing $HELPER - run homeassistant/scripts/deploy.sh" >&2; exit 1; }
+
+# Push the helper rather than leaving it in /config between runs: the repo stays
+# the only source of truth for it, and HA's config directory stays tidy.
+b64=$(base64 -w0 "$HELPER")
+qexec "echo $b64 | base64 -d > $CONFIG/ha-tls.py" >/dev/null
+
+set +e
+msg=$(qexec "docker exec homeassistant python3 /config/ha-tls.py renew --expires-in-hours $EXPIRES_IN_HOURS")
+rc=$?
+set -e
+echo "$msg"
+
+[ "$rc" = 3 ] && exit 0            # not due yet - the common case
+[ "$rc" = 0 ] || exit "$rc"
+
+# The container staged the new bundle in /config because it cannot write /ssl.
+# Move it across here, on the HAOS host side, where /ssl is writable.
+qexec "set -e
+  [ -s $CONFIG/ha-tls.crt.new ] || { echo 'nothing staged'; exit 1; }
+  cp $SSLDIR/homeassistant.crt $SSLDIR/homeassistant.crt.prev 2>/dev/null || true
+  cp $CONFIG/ha-tls.crt.new $SSLDIR/homeassistant.crt
+  chmod 644 $SSLDIR/homeassistant.crt
+  rm -f $CONFIG/ha-tls.crt.new"
+echo "installed into $SSLDIR/homeassistant.crt (previous kept as .prev)"
+
+if [ "$RESTART" = no ]; then
+  echo "not restarting: Home Assistant keeps serving the old certificate until it does"
+  exit 0
+fi
+
+# Home Assistant reads ssl_certificate once, at startup. Until it restarts the
+# renewal has achieved nothing, which is why this is the default.
+qexec "ha core restart" >/dev/null
+echo "home assistant restarting"
+
+i=0
+while [ "$i" -lt 60 ]; do
+  if echo | openssl s_client -connect 192.168.8.90:443 \
+       -CAfile /etc/homelab-tls/root_ca.crt 2>/dev/null \
+       | grep -q "Verify return code: 0"; then
+    echo "serving the new certificate, verified against the lab root"
+    exit 0
+  fi
+  i=$((i + 1)); sleep 5
+done
+echo "WARNING: did not see a verified TLS handshake on 192.168.8.90:443 within 5m" >&2
+echo "         the previous certificate is at $SSLDIR/homeassistant.crt.prev" >&2
+exit 1

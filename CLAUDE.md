@@ -134,7 +134,8 @@ Three things to be aware of:
   is set inside HAOS (`ha network update`), not by Proxmox. Music Assistant
   runs there as a Supervisor app (`d5369777_music_assistant`, host network,
   :8095). It is **on the LAN only** — a second NIC on VLAN 10 was tried in
-  October 2026 and removed again, by choice.
+  October 2026 and removed again, by choice. It serves HTTPS on **:443** off
+  the lab CA; `homeassistant/` owns the certificate and its renewal.
 
 ## DNS
 
@@ -229,7 +230,9 @@ prometheus-pve-exporter on 127.0.0.1:9221 is not running.
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS
 off the lab's own CA (`ca/`). Eleven hosts are enrolled — all ten containers
-plus lenora.
+plus lenora. The Home Assistant VM holds a certificate too but is **not
+enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
+`homeassistant/`.
 
 - **Get a certificate with `ca/scripts/enrol.sh <ip> <name>`.** It installs the
   trust anchors, mints a single-use token on pistis and has the target redeem
@@ -245,9 +248,14 @@ plus lenora.
   keeps the IP on purpose rather than by inertia: `homelab-tls-renew`, because
   renewing every certificate in the lab should not depend on DNS being up.
 - **Per-service TLS config lives in that service's own top-level directory**
-  (`grafana/`, `jellyfin/`, `loki/`, `moby/`, `navidrome/`, `prometheus/`),
-  one per container. `node-exporter/` and `alloy/` are the exceptions: one
-  service on eleven hosts, so one directory rather than eleven copies.
+  (`grafana/`, `homeassistant/`, `jellyfin/`, `loki/`, `moby/`, `navidrome/`,
+  `prometheus/`), one per container. `node-exporter/` and `alloy/` are the
+  exceptions: one service on eleven hosts, so one directory rather than eleven
+  copies.
+- **The Home Assistant VM is the one host that cannot renew itself.** HAOS has
+  no step-cli and no openssl, and `/ssl` is read-only to the core container, so
+  a timer on lenora drives it over the guest agent. The key is still generated
+  in the VM and never leaves it. See `homeassistant/CLAUDE.md`.
 - **Deploy order is load-bearing**: `node-exporter/` → `prometheus/` →
   everything else. The exporters go TLS first and Prometheus learns to speak
   TLS second, so there is a window where scrapes fail. Do them together.

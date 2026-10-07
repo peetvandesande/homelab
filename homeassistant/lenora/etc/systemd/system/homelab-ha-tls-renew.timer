@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily Home Assistant certificate renewal check
+
+[Timer]
+# Same shape as the fleet's homelab-tls-renew.timer: daily with jitter, and
+# Persistent so a node that was off catches up rather than waiting for the next
+# midnight. One VM rather than eleven hosts, so the jitter is only to keep it
+# off the same second as the fleet's own sweep.
+OnCalendar=daily
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

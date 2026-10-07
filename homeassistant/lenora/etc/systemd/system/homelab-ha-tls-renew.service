@@ -1,0 +1,16 @@
+[Unit]
+Description=Renew Home Assistant's lab certificate via the guest agent
+# The guest agent is reached through pvedaemon, so there is nothing to wait for
+# beyond the local node being up. A VM that is off simply fails the run and the
+# timer tries again tomorrow.
+After=pve-guests.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/homelab-ha-tls-renew
+# The script's own wait loop is up to 5 minutes; give it room beyond that.
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target
