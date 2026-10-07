@@ -24,9 +24,10 @@ so doing it first leaves every dashboard broken in between.
    this is a real check, and setting it true would make the whole migration
    decorative.
 
-3. **The datasource URL is an IP.** `.home` does not resolve anywhere on this
-   LAN until the DHCP cutover to Themis; the certificate carries an IP SAN for
-   this. Change it to a name only after the cutover.
+3. **The datasource URL is an IP.** `.home` resolves since the DHCP cutover to
+   Themis, and the certificate carries a DNS SAN as well as an IP SAN, so a
+   name would verify. It stays an IP because it works — a choice now, not a
+   constraint.
 
 ## Verifying trust without credentials
 

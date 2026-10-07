@@ -147,9 +147,11 @@ Queries over all three go through the same rule chain, so kids tagging and the
 cache pool split apply identically. There is no separate path for encrypted
 clients and there must not be one.
 
-Clients need to trust the G2 root, and — until the DHCP cutover — must address
-Themis **by IP**, because nothing resolves `themis.home` yet. Every lab
-certificate carries an IP SAN for exactly this.
+Clients need to trust the G2 root. Addressing Themis **by IP** always works,
+because every lab certificate carries an IP SAN; since the DHCP cutover a
+client that already uses Themis can resolve `themis.home` and verify the name
+instead. A client being configured for the first time has no resolver yet, so
+the IP remains the sensible thing to type.
 
 Testing by hand:
 

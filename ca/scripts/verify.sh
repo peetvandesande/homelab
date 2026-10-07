@@ -11,8 +11,9 @@ fail=0
 
 cd "$(dirname "$0")/.."
 SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5"
-# Resolve pistis.home ourselves so this works before the DNS cutover, while
-# still exercising the name the certificate is actually issued for.
+# Resolve pistis.home ourselves rather than trusting whatever resolver this
+# workstation has - it may be on a VPN - while still exercising the name the
+# certificate is actually issued for.
 CURL="curl -sS --max-time 10 --cacert $ROOT --resolve pistis.home:8443:$PISTIS"
 
 pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
@@ -68,7 +69,7 @@ check_eq "$host resolves to pistis via Themis" "$PISTIS" \
   "$(dig +short +time=3 +tries=1 @192.168.8.50 "$host" A 2>/dev/null | tail -1)"
 
 # 2. The files are actually served at the advertised paths. Forced at pistis,
-#    so this passes before the DHCP cutover and tests the paths, not the DNS.
+#    so this tests the paths rather than whatever DNS the workstation has.
 for u in "$cdp" "$aia"; do
   if curl -sS --max-time 10 -f -o /dev/null --resolve "$host:80:$PISTIS" "$u" 2>/dev/null; then
     pass "$u is served by pistis"
@@ -77,15 +78,15 @@ for u in "$cdp" "$aia"; do
   fi
 done
 
-# 3. What a real client on this LAN gets today. Until the router hands out
-#    Themis, everything still resolves via the gateway and reaches the public
-#    VPS, where nothing is published - so revocation checking is still broken
-#    for real clients even though the two checks above pass.
+# 3. What this host gets with its own resolver. Since the DHCP cutover a LAN
+#    client using Themis resolves the name to pistis and gets the CRL - verify
+#    from a container to see that. This check runs on the workstation, which
+#    may be on a VPN and resolve the name to the public VPS instead.
 if curl -sS --max-time 10 -f -o /dev/null "$cdp" 2>/dev/null; then
   pass "$cdp reachable as this host actually resolves it"
 else
   warn "$cdp is NOT reachable as this host actually resolves it" \
-    "expected until the DHCP cutover to Themis - see README.md"
+    "this workstation is not using Themis - check from a container instead"
 fi
 
 echo "== step-ca"

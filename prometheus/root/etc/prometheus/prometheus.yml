@@ -8,9 +8,9 @@
 #
 # TLS: every job below that carries `scheme: https` is talking to a service
 # holding a certificate from the lab's own CA (homelab/ca). Targets stay as IP
-# addresses rather than names because no host on this LAN can resolve .home
-# until the DHCP cutover to Themis - which is why every issued certificate
-# carries an IP SAN. Switch these to names only after that cutover.
+# addresses rather than names. That was forced before the DHCP cutover to
+# Themis and is now a choice: .home resolves, and every certificate carries a
+# DNS SAN beside its IP SAN, so a name would verify.
 
 global:
   scrape_interval:     30s

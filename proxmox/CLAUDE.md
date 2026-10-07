@@ -47,5 +47,8 @@ knows nothing about `.home`. The dns-01 route would need Pythia's API key on
 lenora and an nginx ACL change on .52.
 
 Reusing the enrolment mechanism costs one hook and no new failure modes, and
-lenora was already enrolled for node-exporter. Revisit after the DHCP cutover,
-when `.home` resolves and http-01 becomes possible.
+lenora was already enrolled for node-exporter. The DHCP cutover has since
+happened, so `.home` resolves and http-01 is possible in principle — but note
+pistis is one of the three hosts deliberately left on the router, and the
+router resolves `home.` only by forwarding to Pythia. Worth revisiting, not
+free.

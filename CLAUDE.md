@@ -236,8 +236,9 @@ plus lenora.
   resolver is Themis or the router. Moving a consumer to a name is therefore
   possible but is not a comment change: the certificate already carries the
   DNS SAN, but a container still resolves **its own** FQDN to `127.0.1.1` (see
-  Container defaults), so anything addressing itself by name breaks.
-  Per-service files still carry comments citing the pre-cutover rationale.
+  Container defaults), so anything addressing itself by name breaks. One place
+  keeps the IP on purpose rather than by inertia: `homelab-tls-renew`, because
+  renewing every certificate in the lab should not depend on DNS being up.
 - **Per-service TLS config lives in that service's own top-level directory**
   (`grafana/`, `jellyfin/`, `loki/`, `moby/`, `navidrome/`, `prometheus/`),
   one per container. `node-exporter/` and `alloy/` are the exceptions: one

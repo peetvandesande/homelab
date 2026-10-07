@@ -76,8 +76,8 @@ loki.relabel "journal" {
   }
 }
 
-// The IP, not loki.home: nothing on this LAN resolves .home until the DHCP
-// cutover to Themis. Loki's certificate carries an IP SAN for this. Verified
+// The IP, not loki.home. .home resolves since the DHCP cutover to Themis and
+// Loki's certificate carries a DNS SAN too, so the IP is a choice. Verified
 // against the lab root explicitly rather than the system store, so a push can
 // never silently trust some unrelated public CA.
 loki.write "loki" {

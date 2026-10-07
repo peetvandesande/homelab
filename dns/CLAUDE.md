@@ -153,15 +153,6 @@ Built and verified, including across cold boots. Not yet done:
 - **`kids-devices.conf` is empty**, so every device currently gets the malware
   feed only. The kids path itself is proven working — it was tested end to end
   with a temporary entry, including cache isolation between the two policies.
-- **No client cutover.** Nothing uses Themis yet; the router still hands out
-  192.168.8.1. The three containers must stay on 192.168.8.1 regardless —
-  pointing Delphi at Themis is a boot-time resolution loop.
-
-  This now costs something concrete: the `ca.peetvandesande.com` split-horizon
-  (invariant 5) is live and correct at Themis, but **no host on the LAN sees
-  it** — they all still resolve that name to the public VPS and get a 404 for
-  the CA's CRL and AIA. The CA cannot do revocation checking until the cutover
-  happens.
 - **IOT filtering is not enabled.** Feeds are staged and commented in
   `delphi/etc/powerdns/rpz-feeds.conf`; enabling one also needs a matching
   `rpzFile()` block in `recursor.lua`. Which vendor lists are wanted depends on

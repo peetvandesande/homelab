@@ -61,7 +61,7 @@ check_eq "ANY is refused" "REFUSED" "$(status example.com ANY)"
 echo "== encrypted transports (dnsdist)"
 CA=../ca/rootca/certs/root.crt
 # Verified against our own root, and against the IP - every lab certificate
-# carries an IP SAN because .home resolves nowhere until the DHCP cutover.
+# carries an IP SAN, which is what a client pinning the address verifies.
 if a=$(./scripts/dns-tls-query.py dot 192.168.8.50 853 grafana.home "$CA" 2>&1); then
   check_eq "DoT :853 resolves grafana.home" "192.168.8.54" "$a"
 else

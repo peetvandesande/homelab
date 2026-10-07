@@ -25,9 +25,11 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    `/etc/homelab-tls/host.key`. Naming the group explicitly does. Do not
    "fix" this by disabling `PrivateUsers`.
 
-3. **Targets are IP addresses, not `.home` names.** Nothing on this LAN
-   resolves `.home` until the DHCP cutover to Themis, containers included.
-   Every certificate carries an IP SAN for exactly this reason. The self-scrape
+3. **Targets are IP addresses, not `.home` names.** This was once forced —
+   nothing resolved `.home` — and since the DHCP cutover to Themis it is a
+   choice: names resolve, and every certificate carries a DNS SAN beside its
+   IP SAN, so a name would verify. Renaming 22 targets buys nothing and a
+   container resolves its own FQDN to 127.0.1.1 under DHCP. The self-scrape
    uses `localhost:9090`, which is in this host's SANs too.
 
 4. **The `node` job must match `FLEET` in `ca/scripts/enrol.sh`.** A host

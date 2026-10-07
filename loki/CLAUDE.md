@@ -23,8 +23,11 @@ the certificate and Loki will not start without it.
    The packaged unit runs as `loki`; the key is `root:tlscert 0640`.
 
 3. **Grafana's datasource URL is an IP** (`grafana/.../datasources/loki.yaml`),
-   same reason as every other consumer: nothing resolves `.home` until the
-   DHCP cutover to Themis. Switch to a name after, not before.
+   same reason as every other consumer. `.home` does resolve since the DHCP
+   cutover to Themis, and the certificate carries a DNS SAN as well as an IP
+   one, so a name would verify. It stays an IP because it works and because a
+   container resolves its own FQDN to 127.0.1.1 under DHCP — a choice now,
+   not a constraint.
 
 4. **The package is pinned and held** (`apt-mark hold loki`). Loki's schema and
    config keys move between majors; bump `LOKI_VER` in `bootstrap.sh` together

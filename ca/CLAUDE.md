@@ -115,10 +115,12 @@ Three pieces make that work and **none of them works alone** — the zone on
 Pythia, the forward-zone on Delphi, and an `addNTA()` because
 `peetvandesande.com` is DNSSEC-signed. See `homelab/dns/CLAUDE.md`.
 
-The remaining gap is that **no client uses Themis yet**, so in practice every
-host on the LAN still resolves the name to the VPS and gets a 404. `verify.sh`
-tests the split-horizon and the served paths as PASS, and reports the
-real-client path as WARN until the DHCP cutover.
+Since the DHCP cutover this **works for real clients**: from a container,
+`ca.peetvandesande.com` resolves to pistis and the CRL returns 200, so
+revocation checking is no longer broken. `verify.sh` still has a third check
+for the real-client path, but it runs on **your workstation** — if that is on a
+VPN, or otherwise not using Themis, it resolves the name to the public VPS and
+the check WARNs. That is a fact about the workstation, not the lab.
 
 Adding a DNS alias for the CA API means adding it to `dnsNames` in `ca.json`
 too, or TLS to that name fails.
@@ -176,11 +178,14 @@ Each of these was found by something breaking.
    node-exporter, and most run something else too. A single `post-renew` file
    would mean the two stacks overwriting each other's hook.
 
-5. **Certificates carry IP SANs, and consumers address hosts by IP.** Nothing
-   on this LAN resolves `.home` until the DHCP cutover to Themis — not even the
-   containers, which inherit the router. Prometheus targets and Grafana's
-   datasource URL are therefore IPs. After the cutover they can become names;
-   until then, changing them breaks TLS verification.
+5. **Certificates carry IP SANs, and consumers address hosts by IP.** This was
+   forced before the DHCP cutover to Themis, when nothing resolved `.home`. It
+   now holds by choice: names resolve, and each certificate carries a DNS SAN
+   beside its IP SAN, so Prometheus targets and Grafana's datasource URL could
+   become names and still verify. Two reasons not to bother — it buys nothing,
+   and a container resolves **its own** FQDN to 127.0.1.1 under DHCP, so
+   anything addressing itself by name breaks. `homelab-tls-renew` keeps the IP
+   deliberately: renewal should not depend on DNS being healthy.
 
 ## When you add a container
 
