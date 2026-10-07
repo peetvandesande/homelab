@@ -26,6 +26,12 @@ than fought.
 - **Reservations are the source of truth for lab addressing.** They live on the
   router (`uci show dhcp`), not in this repo. When you add a container, add the
   reservation first — see the Container defaults below.
+- **Three other networks hang off it**, each with its own .100-.249 pool:
+  `guest` (192.168.9.0/24) and `iot` (**192.168.10.0/24, VLAN 10**), plus the
+  ONT management net on 192.168.11.0/24. VLAN 10 arrives at lenora **tagged on
+  the same uplink as the untagged LAN**, so a guest joins it with `tag=10` on
+  `vmbr0` and Proxmox builds `vmbr0v10` for it — vmbr0 itself is a traditional
+  bridge and must stay that way unless you are ready to bounce every container.
 - The router is not otherwise managed from here.
 
 ## Storage
@@ -121,7 +127,9 @@ Three things to be aware of:
   them), with the Sonoff Zigbee dongle passed through as `usb0`. Its address
   is set inside HAOS (`ha network update`), not by Proxmox. Music Assistant
   runs there as a Supervisor app (`d5369777_music_assistant`, host network,
-  :8095).
+  :8095). It has a **second NIC on VLAN 10** (`net1`, `tag=10`) for the IoT
+  devices, reserved at **192.168.10.90**; that address is set in the HAOS GUI,
+  so Proxmox's reservation is only half the story on both interfaces.
 
 ## DNS
 
