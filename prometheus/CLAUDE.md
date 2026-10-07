@@ -1,6 +1,6 @@
 # Prometheus
 
-CT 103, **192.168.1.53**. Serves its API over TLS on `:9090` and scrapes the
+CT 103, **192.168.8.53**. Serves its API over TLS on `:9090` and scrapes the
 migrated services over TLS.
 
 ## Working on this

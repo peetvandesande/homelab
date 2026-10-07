@@ -3,14 +3,14 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-FLEET=(192.168.1.21 192.168.1.50 192.168.1.51 192.168.1.52 192.168.1.53
-       192.168.1.54 192.168.1.55 192.168.1.56 192.168.1.60 192.168.1.61)
+FLEET=(192.168.8.21 192.168.8.50 192.168.8.51 192.168.8.52 192.168.8.53
+       192.168.8.54 192.168.8.55 192.168.8.56 192.168.8.60 192.168.8.61)
 
 echo "== node-exporter TLS across the fleet"
 for ip in "${FLEET[@]}"; do https_ok "$ip:9100" "https://$ip:9100/metrics"; done
 
 echo "== chain (spot check; the rest share the mechanism)"
-chain_ok "192.168.1.21:9100" 192.168.1.21:9100
+chain_ok "192.168.8.21:9100" 192.168.8.21:9100
 
 echo "== plain HTTP must be gone"
 for ip in "${FLEET[@]}"; do

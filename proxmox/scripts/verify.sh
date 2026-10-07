@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-HOST=192.168.1.21
+HOST=192.168.8.21
 
 echo "== Proxmox web GUI over TLS"
 https_ok "pveproxy :8006" "https://$HOST:8006/" 200

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Navidrome (192.168.1.61): plain HTTP on 4533.
+# Navidrome (192.168.8.61): plain HTTP on 4533.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.61
+HOST=192.168.8.61
 
 push "$HOST" root
 $SSH "root@$HOST" '

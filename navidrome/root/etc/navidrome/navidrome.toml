@@ -1,4 +1,4 @@
-# Managed from homelab/navidrome - edit there, not on 192.168.1.61.
+# Managed from homelab/navidrome - edit there, not on 192.168.8.61.
 #
 # Plain HTTP on 4533, deliberately. Media streaming is LAN-only, and Navidrome
 # has a single listener - TLSCert/TLSKey would switch the UI to HTTPS too, and

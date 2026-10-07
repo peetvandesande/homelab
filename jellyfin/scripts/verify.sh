@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-HOST=192.168.1.60
+HOST=192.168.8.60
 
 echo "== UI on plain HTTP 8096"
 code=$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' "http://$HOST:8096/System/Info/Public" 2>/dev/null || echo 000)

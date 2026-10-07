@@ -4,16 +4,16 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-LOKI=192.168.1.56
+LOKI=192.168.8.56
 CURL="curl -sS --max-time 10 --cacert $CA_ROOT"
-FLEET=(192.168.1.21 192.168.1.50 192.168.1.51 192.168.1.52 192.168.1.53
-       192.168.1.54 192.168.1.55 192.168.1.56 192.168.1.60 192.168.1.61)
+FLEET=(192.168.8.21 192.168.8.50 192.168.8.51 192.168.8.52 192.168.8.53
+       192.168.8.54 192.168.8.55 192.168.8.56 192.168.8.60 192.168.8.61)
 
 echo "== alloy TLS across the fleet"
 for ip in "${FLEET[@]}"; do https_ok "$ip:12345" "https://$ip:12345/-/ready"; done
 
 echo "== chain (spot check; the rest share the mechanism)"
-chain_ok "192.168.1.21:12345" 192.168.1.21:12345
+chain_ok "192.168.8.21:12345" 192.168.8.21:12345
 
 echo "== plain HTTP must be gone"
 for ip in "${FLEET[@]}"; do
@@ -36,7 +36,7 @@ for ip in "${FLEET[@]}"; do
 done
 
 echo "== scraped by prometheus"
-read -r n down < <($CURL "https://192.168.1.53:9090/api/v1/targets" 2>/dev/null \
+read -r n down < <($CURL "https://192.168.8.53:9090/api/v1/targets" 2>/dev/null \
   | python3 -c '
 import json,sys
 ts=[t for t in json.load(sys.stdin)["data"]["activeTargets"] if t["labels"]["job"]=="alloy"]

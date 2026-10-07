@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-HOST=192.168.1.53
+HOST=192.168.8.53
 CURL="curl -sS --max-time 10 --cacert $CA_ROOT"
 
 echo "== prometheus API over TLS"

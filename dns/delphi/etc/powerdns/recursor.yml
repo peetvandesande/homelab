@@ -12,16 +12,16 @@
 
 incoming:
   listen:
-    - 192.168.1.51
+    - 192.168.8.51
   port: 53
   # Themis is the only thing that talks to us directly, but once the PROXY
   # header is decoded allow_from is matched against the *real* client, so this
-  # has to be the client range - not 192.168.1.50.
+  # has to be the client range - not 192.168.8.50.
   allow_from:
-    - 192.168.1.0/24
+    - 192.168.8.0/24
     - 127.0.0.0/8
   proxy_protocol_from:
-    - 192.168.1.50/32
+    - 192.168.8.50/32
 
 recursor:
   threads: 2
@@ -33,11 +33,11 @@ recursor:
     - zone: home.
       recurse: false
       forwarders:
-        - 192.168.1.52
-    - zone: 1.168.192.in-addr.arpa.
+        - 192.168.8.52
+    - zone: 8.168.192.in-addr.arpa.
       recurse: false
       forwarders:
-        - 192.168.1.52
+        - 192.168.8.52
     # Split-horizon: this one name resolves to pistis inside the lab, not to
     # the public VPS. Only the single name is forwarded - the rest of
     # peetvandesande.com still recurses to the internet normally. Requires the
@@ -45,7 +45,7 @@ recursor:
     - zone: ca.peetvandesande.com.
       recurse: false
       forwarders:
-        - 192.168.1.52
+        - 192.168.8.52
 
   lua_config_file: /etc/powerdns/recursor.lua
   lua_dns_script: /etc/powerdns/policy.lua

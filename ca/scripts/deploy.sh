@@ -14,7 +14,7 @@ source secrets.env
 : "${STEP_CA_KEY_PASSWORD:?not set in secrets.env}"
 : "${STEP_CA_JWK_PASSWORD:?not set in secrets.env}"
 
-PISTIS=192.168.1.55
+PISTIS=192.168.8.55
 INT="intermediate"
 CRT="$INT/certs/intermediate-g3.crt"
 KEY="$INT/private/intermediate-g3.key"

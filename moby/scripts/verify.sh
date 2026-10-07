@@ -5,10 +5,10 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-HOST=192.168.1.27
-LENORA=192.168.1.21
-PROM=192.168.1.53
-LOKI=192.168.1.56
+HOST=192.168.8.27
+LENORA=192.168.8.21
+PROM=192.168.8.53
+LOKI=192.168.8.56
 CURL="curl -sS --max-time 10 --cacert $CA_ROOT"
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=5"
 
@@ -75,7 +75,7 @@ echo "== extra addresses and the stacks that publish on them"
 # The addresses arrived with the stacks from the old moby; docker.service
 # Requires= the unit that adds them, so a container binding .73 or .74 cannot
 # start before they exist.
-for a in 192.168.1.73 192.168.1.74; do
+for a in 192.168.8.73 192.168.8.74; do
   $SSH "root@$HOST" "ip -4 addr show dev eth0 | grep -q 'inet $a/'" \
     && pass "$a is on eth0" || bad "$a is on eth0" "address missing - is homelab-extra-addresses running?"
 done
@@ -85,20 +85,20 @@ $SSH "root@$HOST" 'systemctl is-enabled --quiet homelab-extra-addresses.service'
 
 # Nextcloud rejects a request whose Host is a bare IP (trusted_domains), so
 # ask it the way a client does.
-if curl -sS --max-time 15 -H 'Host: nextcloud.lan' http://192.168.1.73/status.php 2>/dev/null \
+if curl -sS --max-time 15 -H 'Host: nextcloud.lan' http://192.168.8.73/status.php 2>/dev/null \
      | grep -q '"maintenance":false'; then
   pass "nextcloud answers on .73 and is not in maintenance mode"
 else bad "nextcloud answers on .73" "status.php did not report a healthy install"; fi
 
 # Traefik holds the routes for both migrated sites. Its API is plain HTTP on
 # the dashboard entrypoint - see prometheus.yml.
-routers=$(curl -sS --max-time 10 http://192.168.1.74:8080/api/http/routers 2>/dev/null \
+routers=$(curl -sS --max-time 10 http://192.168.8.74:8080/api/http/routers 2>/dev/null \
   | python3 -c 'import json,sys; print(" ".join(r["name"] for r in json.load(sys.stdin) if r.get("status")=="enabled"))' 2>/dev/null || true)
 for r in nextcloud_lan@docker xwiki@docker; do
   grep -q "$r" <<<"$routers" && pass "traefik router $r is enabled" \
     || bad "traefik router $r is enabled" "not in the enabled routers: ${routers:-none}"
 done
-code=$(curl -sk --max-time 30 -o /dev/null -w '%{http_code}' --resolve inall.net:443:192.168.1.74 https://inall.net/xwiki/ 2>/dev/null || echo 000)
+code=$(curl -sk --max-time 30 -o /dev/null -w '%{http_code}' --resolve inall.net:443:192.168.8.74 https://inall.net/xwiki/ 2>/dev/null || echo 000)
 case "$code" in
   200|302) pass "xwiki serves through traefik (http=$code)" ;;
   202)     warn "xwiki through traefik" "202 - tomcat is still starting" ;;

@@ -13,26 +13,26 @@ $ORIGIN home.
 @       IN  NS      pythia.home.
 
 ; --- infrastructure -------------------------------------------------
-gw          IN  A   192.168.1.1
-lenora      IN  A   192.168.1.21     ; Proxmox host
-themis      IN  A   192.168.1.50     ; dnsdist - the LAN's resolver
-delphi      IN  A   192.168.1.51     ; recursor + filtering
-pythia      IN  A   192.168.1.52     ; this server
-prometheus  IN  A   192.168.1.53
-grafana     IN  A   192.168.1.54
-pistis      IN  A   192.168.1.55     ; step-ca private CA
-loki        IN  A   192.168.1.56     ; log store
-moby        IN  A   192.168.1.27     ; Docker host - outside the .50-.59 range
-nextcloud   IN  A   192.168.1.73     ; on moby, published on its own address
-traefik     IN  A   192.168.1.74     ; on moby, published on its own address
+gw          IN  A   192.168.8.1
+lenora      IN  A   192.168.8.21     ; Proxmox host
+themis      IN  A   192.168.8.50     ; dnsdist - the LAN's resolver
+delphi      IN  A   192.168.8.51     ; recursor + filtering
+pythia      IN  A   192.168.8.52     ; this server
+prometheus  IN  A   192.168.8.53
+grafana     IN  A   192.168.8.54
+pistis      IN  A   192.168.8.55     ; step-ca private CA
+loki        IN  A   192.168.8.56     ; log store
+moby        IN  A   192.168.8.27     ; Docker host - outside the .50-.59 range
+nextcloud   IN  A   192.168.8.73     ; on moby, published on its own address
+traefik     IN  A   192.168.8.74     ; on moby, published on its own address
 
 ; --- production -----------------------------------------------------
-jellyfin    IN  A   192.168.1.60
-navidrome   IN  A   192.168.1.61
-homeassistant IN A  192.168.1.90     ; HAOS VM 302 - outside the .60-.69 range
+jellyfin    IN  A   192.168.8.60
+navidrome   IN  A   192.168.8.61
+homeassistant IN A  192.168.8.90     ; HAOS VM 302 - outside the .60-.69 range
 
 ; --- non-production -------------------------------------------------
-lexie       IN  A   192.168.1.26
+lexie       IN  A   192.168.8.24
 
 ; --- aliases --------------------------------------------------------
 dns         IN  CNAME themis.home.

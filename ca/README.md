@@ -8,7 +8,7 @@ Peet van de Sande Root Certificate G2      rootca/ — offline, on the workstati
   C=GB, ST=England, L=London               RSA-4096, expires Dec 2046
         │
         ▼
-Peet van de Sande Intermediate CA G3       pistis (192.168.1.55), step-ca 0.30.2
+Peet van de Sande Intermediate CA G3       pistis (192.168.8.55), step-ca 0.30.2
   C=FR, ST=Bouches-du-Rhone                ECDSA P-256, pathlen:0, ~10 years
         │
         ▼
@@ -164,7 +164,7 @@ regenerates and redeploys by hand.
   and re-issue — but that is a rebuild, not a restore.
 - **`/g3/` is only served on the inside.** `ca.peetvandesande.com` is
   split-horizon: Pythia is authoritative for that one name and answers
-  `192.168.1.55`, so pistis serves the CRL and AIA at exactly the URL the
+  `192.168.8.55`, so pistis serves the CRL and AIA at exactly the URL the
   certificate names. Publicly the name is still a CNAME to an OVH VPS
   (145.239.73.18) that this repo does not manage, where `/g3/` returns 404 — as
   does `/g2/`, dangling since 2016. Two consequences:

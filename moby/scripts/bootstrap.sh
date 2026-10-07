@@ -2,20 +2,20 @@
 # Creates the moby container on lenora and installs Docker Engine from
 # download.docker.com. Idempotent: skips the create if CT 108 exists, but
 # still asserts the settings Docker needs, and skips installs already done.
-# Run ON the Proxmox host:  ssh root@192.168.1.21 bash -s < scripts/bootstrap.sh
+# Run ON the Proxmox host:  ssh root@192.168.8.21 bash -s < scripts/bootstrap.sh
 set -euo pipefail
 
 TEMPLATE="local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
 STORAGE="ssdpool"
 BRIDGE="vmbr0"
-GW="192.168.1.1"
+GW="192.168.8.1"
 SEARCH="home"
 POOL="Infrastructure"          # exact case - "Infrastructure", pct is picky
 KEY="/root/.ssh/dns-infra.pub"
 
 VMID=108
 HOST=moby
-IP=192.168.1.27
+IP=192.168.8.27
 CORES=8
 MEM=16384
 DISK=80                        # images, volumes and build cache all live here

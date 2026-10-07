@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-HOST=192.168.1.56
+HOST=192.168.8.56
 CURL="curl -sS --max-time 10 --cacert $CA_ROOT"
 
 echo "== loki API over TLS"
@@ -38,7 +38,7 @@ if $CURL -G "https://$HOST:3100/loki/api/v1/query_range" \
 else bad "query returns the pushed line" "line not found within 60s window"; fi
 
 echo "== scraped by prometheus"
-$CURL "https://192.168.1.53:9090/api/v1/targets" 2>/dev/null \
+$CURL "https://192.168.8.53:9090/api/v1/targets" 2>/dev/null \
   | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
@@ -50,7 +50,7 @@ sys.exit(0 if ok else 1)' \
 echo "== grafana's host trusts loki"
 # Same question grafana/scripts/verify.sh asks about Prometheus: plain curl,
 # system trust store only, from grafana's own container.
-if ssh -o BatchMode=yes -o ConnectTimeout=5 root@192.168.1.54 \
+if ssh -o BatchMode=yes -o ConnectTimeout=5 root@192.168.8.54 \
      "curl -sS --max-time 10 -o /dev/null https://$HOST:3100/ready" 2>/dev/null; then
   pass "grafana host reaches Loki over TLS using the system trust store"
 else

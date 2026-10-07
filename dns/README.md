@@ -4,9 +4,9 @@ Three containers on `lenora`, in the Infrastructure pool.
 
 | CT  | Host   | IP           | Runs                | Role                                   |
 |-----|--------|--------------|---------------------|----------------------------------------|
-| 105 | themis | 192.168.1.50 | dnsdist 1.9         | the only address clients talk to       |
-| 106 | delphi | 192.168.1.51 | pdns-recursor 5.2   | recursion + RPZ filtering              |
-| 107 | pythia | 192.168.1.52 | pdns-server 4.9     | authoritative for `home.`              |
+| 105 | themis | 192.168.8.50 | dnsdist 1.9         | the only address clients talk to       |
+| 106 | delphi | 192.168.8.51 | pdns-recursor 5.2   | recursion + RPZ filtering              |
+| 107 | pythia | 192.168.8.52 | pdns-server 4.9     | authoritative for `home.`              |
 
 All three are Debian 13, unprivileged, `onboot=1`, IPv4 static + IPv6 SLAAC,
 root login by key only.
@@ -16,7 +16,7 @@ root login by key only.
 ```
 client ──▶ themis ──▶ delphi ──▶ internet
            (tag)      (filter)      │
-                          └──▶ pythia   (home., 1.168.192.in-addr.arpa.,
+                          └──▶ pythia   (home., 8.168.192.in-addr.arpa.,
                                          and ca.peetvandesande.com.)
 ```
 
@@ -37,7 +37,7 @@ Two things worth knowing about this:
 - **PROXY protocol, not EDNS**, because it also carries the real client IP.
   Delphi's logs and `rec_control top-remotes` name the device that asked, not
   Themis. `allow_from` on Delphi is therefore the *client* range, not
-  `192.168.1.50`.
+  `192.168.8.50`.
 - **`rpzFile()`'s `tags` option does not do this.** It only labels protobuf
   output; it does not gate whether a zone matches. `discardPolicy()` in
   `prerpz` is the supported mechanism, so don't "simplify" policy.lua away.
@@ -83,7 +83,7 @@ and membership is an explicit list.
    will drift and it will silently fall out of the policy.
 2. Add a line to `themis/etc/dnsdist/kids-devices.conf`.
 3. `./scripts/deploy.sh`
-4. From that device: `dig @192.168.1.50 bsky.app` should be `NXDOMAIN`.
+4. From that device: `dig @192.168.8.50 bsky.app` should be `NXDOMAIN`.
 
 If you ever put kids on their own VLAN, replace the per-device masks with the
 subnet and nothing else changes.
@@ -101,7 +101,7 @@ answer is even considered.
 ## Overriding a public name internally (split-horizon)
 
 `ca.peetvandesande.com` is the worked example: publicly a CNAME to an OVH VPS,
-internally an A record for pistis (192.168.1.55), because that is where the
+internally an A record for pistis (192.168.8.55), because that is where the
 CA's CRL and AIA files live. See `homelab/ca`.
 
 It takes **three** changes, and it is broken until all three are in place:
@@ -130,7 +130,7 @@ Afterwards, confirm you scoped it tightly — the parent should still come back
 with the `ad` flag set:
 
 ```sh
-dig @192.168.1.50 <parent-domain> A +dnssec | grep flags:
+dig @192.168.8.50 <parent-domain> A +dnssec | grep flags:
 ```
 
 ## Encrypted DNS
@@ -139,9 +139,9 @@ Themis serves DoT and DoH off the lab CA, in addition to plain Do53:
 
 | Transport | Address | Notes |
 |---|---|---|
-| Do53 | `192.168.1.50:53` | unchanged |
-| DoT | `192.168.1.50:853` | |
-| DoH | `https://192.168.1.50/dns-query` | **HTTP/2 only** |
+| Do53 | `192.168.8.50:53` | unchanged |
+| DoT | `192.168.8.50:853` | |
+| DoH | `https://192.168.8.50/dns-query` | **HTTP/2 only** |
 
 Queries over all three go through the same rule chain, so kids tagging and the
 cache pool split apply identically. There is no separate path for encrypted
@@ -155,12 +155,12 @@ Testing by hand:
 
 ```sh
 # DoT. macOS dig is 9.10 and has no +tls, hence the helper.
-./scripts/dns-tls-query.py dot 192.168.1.50 853 grafana.home ../ca/rootca/certs/root.crt
+./scripts/dns-tls-query.py dot 192.168.8.50 853 grafana.home ../ca/rootca/certs/root.crt
 
 # DoH. Must be an HTTP/2 client - dnsdist advertises ALPN h2 only, and an
 # HTTP/1.1 request comes back as a bare 400.
 curl --cacert ../ca/rootca/certs/root.crt \
-     --doh-url https://192.168.1.50/dns-query https://grafana.home:3000/api/health
+     --doh-url https://192.168.8.50/dns-query https://grafana.home:3000/api/health
 ```
 
 ## Metrics endpoints are behind nginx
@@ -197,7 +197,7 @@ every run.
 
 ## Monitoring
 
-Prometheus (192.168.1.53) scrapes all three under `job="dns"`, plus
+Prometheus (192.168.8.53) scrapes all three under `job="dns"`, plus
 node_exporter on each under `job="node"`. All three `/metrics` endpoints are
 unauthenticated but ACL'd to the Prometheus container.
 
@@ -208,9 +208,9 @@ labels now describe this stack, and the two service jobs were repointed.
 
 ## Still to do
 
-- **Point clients at Themis.** Nothing uses it yet: hand out `192.168.1.50` as
+- **Point clients at Themis.** Nothing uses it yet: hand out `192.168.8.50` as
   the only DNS server via DHCP on the router. The containers themselves stay
-  on `192.168.1.1` deliberately — Delphi is Themis's backend, and pointing it
+  on `192.168.8.1` deliberately — Delphi is Themis's backend, and pointing it
   at Themis would be a resolution loop at boot.
 - **Populate `kids-devices.conf`.** It is empty, so every device currently gets
   the malware feed only.

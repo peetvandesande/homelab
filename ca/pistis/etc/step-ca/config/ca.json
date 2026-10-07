@@ -17,12 +17,12 @@
   "crt": "/etc/step-ca/certs/intermediate_ca.crt",
   "key": "/etc/step-ca/secrets/intermediate_ca_key",
 
-  "address": "192.168.1.55:8443",
+  "address": "192.168.8.55:8443",
   "insecureAddress": "",
   "dnsNames": [
     "pistis.home",
     "ca.home",
-    "192.168.1.55"
+    "192.168.8.55"
   ],
 
   "logger": { "format": "text" },

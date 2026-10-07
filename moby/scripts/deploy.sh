@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Moby (192.168.1.27): push the engine config and put TLS in front of its
+# Moby (192.168.8.27): push the engine config and put TLS in front of its
 # metrics.
 #
-# Run this AFTER ca/scripts/enrol.sh 192.168.1.27 moby - the nginx in front of
+# Run this AFTER ca/scripts/enrol.sh 192.168.8.27 moby - the nginx in front of
 # the metrics endpoint points at /etc/homelab-tls/host.{crt,key} and will not
 # start without them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.27
+HOST=192.168.8.27
 
 require_enrolled "$HOST"
 push "$HOST" root

@@ -6,7 +6,7 @@ The intent is to use privately signed certificates across all services in homela
 
 | CT  | Host   | IP           | Runs                | Role                              |
 |-----|--------|--------------|---------------------|-----------------------------------|
-| 101 | pistis | 192.168.1.55 | step-ca 0.30.2      | CA                                |
+| 101 | pistis | 192.168.8.55 | step-ca 0.30.2      | CA                                |
 
 - **Pistis** holds the G3 intermediate and acts as the issuing CA — signing and
   revoking leaf certificates, over ACME and by hand.
@@ -87,7 +87,7 @@ The existing root CA files are in `rootca/`.
    This applies to strings frozen into certificates, and **only** those. The CA
    API URL is not one of them; see below.
 
-Also worth knowing: step-ca binds `192.168.1.55:8443` explicitly, so it needs
+Also worth knowing: step-ca binds `192.168.8.55:8443` explicitly, so it needs
 the `wait-for-address` drop-in like the DNS containers. nginx listens on the
 wildcard and deliberately does not.
 
@@ -108,7 +108,7 @@ to the tool's host is honest — a settled decision, not an outstanding one.
 `ca.peetvandesande.com` is **split-horizon**. Publicly it is a CNAME to an OVH
 VPS (145.239.73.18) that this repo does not manage, where nothing is published
 under `/g3/` — nor under `/g2/`, dangling since 2016. Inside the lab, Pythia is
-authoritative for that single name and answers `192.168.1.55`, so pistis serves
+authoritative for that single name and answers `192.168.8.55`, so pistis serves
 the files at exactly the URL the certificate names.
 
 Three pieces make that work and **none of them works alone** — the zone on
@@ -186,5 +186,5 @@ Each of these was found by something breaking.
 
 The homelab rule applies here as everywhere: add its A and PTR records to
 `dns/pythia/var/lib/powerdns/zones/`, bump both serials, run
-`dns/scripts/deploy.sh`, and add the `node` target on 192.168.1.53.
+`dns/scripts/deploy.sh`, and add the `node` target on 192.168.8.53.
 `pistis` (`.55`) and the `ca.home` CNAME are already done.

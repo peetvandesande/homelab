@@ -1,10 +1,10 @@
 # Moby
 
-CT 108, **192.168.1.27**. Docker container host: engine, compose v2 and
+CT 108, **192.168.8.27**. Docker container host: engine, compose v2 and
 buildx, with the engine's own metrics fronted by nginx on `:9323` and every
 container's stdout reaching Loki through the host journal.
 
-It also carries **192.168.1.73 and .74** as extra addresses on `eth0`, because
+It also carries **192.168.8.73 and .74** as extra addresses on `eth0`, because
 the stacks that came from the old moby publish their ports on them.
 
 Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
@@ -20,7 +20,7 @@ three — the repo owns none of them.
 that a container actually runs, that the metrics are TLS and reachable only by
 Prometheus, and that the journal lands in Loki.
 
-Deploy **after** `ca/scripts/enrol.sh 192.168.1.27 moby` — the nginx in front
+Deploy **after** `ca/scripts/enrol.sh 192.168.8.27 moby` — the nginx in front
 of the metrics names the certificate and will not start without it.
 
 ## Invariants
@@ -70,7 +70,7 @@ of the metrics names the certificate and will not start without it.
    `systemctl start` on an already-active unit does nothing — use `restart` to
    reapply.
 
-7. **The address is outside the Infrastructure range**, like `lexie` at .26.
+7. **The address is outside the Infrastructure range**, like `lexie` at .24.
    The pool is right and the IP is not; both are recorded that way
    deliberately (`../CLAUDE.md`). Don't renumber without grepping
    `prometheus/root/etc/prometheus/prometheus.yml`, `ca/scripts/enrol.sh`,
@@ -81,7 +81,7 @@ of the metrics names the certificate and will not start without it.
 
 ## Home Assistant is gone
 
-It ran here as `/opt/stacks/homeassistant` on **192.168.1.79**, behind the
+It ran here as `/opt/stacks/homeassistant` on **192.168.8.79**, behind the
 host nginx, from September 2026 until 24 September 2026, when it was removed
 in favour of a dedicated VM. Deleted with it: the stack and its config volume,
 the nginx site and the `map` in `conf.d/websocket-upgrade.conf`, .79 from

@@ -1,6 +1,6 @@
 # Loki
 
-CT 102, **192.168.1.56**. Log store, API over TLS on `:3100`, single binary
+CT 102, **192.168.8.56**. Log store, API over TLS on `:3100`, single binary
 with filesystem storage and 30-day retention.
 
 ## Working on this
@@ -11,7 +11,7 @@ with filesystem storage and 30-day retention.
 chain, an ingest/query round-trip, the Prometheus scrape and the trust path
 from Grafana.
 
-Deploy **after** `ca/scripts/enrol.sh 192.168.1.56 loki` — the config names
+Deploy **after** `ca/scripts/enrol.sh 192.168.8.56 loki` — the config names
 the certificate and Loki will not start without it.
 
 ## Invariants

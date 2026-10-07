@@ -9,9 +9,24 @@ inventory written down here; this file records *conventions*, not state.
 
 ## Host
 
-- `lenora`, **192.168.1.21**, web UI on :8006
+- `lenora`, **192.168.8.21**, web UI on :8006
 - 2 x Intel Xeon Gold 6262V, 256GB RAM
 - Template: `local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst`
+
+## Router
+
+The LAN is routed by a **GL.iNet GL-BE14000 running OpenWrt**, at
+**192.168.8.1**. It replaced an Orange Livebox in October 2026, which is why
+this lab is on 192.168.8.0/24 — that is the GL-iNet default range, kept rather
+than fought.
+
+- **DHCP pool is .100-.249** (`dhcp.lan.start=100`, `limit=150`). Every lab
+  host sits **below .100**, outside the pool, as a static reservation keyed by
+  MAC. Keep it that way: a reservation inside the pool races the dynamic range.
+- **Reservations are the source of truth for lab addressing.** They live on the
+  router (`uci show dhcp`), not in this repo. When you add a container, add the
+  reservation first — see the Container defaults below.
+- The router is not otherwise managed from here.
 
 ## Storage
 
@@ -48,16 +63,22 @@ Every container is unprivileged, nesting-enabled and starts at boot:
 - **No root password.** Import `~/Documents/sshkey.pub` (path on the
   workstation) via `--ssh-public-keys` at create time; root SSH is key-only
   thereafter.
-- **IPv4 static** in 192.168.1.0/24, gateway 192.168.1.1. **IPv6 is SLAAC** —
-  pass `ip6=auto` in `--net0`. The LAN has a real prefix
-  (`2a01:cb1c:d:3500::/64`), so omitting it forgoes working IPv6.
+- **IPv4 by DHCP reservation, not static** — pass `ip=dhcp` in `--net0` and
+  no `gw=`. The router holds a reservation per MAC, so the address is stable
+  and services may still bind to it. **lenora is the one exception**: its
+  address is static in `/etc/network/interfaces`. Add the reservation on the
+  router *before* starting the container, or it lands in the dynamic pool.
+- **IPv6 is SLAAC** — pass `ip6=auto` in `--net0`; omitting it forgoes working
+  IPv6. The prefix is delegated by the router and changed with it, so confirm
+  the current one rather than trusting a value written down.
 - **Leave `--nameserver` unset** so the container inherits the host's resolver,
   unless it is part of the DNS stack itself.
 - Always pass `--pool`.
 
 Services bind to specific IPs, and in an LXC with ifupdown
-`network-online.target` is reached *before* `eth0` has its address. If a
-service binds to its static IP rather than the wildcard, give it a systemd
+`network-online.target` is reached *before* `eth0` has its address. DHCP widens
+that window, so this now applies to every container, not just the DNS stack: if
+a service binds to its own address rather than the wildcard, give it a systemd
 drop-in that waits for the address — otherwise it will intermittently fail to
 bind on cold boot. See `dns/*/etc/systemd/system/*.d/wait-for-address.conf`
 for the pattern, including the leading `+` needed to escape unit sandboxing.
@@ -69,9 +90,9 @@ Pool names are **case-sensitive and exact** — `Non-Production`, not
 
 | Pool             | Container IDs | IP range              |
 |------------------|---------------|-----------------------|
-| `Infrastructure` | 100-199       | 192.168.1.50-.59      |
-| `Production`     | 300-399       | 192.168.1.60-.69 †    |
-| `Non-Production` | 200-299 †     | 192.168.1.70-.79 †    |
+| `Infrastructure` | 100-199       | 192.168.8.50-.59      |
+| `Production`     | 300-399       | 192.168.8.60-.69 †    |
+| `Non-Production` | 200-299 †     | 192.168.8.70-.79 †    |
 
 † Inferred from the existing pattern, not yet confirmed — Production is using
 .60/.61 in practice, and Non-Production is currently empty with no range ever
@@ -82,12 +103,12 @@ Three things to be aware of:
 - **The Infrastructure IP range is nearly gone** (.50-.56 used) while its ID
   range has 93 free slots. The ranges are badly matched in size; widen the IP
   allocation before it bites.
-- **`lexie` (CT 100) sits at 192.168.1.26 and `moby` (CT 108) at
-  192.168.1.27**, both outside the Infrastructure range they are pooled into.
+- **`lexie` (CT 100) sits at 192.168.8.24 and `moby` (CT 108) at
+  192.168.8.27**, both outside the Infrastructure range they are pooled into.
   Moby additionally answers on .73 and .74 for the stacks it publishes,
   inside the range pencilled in for Non-Production. Existing anomalies —
   don't take them as precedent, and don't "tidy" them without asking.
-- **`homeassistant` (VM 302) is at 192.168.1.90**, pooled into Production
+- **`homeassistant` (VM 302) is at 192.168.8.90**, pooled into Production
   but outside its range, by choice. It is the lab's only VM: Home Assistant
   OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will not boot with
   them), with the Sonoff Zigbee dongle passed through as `usb0`. Its address
@@ -101,28 +122,28 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 `dns/README.md`. What matters at this level:
 
 - **Internal domain is `home.`**, served authoritatively by Pythia
-  (192.168.1.52). Reverse zone `1.168.192.in-addr.arpa.`.
+  (192.168.8.52). Reverse zone `8.168.192.in-addr.arpa.`.
 - **`ca.peetvandesande.com` is overridden internally** to point at pistis
-  (192.168.1.55), because the CA's certificates name it. Split-horizon on a
+  (192.168.8.55), because the CA's certificates name it. Split-horizon on a
   DNSSEC-signed domain needs three coordinated pieces — read `dns/CLAUDE.md`
   invariant 5 before touching it.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.
-- **Clients are intended to use Themis (192.168.1.50) as their only resolver**,
+- **Clients are intended to use Themis (192.168.8.50) as their only resolver**,
   via DHCP on the router. This cutover has not happened yet — everything still
   points at the gateway. The DNS containers themselves must stay on
-  192.168.1.1 regardless, or Delphi cannot resolve at boot.
+  192.168.8.1 regardless, or Delphi cannot resolve at boot.
 
 ## Docker
 
 Container workloads that are not worth an LXC run on `moby` (CT 108,
-192.168.1.27) — Docker Engine with compose v2, one directory per stack under
+192.168.8.27) — Docker Engine with compose v2, one directory per stack under
 `/opt/stacks`. See `moby/CLAUDE.md`. Nextcloud, Traefik and XWiki moved here
 from the old moby at 192.168.1.25 (a machine this repo does not manage) in
 September 2026; the rest of that host's stacks are still there.
 
-Moby also holds **192.168.1.73 and .74** as extra addresses on `eth0`, one
+Moby also holds **192.168.8.73 and .74** as extra addresses on `eth0`, one
 per published stack, carried over so the migrated compose files did not have
 to be rewritten. They are applied by a unit that `docker.service` requires,
 not by interface config — Proxmox rewrites that on every start.
@@ -137,8 +158,8 @@ nothing from the host; reach for an LXC when it wants to look like a machine.
 
 ## Monitoring
 
-Prometheus (192.168.1.53) is used for **all** monitoring; Grafana
-(192.168.1.54) for dashboards and alerting. Loki (192.168.1.56) is the log
+Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
+(192.168.8.54) for dashboards and alerting. Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
 eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana. The

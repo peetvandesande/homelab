@@ -80,7 +80,7 @@
           "legendFormat": "{{model}}"
         }
       ],
-      "description": "health_status as reported by esxcli. No data means the puller has not pushed in two hours - check esxi-smart.timer on 192.168.1.56.",
+      "description": "health_status as reported by esxcli. No data means the puller has not pushed in two hours - check esxi-smart.timer on 192.168.8.56.",
       "fieldConfig": {
         "defaults": {
           "color": {

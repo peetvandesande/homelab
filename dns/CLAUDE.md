@@ -7,9 +7,9 @@ malware protection.
 
 | CT  | Host   | IP           | Runs                | Role                              |
 |-----|--------|--------------|---------------------|-----------------------------------|
-| 105 | themis | 192.168.1.50 | dnsdist 1.9         | the only address clients talk to  |
-| 106 | delphi | 192.168.1.51 | pdns-recursor 5.2   | recursion + RPZ filtering         |
-| 107 | pythia | 192.168.1.52 | pdns-server 4.9     | authoritative for `home.` + overrides |
+| 105 | themis | 192.168.8.50 | dnsdist 1.9         | the only address clients talk to  |
+| 106 | delphi | 192.168.8.51 | pdns-recursor 5.2   | recursion + RPZ filtering         |
+| 107 | pythia | 192.168.8.52 | pdns-server 4.9     | authoritative for `home.` + overrides |
 
 - **Themis** decides *who* is asking, stamps a policy tag, and hands the query
   to Delphi. Also where Prometheus scrapes, and where DoT (:853) and DoH
@@ -19,7 +19,7 @@ malware protection.
   gives two policies. Malware applies to everyone; adult-content and
   social-media only to kids.
 - **Pythia** holds the lab's own zones. Delphi forwards `home.` and
-  `1.168.192.in-addr.arpa.` to it and never asks the internet. It also holds
+  `8.168.192.in-addr.arpa.` to it and never asks the internet. It also holds
   the split-horizon override for `ca.peetvandesande.com` — see invariant 5.
 
 `README.md` has the operational detail — how to add a kids device, add an
@@ -51,7 +51,7 @@ the rest came out of putting the stack behind the lab CA.
 2. **The tag rides in a PROXY protocol TLV (type 224), not EDNS.** PROXY also
    carries the real client IP, so Delphi's logs name the device that asked.
    Consequence: Delphi's `allow_from` must be the **client** range, not
-   `192.168.1.50`. Set it to the proxy and every client is refused.
+   `192.168.8.50`. Set it to the proxy and every client is refused.
 
 3. **Themis keeps a separate packet cache per pool** (`""` and `"kids"`).
    dnsdist keys its cache on the question, not the tag — one shared cache
@@ -80,13 +80,13 @@ the rest came out of putting the stack behind the lab CA.
    parent would shadow mail, www and everything else in the domain with an
    empty internal zone and break them for the whole LAN. The NTA is scoped the
    same way, so the rest of the domain stays fully validated — check with
-   `dig @192.168.1.50 peetvandesande.com A +dnssec` and look for the `ad` flag.
+   `dig @192.168.8.50 peetvandesande.com A +dnssec` and look for the `ad` flag.
 
    Why it exists: the G3 intermediate in `homelab/ca` names
    `http://ca.peetvandesande.com/g3/` in its CRL and AIA extensions, and those
    strings are frozen into the certificate for ten years. The name had to be
    one that outlives any particular host, so internally it is pointed at
-   whichever host serves the files — today pistis, 192.168.1.55.
+   whichever host serves the files — today pistis, 192.168.8.55.
 
 6. **No PowerDNS component here can serve TLS on its own webserver, so nginx
    fronts all three.** The authoritative server and the recursor have no
@@ -154,7 +154,7 @@ Built and verified, including across cold boots. Not yet done:
   feed only. The kids path itself is proven working — it was tested end to end
   with a temporary entry, including cache isolation between the two policies.
 - **No client cutover.** Nothing uses Themis yet; the router still hands out
-  192.168.1.1. The three containers must stay on 192.168.1.1 regardless —
+  192.168.8.1. The three containers must stay on 192.168.8.1 regardless —
   pointing Delphi at Themis is a boot-time resolution loop.
 
   This now costs something concrete: the `ca.peetvandesande.com` split-horizon

@@ -6,17 +6,17 @@ set -euo pipefail
 TEMPLATE="local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
 STORAGE="ssdpool"
 BRIDGE="vmbr0"
-GW="192.168.1.1"
-NS="192.168.1.1"
+GW="192.168.8.1"
+NS="192.168.8.1"
 SEARCH="home"
 POOL="Infrastructure"
 KEY="/root/.ssh/dns-infra.pub"
 
 # vmid hostname ip cores mem disk
 CONTAINERS=(
-  "105 themis 192.168.1.50 1 512 4"
-  "106 delphi 192.168.1.51 2 4096 8"   # RPZ feeds + a 2M-entry record cache
-  "107 pythia 192.168.1.52 1 512 4"
+  "105 themis 192.168.8.50 1 512 4"
+  "106 delphi 192.168.8.51 2 4096 8"   # RPZ feeds + a 2M-entry record cache
+  "107 pythia 192.168.8.52 1 512 4"
 )
 
 for entry in "${CONTAINERS[@]}"; do

@@ -7,14 +7,14 @@ set -euo pipefail
 TEMPLATE="local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
 STORAGE="ssdpool"
 BRIDGE="vmbr0"
-GW="192.168.1.1"
+GW="192.168.8.1"
 SEARCH="home"
 POOL="Infrastructure"          # exact case - "Infrastructure", pct is picky
 KEY="/root/.ssh/dns-infra.pub"
 
 VMID=101
 HOST=pistis
-IP=192.168.1.55
+IP=192.168.8.55
 CORES=2
 MEM=1024
 DISK=8

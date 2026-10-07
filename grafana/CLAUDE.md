@@ -1,6 +1,6 @@
 # Grafana
 
-CT 104, **192.168.1.54**. UI over TLS on `:3000`, reaching Prometheus over TLS.
+CT 104, **192.168.8.54**. UI over TLS on `:3000`, reaching Prometheus over TLS.
 
 ## Working on this
 

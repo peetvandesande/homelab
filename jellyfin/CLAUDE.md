@@ -1,6 +1,6 @@
 # Jellyfin
 
-CT 300, **192.168.1.60**. UI on plain HTTP `:8096`; HTTPS on `:8920` exists
+CT 300, **192.168.8.60**. UI on plain HTTP `:8096`; HTTPS on `:8920` exists
 only for Prometheus.
 
 ## Working on this

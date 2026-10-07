@@ -31,7 +31,7 @@ done
 
 STACK=${1:?usage: import-stack.sh [--stop] [--up] <stack> [src-host]}
 SRC=${2:-192.168.1.25}
-DST=192.168.1.27
+DST=192.168.8.27
 DIR=/opt/stacks/$STACK
 
 SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=/tmp/.hlimport-%C -o ControlPersist=60s"

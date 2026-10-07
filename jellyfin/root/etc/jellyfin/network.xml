@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Managed from homelab/jellyfin - edit there, not on 192.168.1.60.
+  Managed from homelab/jellyfin - edit there, not on 192.168.8.60.
 
   Jellyfin will not take a PEM pair: CertificatePath must be a PKCS#12 bundle.
   /etc/homelab-tls/jellyfin.pfx is built from host.crt and host.key by the

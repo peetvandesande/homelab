@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Jellyfin (192.168.1.60): UI on plain HTTP 8096; HTTPS on 8920 for Prometheus.
+# Jellyfin (192.168.8.60): UI on plain HTTP 8096; HTTPS on 8920 for Prometheus.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.60
+HOST=192.168.8.60
 
 require_enrolled "$HOST"
 push "$HOST" root

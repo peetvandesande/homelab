@@ -3,7 +3,7 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-RELAY=192.168.1.56
+RELAY=192.168.8.56
 CURL="curl -sS --max-time 10 --cacert $CA_ROOT"
 
 count() { # count <logql selector> <range>

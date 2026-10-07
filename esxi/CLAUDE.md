@@ -3,7 +3,7 @@
 `esther`, the ESXi 8.0.3 host at **192.168.1.20**, logging to Loki. It is not
 a container and not Proxmox — it is the one machine in the lab that cannot run
 Alloy, so it gets two mechanisms, both of which live on the loki container
-(192.168.1.56), the *relay*:
+(192.168.8.56), the *relay*:
 
 - **Syslog**: ESXi's own vmsyslogd forwards over TLS to an Alloy
   `loki.source.syslog` listener on `:1514`, verifying the relay against the
@@ -33,7 +33,7 @@ Order: `alloy/scripts/deploy.sh` (once, for directory mode) → `deploy.sh` →
 ## Dashboard
 
 `grafana/root/var/lib/grafana/dashboards/esxi.json`, at
-https://192.168.1.54:3000/d/esxi. Loki-only, because esther has no exporter:
+https://192.168.8.54:3000/d/esxi. Loki-only, because esther has no exporter:
 SMART health, drive temperature (with the drive's own limit where esxcli
 reports one), bad-sector totals, power-on time and a below-threshold counter
 from the `esxi-smart` job, plus severity/source volume and error, vmkernel

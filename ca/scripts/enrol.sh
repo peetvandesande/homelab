@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source scripts/lib.sh
 
-PISTIS=192.168.1.55
+PISTIS=192.168.8.55
 CA_URL="https://$PISTIS:8443"
 ROOT=rootca/certs/root.crt
 
@@ -27,20 +27,20 @@ ROOT=rootca/certs/root.crt
 # unmonitored, and a host there but not here will fail its scrape once
 # node-exporter goes TLS.
 FLEET=(
-  "192.168.1.21 lenora"
-  "192.168.1.50 themis"
-  "192.168.1.51 delphi"
-  "192.168.1.52 pythia"
-  "192.168.1.53 prometheus"
-  "192.168.1.54 grafana"
-  "192.168.1.55 pistis"
-  "192.168.1.56 loki"
+  "192.168.8.21 lenora"
+  "192.168.8.50 themis"
+  "192.168.8.51 delphi"
+  "192.168.8.52 pythia"
+  "192.168.8.53 prometheus"
+  "192.168.8.54 grafana"
+  "192.168.8.55 pistis"
+  "192.168.8.56 loki"
   # Words after the shortname would be extra SANs. moby needed them while it
   # fronted Home Assistant on .79; the stacks it publishes now carry their own
   # certificates, so it is back to the plain form.
-  "192.168.1.27 moby"
-  "192.168.1.60 jellyfin"
-  "192.168.1.61 navidrome"
+  "192.168.8.27 moby"
+  "192.168.8.60 jellyfin"
+  "192.168.8.61 navidrome"
 )
 
 enrol_one() { # enrol_one <ip> <name> [extra sans...]

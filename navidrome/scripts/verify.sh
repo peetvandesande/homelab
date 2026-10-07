@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
-HOST=192.168.1.61
+HOST=192.168.8.61
 
 http_ok() { # http_ok <label> <url>
   local code

@@ -4,7 +4,7 @@
 #
 # The issuance test runs on pistis over ssh rather than here: step-cli is not a
 # workstation dependency, and issuing from the CA host proves the same thing.
-PISTIS=192.168.1.55
+PISTIS=192.168.8.55
 ROOT=rootca/certs/root.crt
 CA_URL="https://pistis.home:8443"
 fail=0
@@ -65,7 +65,7 @@ host=$(printf '%s' "$cdp" | sed -e 's|^http://||' -e 's|/.*$||')
 
 # 1. Split-horizon: Themis must answer with pistis, not the public VPS.
 check_eq "$host resolves to pistis via Themis" "$PISTIS" \
-  "$(dig +short +time=3 +tries=1 @192.168.1.50 "$host" A 2>/dev/null | tail -1)"
+  "$(dig +short +time=3 +tries=1 @192.168.8.50 "$host" A 2>/dev/null | tail -1)"
 
 # 2. The files are actually served at the advertised paths. Forced at pistis,
 #    so this passes before the DHCP cutover and tests the paths, not the DNS.
@@ -123,7 +123,7 @@ else bad "node_exporter listening on $PISTIS:9100" "port closed"; fi
 # https, because Prometheus now serves its own API off this CA. Verified
 # against our root rather than the system store - if this ever silently falls
 # back to plain HTTP it should fail, not quietly succeed.
-if curl -sS --max-time 10 --cacert "$ROOT" "https://192.168.1.53:9090/api/v1/targets" \
+if curl -sS --max-time 10 --cacert "$ROOT" "https://192.168.8.53:9090/api/v1/targets" \
    | tr ',' '\n' | grep -q "$PISTIS:9100"; then
   pass "prometheus has a target for $PISTIS"
 else

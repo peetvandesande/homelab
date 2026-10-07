@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Proxmox VE web GUI (lenora, 192.168.1.21:8006) onto the lab CA.
+# Proxmox VE web GUI (lenora, 192.168.8.21:8006) onto the lab CA.
 #
 # Rolls back automatically. This is the hypervisor's management interface: if
 # pveproxy does not come back, the certificate is removed and pveproxy
@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.21
+HOST=192.168.8.21
 
 require_enrolled "$HOST"
 

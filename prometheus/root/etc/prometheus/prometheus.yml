@@ -1,5 +1,5 @@
 # Prometheus configuration. Managed from homelab/prometheus - edit there, not
-# on 192.168.1.53.
+# on 192.168.8.53.
 #
 # Targets are static and hand-maintained, so they rot when a service moves.
 # They have been wrong before: the `node` job scraped .50/.51 as
@@ -52,27 +52,27 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.1.21:9100']
+      - targets: ['192.168.8.21:9100']
         labels: {role: pve-host }
-      - targets: ['192.168.1.27:9100']
+      - targets: ['192.168.8.27:9100']
         labels: {role: moby }
-      - targets: ['192.168.1.50:9100']
+      - targets: ['192.168.8.50:9100']
         labels: {role: themis }
-      - targets: ['192.168.1.51:9100']
+      - targets: ['192.168.8.51:9100']
         labels: {role: delphi }
-      - targets: ['192.168.1.52:9100']
+      - targets: ['192.168.8.52:9100']
         labels: {role: pythia }
-      - targets: ['192.168.1.53:9100']
+      - targets: ['192.168.8.53:9100']
         labels: {role: prometheus }
-      - targets: ['192.168.1.54:9100']
+      - targets: ['192.168.8.54:9100']
         labels: {role: grafana }
-      - targets: ['192.168.1.55:9100']
+      - targets: ['192.168.8.55:9100']
         labels: {role: pistis }
-      - targets: ['192.168.1.56:9100']
+      - targets: ['192.168.8.56:9100']
         labels: {role: loki }
-      - targets: ['192.168.1.60:9100']
+      - targets: ['192.168.8.60:9100']
         labels: {role: jellyfin }
-      - targets: ['192.168.1.61:9100']
+      - targets: ['192.168.8.61:9100']
         labels: {role: navidrome }
 
   # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same eleven
@@ -83,27 +83,27 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.1.21:12345']
+      - targets: ['192.168.8.21:12345']
         labels: {role: pve-host }
-      - targets: ['192.168.1.27:12345']
+      - targets: ['192.168.8.27:12345']
         labels: {role: moby }
-      - targets: ['192.168.1.50:12345']
+      - targets: ['192.168.8.50:12345']
         labels: {role: themis }
-      - targets: ['192.168.1.51:12345']
+      - targets: ['192.168.8.51:12345']
         labels: {role: delphi }
-      - targets: ['192.168.1.52:12345']
+      - targets: ['192.168.8.52:12345']
         labels: {role: pythia }
-      - targets: ['192.168.1.53:12345']
+      - targets: ['192.168.8.53:12345']
         labels: {role: prometheus }
-      - targets: ['192.168.1.54:12345']
+      - targets: ['192.168.8.54:12345']
         labels: {role: grafana }
-      - targets: ['192.168.1.55:12345']
+      - targets: ['192.168.8.55:12345']
         labels: {role: pistis }
-      - targets: ['192.168.1.56:12345']
+      - targets: ['192.168.8.56:12345']
         labels: {role: loki }
-      - targets: ['192.168.1.60:12345']
+      - targets: ['192.168.8.60:12345']
         labels: {role: jellyfin }
-      - targets: ['192.168.1.61:12345']
+      - targets: ['192.168.8.61:12345']
         labels: {role: navidrome }
 
   # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
@@ -115,7 +115,7 @@ scrape_configs:
       cluster: ['1']
       node: ['1']
     static_configs:
-      - targets: ['192.168.1.21']
+      - targets: ['192.168.8.21']
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -131,13 +131,13 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.1.60:8920']
+      - targets: ['192.168.8.60:8920']
 
   # Plain HTTP on purpose: Navidrome has one listener serving both the UI and
   # /metrics, and the UI is deliberately unencrypted (homelab/navidrome).
   - job_name: navidrome
     static_configs:
-      - targets: ['192.168.1.61:4533']
+      - targets: ['192.168.8.61:4533']
 
   # The Docker Engine on moby. The engine serves /metrics as plain HTTP on
   # 127.0.0.1:9324 and cannot do TLS itself, so nginx on the container fronts
@@ -147,7 +147,7 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.1.27:9323']
+      - targets: ['192.168.8.27:9323']
         labels: {role: moby }
 
   # Traefik, on moby's .74. Plain HTTP on purpose: the dashboard entrypoint
@@ -156,7 +156,7 @@ scrape_configs:
   # fronts. Put it behind nginx like the engine metrics if that changes.
   - job_name: traefik
     static_configs:
-      - targets: ['192.168.1.74:8080']
+      - targets: ['192.168.8.74:8080']
         labels: {role: moby }
 
   # Loki exposes its own metrics on the same TLS port as its API.
@@ -165,7 +165,7 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.1.56:3100']
+      - targets: ['192.168.8.56:3100']
 
   # TLS, terminated by nginx on each DNS container. None of the three PowerDNS
   # components can serve TLS itself, so the backend binds loopback and nginx
@@ -177,9 +177,9 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.1.50:8083']
+      - targets: ['192.168.8.50:8083']
         labels: {role: themis, component: dnsdist }
-      - targets: ['192.168.1.51:8082']
+      - targets: ['192.168.8.51:8082']
         labels: {role: delphi, component: recursor }
-      - targets: ['192.168.1.52:8081']
+      - targets: ['192.168.8.52:8081']
         labels: {role: pythia, component: auth }

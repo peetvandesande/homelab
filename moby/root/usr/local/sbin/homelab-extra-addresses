@@ -9,7 +9,7 @@
 # one, the same race the DNS containers' wait-for-address drop-ins handle.
 set -eu
 CONF=/etc/homelab-extra-addresses
-PRIMARY=192.168.1.27
+PRIMARY=192.168.8.27
 
 n=0
 while [ $n -lt 120 ]; do

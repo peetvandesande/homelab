@@ -3,7 +3,7 @@
 # Every query goes to Themis, because that is the only address clients use.
 #
 # Exit status is the number of failed checks.
-THEMIS=192.168.1.50
+THEMIS=192.168.8.50
 DIG="dig +time=3 +tries=1 @$THEMIS"
 fail=0
 
@@ -16,15 +16,15 @@ check_eq() { # check_eq <label> <expected> <actual>
 status() { $DIG "$@" 2>/dev/null | sed -n 's/.*status: \([A-Z]*\).*/\1/p' | head -1; }
 
 echo "== internal zones (Pythia, via Delphi's forward-zone)"
-check_eq "grafana.home resolves"        "192.168.1.54" "$($DIG grafana.home A +short)"
-check_eq "lenora.home resolves"         "192.168.1.21" "$($DIG lenora.home A +short)"
+check_eq "grafana.home resolves"        "192.168.8.54" "$($DIG grafana.home A +short)"
+check_eq "lenora.home resolves"         "192.168.8.21" "$($DIG lenora.home A +short)"
 check_eq "dns.home is a CNAME to themis" "themis.home." "$($DIG dns.home CNAME +short)"
-check_eq "reverse of .54"               "grafana.home." "$($DIG -x 192.168.1.54 +short)"
+check_eq "reverse of .54"               "grafana.home." "$($DIG -x 192.168.8.54 +short)"
 check_eq "internal name never leaks"    "NXDOMAIN" "$(status nosuchhost.home A)"
 
 echo "== split-horizon override of a public name"
 check_eq "ca.peetvandesande.com answers with pistis, not the VPS" \
-  "192.168.1.55" "$($DIG ca.peetvandesande.com A +short)"
+  "192.168.8.55" "$($DIG ca.peetvandesande.com A +short)"
 # Scoping: the NTA must cover the one name and nothing more, so the parent
 # domain has to keep validating. A missing 'ad' here means the NTA is too wide
 # and peetvandesande.com is no longer DNSSEC-protected for the whole LAN.
@@ -58,15 +58,15 @@ echo "== encrypted transports (dnsdist)"
 CA=../ca/rootca/certs/root.crt
 # Verified against our own root, and against the IP - every lab certificate
 # carries an IP SAN because .home resolves nowhere until the DHCP cutover.
-if a=$(./scripts/dns-tls-query.py dot 192.168.1.50 853 grafana.home "$CA" 2>&1); then
-  check_eq "DoT :853 resolves grafana.home" "192.168.1.54" "$a"
+if a=$(./scripts/dns-tls-query.py dot 192.168.8.50 853 grafana.home "$CA" 2>&1); then
+  check_eq "DoT :853 resolves grafana.home" "192.168.8.54" "$a"
 else
   bad "DoT :853 resolves grafana.home" "$a"
 fi
 # curl, not the helper: dnsdist's DoH frontend advertises ALPN h2 only. This
 # also proves the whole chain end to end - resolve an internal name over DoH,
 # connect to what it returns, and validate that host's certificate for it.
-if curl -sS --max-time 10 --cacert "$CA" --doh-url https://192.168.1.50/dns-query \
+if curl -sS --max-time 10 --cacert "$CA" --doh-url https://192.168.8.50/dns-query \
      -o /dev/null https://grafana.home:3000/api/health 2>/dev/null; then
   pass "DoH :443 resolves grafana.home, and its certificate validates for that name"
 else
@@ -74,7 +74,7 @@ else
 fi
 
 echo "== metrics endpoints (TLS, terminated by nginx)"
-for t in "themis dnsdist 192.168.1.50:8083" "delphi recursor 192.168.1.51:8082" "pythia auth 192.168.1.52:8081"; do
+for t in "themis dnsdist 192.168.8.50:8083" "delphi recursor 192.168.8.51:8082" "pythia auth 192.168.8.52:8081"; do
   set -- $t
   # nginx allows only Prometheus (.53), so a workstation gets 403 - which still
   # proves TLS terminated and the chain verified. 200 means this host is .53.

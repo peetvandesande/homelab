@@ -1,6 +1,6 @@
 # Proxmox VE
 
-The web GUI on **lenora, 192.168.1.21:8006**, served off the lab CA.
+The web GUI on **lenora, 192.168.8.21:8006**, served off the lab CA.
 
 Named for the service rather than the host, because lenora is the hypervisor
 itself and not a container — it is the one entry here that is not a CT.

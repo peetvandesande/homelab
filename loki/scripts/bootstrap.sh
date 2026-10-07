@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # Creates the loki container on lenora and installs Loki from apt.grafana.com.
 # Idempotent: skips the create if CT 102 exists, skips installs already done.
-# Run ON the Proxmox host:  ssh root@192.168.1.21 bash -s < scripts/bootstrap.sh
+# Run ON the Proxmox host:  ssh root@192.168.8.21 bash -s < scripts/bootstrap.sh
 set -euo pipefail
 
 TEMPLATE="local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
 STORAGE="ssdpool"
 BRIDGE="vmbr0"
-GW="192.168.1.1"
+GW="192.168.8.1"
 SEARCH="home"
 POOL="Infrastructure"          # exact case - "Infrastructure", pct is picky
 KEY="/root/.ssh/dns-infra.pub"
 
 VMID=102
 HOST=loki
-IP=192.168.1.56
+IP=192.168.8.56
 CORES=2
 MEM=2048
 DISK=20                        # chunks + index live on the rootfs; 30d retention

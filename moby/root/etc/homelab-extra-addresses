@@ -13,5 +13,5 @@
 # pct only carries one address per interface, and Proxmox rewrites
 # /etc/network/interfaces in the container on every start, so this cannot live
 # in either. Adding an address here needs a DNS record too (dns/).
-192.168.1.73    # nextcloud: web publishes :80 and :443
-192.168.1.74    # traefik: publishes :80, :443 and the :8080 dashboard
+192.168.8.73    # nextcloud: web publishes :80 and :443
+192.168.8.74    # traefik: publishes :80, :443 and the :8080 dashboard

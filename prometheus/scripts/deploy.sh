@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prometheus (192.168.1.53): serve the API over TLS, and scrape the migrated
+# Prometheus (192.168.8.53): serve the API over TLS, and scrape the migrated
 # services over TLS.
 #
 # Run this AFTER node-exporter/scripts/deploy.sh. Until it runs, every `node`
@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.53
+HOST=192.168.8.53
 
 # No job here has a secret: every scrape authenticates with the lab
 # certificate. Home Assistant's /api/prometheus was the one exception and it

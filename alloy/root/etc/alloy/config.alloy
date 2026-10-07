@@ -82,7 +82,7 @@ loki.relabel "journal" {
 // never silently trust some unrelated public CA.
 loki.write "loki" {
   endpoint {
-    url = "https://192.168.1.56:3100/loki/api/v1/push"
+    url = "https://192.168.8.56:3100/loki/api/v1/push"
 
     tls_config {
       ca_file = "/etc/homelab-tls/root_ca.crt"

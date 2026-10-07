@@ -21,7 +21,7 @@
 -- that default ever changes.
 -------------------------------------------------------------------------------
 addNTA("home.", "internal zone, unsigned by design")
-addNTA("1.168.192.in-addr.arpa.", "internal reverse zone, unsigned by design")
+addNTA("8.168.192.in-addr.arpa.", "internal reverse zone, unsigned by design")
 
 -- ca.peetvandesande.com is a different shape of the same problem, and a nastier
 -- one: peetvandesande.com IS signed, with a valid DS at the parent and an RRSIG

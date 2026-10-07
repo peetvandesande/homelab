@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The lab side of ESXi logging, on the loki container (192.168.1.56):
+# The lab side of ESXi logging, on the loki container (192.168.8.56):
 #   - esxi.alloy: a TLS syslog listener on :1514 beside the fleet Alloy file
 #   - esxi-smart: hourly SMART pull over SSH, pushed to Loki
 #
@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.56
+HOST=192.168.8.56
 CA_ROOT=../ca/rootca/certs/root.crt
 
 require_enrolled "$HOST"

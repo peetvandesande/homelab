@@ -13,9 +13,9 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source secrets.env
 
-THEMIS=192.168.1.50
-DELPHI=192.168.1.51
-PYTHIA=192.168.1.52
+THEMIS=192.168.8.50
+DELPHI=192.168.8.51
+PYTHIA=192.168.8.52
 
 # %C is a short hash; macOS temp dirs blow past the 104-char sockaddr limit.
 CTL="/tmp/.dnsdeploy-%C"

@@ -1,11 +1,11 @@
-; Reverse zone for 192.168.1.0/24.
+; Reverse zone for 192.168.8.0/24.
 ; Keep in step with home.zone. Bump the serial on every edit, then:
-;   pdns_control bind-reload-now 1.168.192.in-addr.arpa
+;   pdns_control bind-reload-now 8.168.192.in-addr.arpa
 $TTL 3600
-$ORIGIN 1.168.192.in-addr.arpa.
+$ORIGIN 8.168.192.in-addr.arpa.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026092402  ; serial
+                2026100701  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -15,7 +15,7 @@ $ORIGIN 1.168.192.in-addr.arpa.
 
 1       IN  PTR gw.home.
 21      IN  PTR lenora.home.
-26      IN  PTR lexie.home.
+24      IN  PTR lexie.home.
 27      IN  PTR moby.home.
 ; .73 and .74 are extra addresses on moby, one per published stack.
 73      IN  PTR nextcloud.home.

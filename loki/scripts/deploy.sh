@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Loki (192.168.1.56): push the config and serve the API over TLS.
+# Loki (192.168.8.56): push the config and serve the API over TLS.
 #
-# Run this AFTER ca/scripts/enrol.sh 192.168.1.56 loki - the config points at
+# Run this AFTER ca/scripts/enrol.sh 192.168.8.56 loki - the config points at
 # /etc/homelab-tls/host.{crt,key} and Loki will not start without them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
-HOST=192.168.1.56
+HOST=192.168.8.56
 
 require_enrolled "$HOST"
 push "$HOST" root

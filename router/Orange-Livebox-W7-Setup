@@ -1,0 +1,48 @@
+1.1	Manufacturer	Sagemcom
+1.2	Type	Livebox W7
+1.3	Country	France
+1.4	Serial number	LK25016DP925805
+1.5	MAC address	2C:F2:A5:81:62:A0
+1.6	Firmware version	G03.R09.C02_02
+1.7	Orange firmware version	sbl-G3.R9.C2-fr
+1.8	Uptime	09 h 34 m 17 s
+1.9	Access technology	Integrated ONT (XGS-PON Fiber)
+4 Internet
+4.1	Internet connection status	Active
+4.2	User name	fti/u7wy3ry
+4.3	Last connection		23 September 2026, 03 h 30 m
+4.4	Connection uptime	09 h 33 m 39 s
+4.5	Protocol type	DHCPv6
+4.6	Last connection error code	None
+4.7	Last connection date	23 September 2026, 03 h 30 m
+4.8	ATM VP/VC or VLAN	832
+4.9	MTU size	1540
+4.10	WAN IPv4 address	92.150.126.102
+4.11	WAN IPv6 address	2a01:cb1c:d:3500:2ef2:a5ff:fe81:62a0
+4.12	Primary DNSv4 IP address	81.253.149.10
+4.13	Secondary DNSv4 IP address	80.10.246.3
+4.14	Primary DNSv6 IP address	2a01:cfc4:2000:f::3
+4.15	Secondary DNSv6 IP address	2a01:cfc4:2180:4001::3
+7 VOIP
+7.1	Status	available
+7.2	VoIP phone number	+33967071719
+7.3	ATM VP/VC or VLAN	VLAN : 832
+7.4	Protocol	sip
+9 ONT
+9.1	Connection status	true
+9.2	ONT status	O5_Operation
+9.3	Max Bit Rate Supported	10000Mbps
+9.4	Signal Rx	Power-20.268dBm
+9.5	Signal Tx	Power5.926dBm
+9.6	Temperature	56°
+9.7	Bias	2.1mA
+9.8	Serial Number	SMBS02C85767
+9.9	Hardware Version	SMBSXLB7270500
+9.10	Equipment ID	SagemcomFast5698OFR
+9.11	Vendor ID	SMBS
+9.12	Vendor Product Code	0
+9.13	Registration ID	N/A
+9.14	Voltage	3.2V
+9.15	ONT Software Version 0	SAHEOFR030803
+9.16	ONT Software Version 1	SAHEOFR030902
+9.17	ONT Software Version Active	1

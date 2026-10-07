@@ -1,5 +1,5 @@
 # Loki, single binary, filesystem storage. Managed from homelab/loki - edit
-# there, not on 192.168.1.56.
+# there, not on 192.168.8.56.
 #
 # Everything lives under /var/lib/loki on the container's rootfs (ssdpool).
 # At lab scale 30 days of logs is a few GB, not bulk data; if that ever stops

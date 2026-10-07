@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ESXI=root@192.168.1.20
-RELAY=192.168.1.56
+RELAY=192.168.8.56
 WSKEY="$HOME/Documents/sshkey.pub"
 CA_DIR=../ca
 E="ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new $ESXI"
