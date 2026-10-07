@@ -3,6 +3,10 @@
 # Every query goes to Themis, because that is the only address clients use.
 #
 # Exit status is the number of failed checks.
+
+# Relative paths below (scripts/, ../ca/) are resolved from dns/, not from
+# wherever this was invoked.
+cd "$(dirname "$0")/.."
 THEMIS=192.168.8.50
 DIG="dig +time=3 +tries=1 @$THEMIS"
 fail=0

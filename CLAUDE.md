@@ -71,6 +71,13 @@ Every container is unprivileged, nesting-enabled and starts at boot:
 - **IPv6 is SLAAC** — pass `ip6=auto` in `--net0`; omitting it forgoes working
   IPv6. The prefix is delegated by the router and changed with it, so confirm
   the current one rather than trusting a value written down.
+- **A DHCP container's `/etc/hosts` maps its own FQDN to `127.0.1.1`**, not to
+  its LAN address: Proxmox writes the real address there only when `net0`
+  carries a static `ip=` (`PVE/LXC/Setup/Base.pm`). So `<name>.home` resolves
+  to loopback *on the container itself*, and anything reaching a host by name
+  from inside one talks to itself. Address by IP, as the rest of this repo
+  does. `ca/scripts/verify.sh`'s end-to-end issuance check is the one place
+  that does not, and it fails for this reason.
 - **Leave `--nameserver` unset** so the container inherits the host's resolver,
   unless it is part of the DNS stack itself.
 - Always pass `--pool`.
