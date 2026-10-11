@@ -35,6 +35,19 @@ $SSH "root@$HOST" '
 '
 echo "   NFS exports reapplied"
 
+# ------------------------------------------------------------------ NTP -----
+# chrony.conf is pushed with root/; a restart is needed to drop the old sources.
+$SSH "root@$HOST" '
+  set -e
+  systemctl restart chrony
+  for _ in $(seq 1 15); do
+    chronyc -n sources | grep -q "^\^\* 192\.168\.8\.1 " && exit 0
+    sleep 2
+  done
+  echo "chrony is not synced to the router"; chronyc -n sources; exit 1
+'
+echo "   chrony synced to the router"
+
 $SSH "root@$HOST" '
   set -e
   node=$(hostname)

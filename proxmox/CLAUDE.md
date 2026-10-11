@@ -1,7 +1,7 @@
 # Proxmox VE
 
 The web GUI on **lenora, 192.168.8.21:8006**, served off the lab CA, plus the
-host's **NFS export** of `/hddpool/media`.
+host's **NFS export** of `/hddpool/media`, and its **time source**.
 
 Named for the service rather than the host, because lenora is the hypervisor
 itself and not a container — it is the one entry here that is not a CT.
@@ -35,6 +35,15 @@ Two things about it:
   so they take `/hddpool/media` through the `mp0` bind mount. The export exists
   for machines that are not containers on this host, which is why a whole-`/24`
   grant with everything squashed to nobody is an acceptable granularity.
+
+## Time
+
+`root/etc/chrony/chrony.conf` is Debian's default with the pool swapped for
+`server 192.168.8.1`, the router's chronyd (`router/README.md`). It matters more
+here than anywhere: containers have no clock of their own, so every one of them
+runs on lenora's. By IP, so time does not depend on DNS. `verify.sh` asserts the
+router is the only source. The host's previous file is
+`/etc/chrony/chrony.conf.bak-2026-10-11-router-ntp`.
 
 ## Invariants
 

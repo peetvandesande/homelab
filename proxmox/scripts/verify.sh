@@ -40,4 +40,9 @@ else bad "/hddpool/media is exported to 192.168.8.0/24" "${exp:-nothing exported
 if grep -q "all_squash" <<<"$exp"; then pass "the export squashes every client to nobody"
 else bad "the export squashes every client to nobody" "$exp"; fi
 
+echo "== time comes from the router"
+src=$(ssh -o BatchMode=yes root@$HOST 'chronyc -n sources' 2>/dev/null | grep '^\^')
+if [[ $src == "^* 192.168.8.1 "* && $(wc -l <<<"$src") -eq 1 ]]; then pass "chrony synced to 192.168.8.1, and nothing else"
+else bad "chrony synced to 192.168.8.1, and nothing else" "${src:-no sources}"; fi
+
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail
