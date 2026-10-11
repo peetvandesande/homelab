@@ -70,6 +70,24 @@ stack is down.
 
 See `CLAUDE.md` invariants 1-4 for the settings that must not change.
 
+## Time
+
+```
+dhcp.lan.dhcp_option      ... 42,192.168.8.1           ← advertise the router's NTP
+chrony.@allow[0].interface lan
+```
+
+The router is the LAN's NTP server: chronyd, syncing upstream over NTS, serving
+IPv4 and IPv6 on :123. `system.ntp.enable_server=0` is irrelevant – that is
+sysntpd, which chrony replaces.
+
+`allow lan` does not appear in `/var/etc/chrony.d/10-uci.conf`, which looks
+like a bug but is not. chronyd starts before netifd has the LAN up, so the init
+script renders no subnets; `/etc/hotplug.d/iface/20-chrony` adds them with
+`chronyc allow` on each ifup. Test with `sntp 192.168.8.1`, not by reading the
+config. Guest and IoT are not allowed, and their firewall zones reject input
+anyway.
+
 ## Routing-rule priority map
 
 Identical shape for IPv4 and IPv6. `ip rule` / `ip -6 rule`:
