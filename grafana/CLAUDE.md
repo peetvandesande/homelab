@@ -119,7 +119,14 @@ folder and read-only in the UI. Seventeen rules in two groups, `dns` and
    instances to carry for a metric that is almost always zero. Its
    `noDataState` is `OK` to match, and that asymmetry is deliberate.
 
-9. **The `pve` job is excluded from the target-down rules.** Its exporter on
+9. **`systemd-unit-failed` has no exclusions, and that is only true because
+   `fleet/` keeps it true.** It alerts on any failed unit on any host. The one
+   thing that used to be failed everywhere, `openipmi.service`, is masked
+   fleet-wide instead of filtered here. If this rule starts firing on something
+   structural, mask it in `fleet/masked-units` rather than adding a `name!=`
+   to this query — an exclusion here hides the next real failure too.
+
+10. **The `pve` job is excluded from the target-down rules.** Its exporter on
    127.0.0.1:9221 has never run, and one permanently firing alert teaches you to
    ignore all of them. Fix the exporter or delete the job; do not "fix" it by
    widening the rule.

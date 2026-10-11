@@ -1,0 +1,18 @@
+# Units masked on every enrolled host, one per line, with the reason.
+#
+# This file is the source of truth: scripts/deploy.sh masks everything listed
+# here, on every host in FLEET. It does NOT unmask anything, so removing a line
+# is not enough to undo it - see CLAUDE.md.
+#
+# Only put a unit here if it should be masked on the WHOLE fleet. A unit that is
+# noise on one host is a per-host decision and does not belong in a file that
+# claims to describe all eleven.
+
+# Ships as a dependency of ipmitool. The unit is an LSB init script that loads
+# the in-band IPMI driver, and there is no /dev/ipmi* on any host - lenora
+# included, so the BMC on that board is not exposed in-band either. It was the
+# fleet's only failed unit, which made the systemd-unit-failed alert in
+# grafana/ useless: it had to exclude the one thing that was actually failing.
+# For in-band ipmitool on lenora, unmask and load ipmi_si/ipmi_devintf;
+# out-of-band over LAN never needed this.
+openipmi.service
