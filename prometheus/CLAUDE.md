@@ -49,6 +49,11 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    .74:8080 — a migrated stack that predates this repo's TLS posture and
    carries its own certificates for the sites it fronts.
 
+6. **The `grafana` job is not for graphs.** `grafana_alerting_*` is the only
+   thing that can report that the alerting itself has stopped - a rule naming a
+   datasource uid that no longer exists never evaluates and never errors. Without
+   this job, every alert in `grafana/` is unmonitored.
+
 ## Known broken, pre-existing
 
 The `pve` job is down because `prometheus-pve-exporter` is not running on

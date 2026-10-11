@@ -1,0 +1,951 @@
+# Alert rules, provisioned from files. Managed from homelab/grafana.
+#
+# Grafana does the alerting in this lab (Prometheus has rule_files commented out
+# and no Alertmanager running), so these are Grafana unified-alerting rules.
+#
+# @@PROM_DS_UID@@ is substituted by scripts/deploy.sh with the uid Grafana
+# actually generated for the provisioned Prometheus datasource. It is not
+# hardcoded because that datasource has no pinned uid - and one must never be
+# added to a live datasource, which is invariant 4 in CLAUDE.md. verify.sh
+# checks the substituted value still matches what Grafana holds.
+#
+# Each rule is a Prometheus query (A) plus a threshold expression (B). The
+# queries read a gauge and threshold it rather than filtering with == 0, so a
+# healthy system still produces a series and "no data" means something is
+# genuinely missing rather than fine.
+#
+# The `pve` job is deliberately excluded from the target-down rules: the
+# prometheus-pve-exporter on 127.0.0.1:9221 is not running, and a permanently
+# firing alert teaches you to ignore the lot.
+#
+# NOTE: there is no contact point here, so these surface in the Grafana UI
+# (Alerting -> Alert rules) and notify nowhere. Add a contact point and a
+# notification policy to get them delivered.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: dns
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: dns-component-down
+        title: "DNS component down"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.component }} on {{ $labels.role }} is down"
+          description: >-
+            themis is the only resolver the LAN has, so dnsdist being down is a total DNS outage. delphi down means no recursion and no filtering; pythia down means no internal names.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'up{job="dns"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: dnsdist-delphi-down
+        title: "dnsdist has lost Delphi"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Themis cannot reach its filtering backend"
+          description: >-
+            Every query except the VPN-domain shunt goes to delphi. dnsdist will serve stale cache entries for 10 minutes (setStaleCacheEntriesTTL) and then nothing.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'dnsdist_server_status{server="delphi"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: dnsdist-vpn-resolver-down
+        title: "VPN-domain resolver down"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.server }} ({{ $labels.address }}) is down"
+          description: >-
+            One of the router's dnsmasq instances behind the VPN-domain shunt. If the tunnel's own resolver is down the pool fails over to the router's main instance, which still fills the ipset but with addresses from the wrong country - so geo-restricted services break while DNS looks fine.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'dnsdist_server_status{server!="delphi"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: vpn-shunt-pool-empty
+        title: "VPN shunt pool has no healthy resolver"
+        condition: B
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pool {{ $labels.pool }} has no backend"
+          description: >-
+            Queries for that pool's domains have nowhere to go, so the VPN policy domains fail to resolve entirely rather than merely routing wrongly.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'dnsdist_pool_active_servers{pool=~"vpn-.*"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: vpn-sync-failing
+        title: "VPN domain sync is failing"
+        condition: B
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "vpn-domain-sync on themis cannot sync from the router"
+          description: >-
+            It keeps the last good list, so routing still works - but a policy you add on the router will not take effect. Usually the router rebooted into a firmware upgrade that removed /usr/local/bin/vpn-policy-dump or the authorized_keys entry; dns/README.md has both to paste back. Check: ssh root@192.168.8.50 vpn-domain-sync
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: vpn_domain_sync_success
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: vpn-sync-stale
+        title: "VPN domain sync has not run"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful VPN domain sync for {{ $values.A }}h"
+          description: >-
+            The hourly timer has stopped rather than individual runs failing. Check vpn-domain-sync.timer on themis.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '(time() - vpn_domain_sync_last_success_seconds) / 3600'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [3]
+      - uid: vpn-shunt-empty
+        title: "VPN shunt covers no domains"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Themis is shunting zero domains to the router"
+          description: >-
+            Domain-based VPN routing cannot fire at all: nothing fills the router's ipset. Either every domain policy was removed on the router, or Themis has no list yet - a freshly built themis starts without one by design.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'sum(vpn_domain_sync_domains)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: rpz-feed-stale
+        title: "Blocklist feed is stale"
+        condition: B
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Feed {{ $labels.feed }} last refreshed {{ $values.A }}h ago"
+          description: >-
+            rpz-update runs daily. The recursor is still serving the old copy - stale filtering, not none - but the feed has stopped refreshing. Check rpz-update.timer on delphi.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '(time() - rpz_feed_last_fresh_seconds) / 3600'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [48]
+      - uid: rpz-feed-failing
+        title: "Blocklist feed refresh is failing"
+        condition: B
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Feed {{ $labels.feed }} did not refresh cleanly"
+          description: >-
+            The download failed, had no SOA, or fell under its line-count tripwire in rpz-feeds.conf, so rpz-update refused to install it and kept the previous copy. If upstream genuinely shrank the list, lower the tripwire.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: rpz_feed_ok
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: recursor-servfail-high
+        title: "Recursor SERVFAIL rate is high"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $values.A }}% of answers are SERVFAIL"
+          description: >-
+            Usually upstream or connectivity. Worth ruling out the two internal causes first: a missing addNTA() for an internal zone, and DNSSEC validation failing against a split-horizon override - both SERVFAIL everything in that zone.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '100 * rate(pdns_recursor_servfail_answers[10m]) / clamp_min(rate(pdns_recursor_questions[10m]), 0.001)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [5]
+      - uid: dnsdist-dropping-clients
+        title: "dnsdist is dropping client queries"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Themis is dropping queries at {{ $values.A }}/s"
+          description: >-
+            The per-IP 200 qps limit is firing and those queries are dropped silently, which is a real DNS outage for whichever device is over the limit. Find it with 'dnsdist -C /etc/dnsdist/dnsdist.conf -e showTopClients(10)'.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'rate(dnsdist_rule_drop[10m])'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      - uid: alerting-evaluation-failing
+        title: "Alert rule evaluation is failing"
+        condition: B
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Grafana cannot evaluate its own alert rules"
+          description: >-
+            Rules are failing to evaluate, so the alerts in this folder are not
+            protecting anything. The usual cause is a rule naming a datasource uid
+            that no longer exists, which fails silently - re-run
+            grafana/scripts/deploy.sh to re-substitute it, and check
+            grafana/scripts/verify.sh.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'increase(grafana_alerting_rule_evaluation_failures_total[15m])'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+
+  - orgId: 1
+    name: fleet
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: host-down
+        title: "Host down"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.role }} ({{ $labels.instance }}) is not responding"
+          description: >-
+            node-exporter is unreachable. Either the host is down or its certificate expired - :9100 is TLS everywhere, so a renewal failure looks identical to a dead host.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'up{job="node"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: service-target-down
+        title: "Service scrape target down"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} on {{ $labels.role }} is down"
+          description: >-
+            The service's own metrics endpoint, not the host. The pve job is excluded on purpose - its exporter has never run.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'up{job=~"alloy|loki|docker|traefik|jellyfin|navidrome|prometheus"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: disk-low
+        title: "Root filesystem nearly full"
+        condition: B
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.role }} has {{ $values.A }}% free on /"
+          description: >-
+            Container rootfs live on ssdpool. Bulk data should be on hddpool and mounted in, so a filling rootfs usually means logs or a cache that should not be there.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '100 * node_filesystem_avail_bytes{job="node",mountpoint="/"} / node_filesystem_size_bytes{job="node",mountpoint="/"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [10]
+      - uid: memory-low
+        title: "Memory nearly exhausted"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.role }} is at {{ $values.A }}% memory"
+          description: >-
+            On delphi this is expected to run high - ~2.3M RPZ entries plus caches - and the daily feed refresh briefly holds two copies of a zone. Raise the container's RAM rather than trimming the feeds, or lower recordcache.max_entries in recursor.yml.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '100 * (1 - node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"})'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [90]
+      - uid: systemd-unit-failed
+        title: "systemd unit failed"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} failed on {{ $labels.role }}"
+          description: >-
+            A unit gave up rather than being stopped. The timers matter most here: rpz-update on delphi, vpn-domain-sync on themis, and homelab-tls-renew everywhere.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            # Filtered to failed units rather than thresholding the whole gauge:
+            # the unfiltered series set is ~1600 per evaluation across the fleet,
+            # which is a lot of alert instances to carry for a metric that is
+            # zero almost always. The cost is that "no data" means healthy here,
+            # hence noDataState: OK.
+            model:
+              editorMode: code
+              # openipmi.service is excluded, not suppressed by accident: it is
+              # failed on all eleven hosts. An unprivileged LXC has no IPMI
+              # device, and it is failed on lenora too. Masking it everywhere is
+              # the real fix; until someone does, alerting on it would fire
+              # permanently and teach you to ignore this rule.
+              expr: 'node_systemd_unit_state{job="node",state="failed",name!="openipmi.service"} == 1'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      - uid: textfile-collector-error
+        title: "Textfile metrics unreadable"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "node-exporter cannot parse a .prom file on {{ $labels.role }}"
+          description: >-
+            Something in /var/lib/node_exporter/textfile is malformed, so the metrics it carries - vpn-domain-sync and rpz-update - are missing or stale and their own alerts cannot be trusted while this is set.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'node_textfile_scrape_error{job="node"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]

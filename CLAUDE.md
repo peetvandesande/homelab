@@ -214,7 +214,10 @@ nothing from the host; reach for an LXC when it wants to look like a machine.
 ## Monitoring
 
 Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
-(192.168.8.54) for dashboards and alerting. Loki (192.168.8.56) is the log
+(192.168.8.54) for dashboards and alerting. Two dashboards and seventeen alert
+rules are provisioned from `grafana/` — `homelab-dns` and `homelab-fleet`, with
+rule groups `dns` and `fleet`. The rules evaluate but **notify nowhere**: no
+contact point is configured, so they are UI-only until one is. Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
 eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.

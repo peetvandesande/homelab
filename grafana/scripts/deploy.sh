@@ -11,8 +11,31 @@ HOST=192.168.8.54
 
 require_enrolled "$HOST"
 push "$HOST" root
+
+# Alert rules need the datasource's uid, and the provisioned Prometheus
+# datasource has none pinned - invariant 4 says why one must never be added to a
+# live datasource. So the uid Grafana generated is read back out of its own
+# database and substituted into the pushed rules, the same way homelab/dns
+# substitutes secrets at push time. A rebuilt Grafana therefore needs no edit
+# here; verify.sh asserts the substituted value still matches.
 $SSH "root@$HOST" '
   set -e
+  uid=$(python3 -c "
+import sqlite3
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+r=c.execute(\"select uid from data_source where type=:t and name=:n\",
+            {\"t\":\"prometheus\",\"n\":\"Prometheus\"}).fetchone()
+print(r[0] if r else \"\")")
+  if [ -z "$uid" ]; then
+    echo "!! no provisioned Prometheus datasource yet - alert rules will not load."
+    echo "   This is expected on a first install: deploy once more once Grafana"
+    echo "   has created it."
+  else
+    for f in /etc/grafana/provisioning/alerting/*.yaml; do
+      sed -i "s|@@PROM_DS_UID@@|$uid|g" "$f"
+    done
+    echo "   alert rules bound to Prometheus datasource $uid"
+  fi
   usermod -aG tlscert grafana
   chmod +x /etc/homelab-tls/post-renew.d/20-grafana
   systemctl daemon-reload

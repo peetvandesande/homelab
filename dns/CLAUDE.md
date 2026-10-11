@@ -280,5 +280,5 @@ Not yet done:
   including cache isolation and the shunt still winning for a tagged client.
 - **DoH is not reachable from outside.** It works on the LAN (`:443`), but
   there is no port forward, so it is internal-only for now.
-- **No Grafana dashboards or alerts** off the `dns` job. Delphi now carries
-  ~2.3M RPZ entries in 6GB; a memory alert off the `node` job is overdue.
+- **Alerts notify nowhere.** The `dns` rule group in `grafana/` evaluates and
+  shows in the UI, but no contact point is configured yet.

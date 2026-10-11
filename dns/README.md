@@ -187,7 +187,9 @@ Nothing about that is obvious from the outside, so it is monitored:
 | `vpn_domain_sync_changed` | 1 on the run that installed a change |
 
 They reach Prometheus through node-exporter's textfile collector (see
-`node-exporter/CLAUDE.md`) and are alerted on in `grafana/`.
+`node-exporter/CLAUDE.md`), appear on the **DNS stack** dashboard
+(`/d/homelab-dns`) and are alerted on by the `dns` rule group in `grafana/`.
+`rpz-update` publishes feed freshness the same way (`rpz_feed_*`).
 
 ### The two pieces that live on the router
 
@@ -390,8 +392,11 @@ labels now describe this stack, and the two service jobs were repointed.
   clients' queries to `.50` straight back to the router.
 - **Populate `client-policies.conf`.** It is empty, so every device gets the
   default set.
-- **Grafana dashboards and alerts** off the `dns` job, including a memory alert
-  on Delphi — it carries ~2.3M RPZ entries now.
+- **Somewhere for alerts to go.** The `dns` rule group in `grafana/` covers the
+  stack — components down, the shunt empty, the sync failing or stale, feeds
+  stale, SERVFAIL rate, clients being rate-limited — and the **DNS stack**
+  dashboard (`/d/homelab-dns`) shows it. But no contact point is configured, so
+  they are visible in the Grafana UI and delivered nowhere.
 - **DoH from outside** if you want phones filtered off-LAN. It works on the LAN
   already; it needs a port forward.
 

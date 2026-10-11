@@ -19,36 +19,46 @@ failed=0
 
 log() { echo "[rpz-update] $*"; }
 
+# Published through node-exporter's textfile collector. A feed that quietly
+# stops refreshing is invisible otherwise: the recursor keeps serving the stale
+# copy and nothing looks wrong. grafana/ alerts on the age.
+METRICS=/var/lib/node_exporter/textfile/rpz_update.prom
+declare -a M_LINES=() M_AGE=() M_OK=()
+
 while read -r name minlines url; do
   [[ -z "${name:-}" || "$name" == \#* ]] && continue
 
   out="$TMP/$name"
   if ! curl -fsSL --max-time 300 --retry 2 --retry-delay 5 -o "$out" "$url"; then
     log "FAIL  $name: download error from $url"
-    failed=1
+    failed=1; M_OK+=("$name 0")
     continue
   fi
 
   lines=$(wc -l < "$out")
   if (( lines < minlines )); then
     log "FAIL  $name: $lines lines, expected >= $minlines - refusing to install"
-    failed=1
+    failed=1; M_OK+=("$name 0")
     continue
   fi
   if ! grep -qi 'SOA' "$out"; then
     log "FAIL  $name: no SOA record, does not look like a zone file"
-    failed=1
+    failed=1; M_OK+=("$name 0")
     continue
   fi
 
   if [[ -f "$DEST/$name.rpz" ]] && cmp -s "$out" "$DEST/$name.rpz"; then
     log "ok    $name: unchanged ($lines lines)"
+    M_OK+=("$name 1"); M_LINES+=("$name $lines")
+    M_AGE+=("$name $(date +%s)")
     continue
   fi
 
   install -o pdns -g pdns -m 0644 "$out" "$DEST/$name.rpz.new"
   mv -f "$DEST/$name.rpz.new" "$DEST/$name.rpz"
   log "ok    $name: updated ($lines lines)"
+  M_OK+=("$name 1"); M_LINES+=("$name $lines")
+  M_AGE+=("$name $(date +%s)")
   changed=1
 done < "$FEEDS"
 
@@ -61,5 +71,26 @@ if (( changed )); then
 else
   log "no changes, skipping reload"
 fi
+
+# ------------------------------------------------------------------ metrics ---
+# "fresh" means the feed was confirmed current on this run - downloaded cleanly
+# and either installed or identical to what is on disk. A feed that failed its
+# tripwire keeps its old file but is NOT fresh, which is the distinction the
+# staleness alert needs.
+emit() { # emit <metric> <help> <type> <entries...>
+  local m=$1 h=$2 t=$3; shift 3
+  (( $# )) || return 0
+  echo "# HELP $m $h"; echo "# TYPE $m $t"
+  local e; for e in "$@"; do echo "$m{feed=\"${e%% *}\"} ${e##* }"; done
+}
+install -d -m 0755 "$(dirname "$METRICS")"
+{
+  emit rpz_feed_lines "Lines in the installed RPZ feed." gauge "${M_LINES[@]+"${M_LINES[@]}"}"
+  emit rpz_feed_last_fresh_seconds "Unix time the feed was last confirmed current." gauge "${M_AGE[@]+"${M_AGE[@]}"}"
+  emit rpz_feed_ok "Whether the feed refreshed cleanly on the last run." gauge "${M_OK[@]+"${M_OK[@]}"}"
+  echo "# HELP rpz_update_last_run_seconds Unix time of the last rpz-update run."
+  echo "# TYPE rpz_update_last_run_seconds gauge"
+  echo "rpz_update_last_run_seconds $(date +%s)"
+} > "$METRICS.tmp" && mv -f "$METRICS.tmp" "$METRICS"
 
 exit $failed

@@ -1,0 +1,1673 @@
+{
+  "uid": "homelab-dns",
+  "title": "DNS stack",
+  "description": "themis (dnsdist) -> delphi (recursor + RPZ) -> pythia (authoritative), plus the VPN-domain shunt to the router. Managed from homelab/grafana.",
+  "tags": [
+    "dns",
+    "homelab"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Is it working?",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "dnsdist (themis)",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "up{job=\"dns\",component=\"dnsdist\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "The only address clients talk to. Down means the LAN has no DNS."
+    },
+    {
+      "type": "stat",
+      "title": "recursor (delphi)",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 3,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "up{job=\"dns\",component=\"recursor\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "All recursion and all RPZ filtering."
+    },
+    {
+      "type": "stat",
+      "title": "auth (pythia)",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "up{job=\"dns\",component=\"auth\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "Authoritative for home. and the split-horizon overrides."
+    },
+    {
+      "type": "stat",
+      "title": "Backends",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "dnsdist_server_status",
+          "legendFormat": "{{server}}",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "DOWN"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "delphi is the filtering path; wgclient2-dns and router-dns-vpn-uk are the VPN-domain shunt and its fallback."
+    },
+    {
+      "type": "stat",
+      "title": "VPN shunt",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "sum(vpn_domain_sync_domains)",
+          "legendFormat": "domains",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "Domains Themis hands to the router so its policy routing fires. Zero means the tunnel is never used."
+    },
+    {
+      "type": "stat",
+      "title": "Shunt sync",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "vpn_domain_sync_success",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "FAILING"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "OK"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "description": "Hourly pull of the VPN domain policy from the router."
+    },
+    {
+      "type": "row",
+      "title": "Query flow",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Queries through Themis",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_queries[5m])",
+          "legendFormat": "queries",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_responses[5m])",
+          "legendFormat": "responses from backends",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_self_answered[5m])",
+          "legendFormat": "answered by dnsdist itself",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_servfail_responses[5m])",
+          "legendFormat": "SERVFAIL",
+          "range": true,
+          "instant": false,
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Everything on the LAN enters here, over Do53, DoT or DoH."
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache hit rate per policy set",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "100 * rate(dnsdist_pool_cache_hits[15m]) / clamp_min(rate(dnsdist_pool_cache_hits[15m]) + rate(dnsdist_pool_cache_misses[15m]), 0.0001)",
+          "legendFormat": "{{pool}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "One cache per pool, deliberately: dnsdist keys the cache on the question and not the policy tag, so a shared cache would serve a kids NXDOMAIN to an adult device. vpn-* pools have no cache on purpose and will not appear."
+    },
+    {
+      "type": "timeseries",
+      "title": "Where queries go",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_server_queries[5m])",
+          "legendFormat": "{{server}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "delphi is the normal path. Traffic to wgclient2-dns is the VPN-domain shunt - BBC and friends being resolved through the UK tunnel so the router's ipset fills."
+    },
+    {
+      "type": "timeseries",
+      "title": "Encrypted transports",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_frontend_tlsqueries[5m])",
+          "legendFormat": "DoT/DoH queries",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_frontend_tlshandshakefailures[5m])",
+          "legendFormat": "TLS handshake failures",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "DoT :853 and DoH :443, off the lab CA. Same rule chain as Do53."
+    },
+    {
+      "type": "row",
+      "title": "Filtering",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Blocks per feed",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_policy_hits{policyname!=\"\"}[5m])",
+          "legendFormat": "{{policyname}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "ads and malware apply to everyone; the rest only to clients Themis tagged into that policy set."
+    },
+    {
+      "type": "timeseries",
+      "title": "Feed size",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rpz_feed_lines",
+          "legendFormat": "{{feed}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Lines in each installed feed. A sudden collapse is upstream serving something broken - the tripwire in rpz-feeds.conf should have refused it, so look at rpz_feed_ok too."
+    },
+    {
+      "type": "timeseries",
+      "title": "Feed staleness",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "(time() - rpz_feed_last_fresh_seconds) / 3600",
+          "legendFormat": "{{feed}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "h",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Hours since the feed was last confirmed current. rpz-update runs daily, so anything much past 24-48h means it has stopped refreshing and the recursor is serving a stale copy."
+    },
+    {
+      "type": "timeseries",
+      "title": "Policy outcomes",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_policy_result_nxdomain[5m])",
+          "legendFormat": "NXDOMAIN (blocked)",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_policy_result_drop[5m])",
+          "legendFormat": "dropped",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_policy_result_nodata[5m])",
+          "legendFormat": "NODATA",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "The hagezi feeds use CNAME . so a block shows up as NXDOMAIN."
+    },
+    {
+      "type": "row",
+      "title": "Recursion and DNSSEC",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Recursor questions and failures",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_questions[5m])",
+          "legendFormat": "questions",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_servfail_answers[5m])",
+          "legendFormat": "SERVFAIL",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_answers_slow[5m])",
+          "legendFormat": "slow (>1s)",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_throttled_out[5m])",
+          "legendFormat": "throttled outqueries",
+          "range": true,
+          "instant": false,
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "DNSSEC validation outcomes",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 39,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_dnssec_result_secure[5m])",
+          "legendFormat": "secure",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_dnssec_result_insecure[5m])",
+          "legendFormat": "insecure",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_dnssec_result_bogus[5m])",
+          "legendFormat": "bogus",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_recursor_dnssec_result_nta[5m])",
+          "legendFormat": "negative trust anchor",
+          "range": true,
+          "instant": false,
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "The NTA line is home., 8.168.192.in-addr.arpa. and ca.peetvandesande.com. - the internal zones that must not be validated. A rising bogus line is usually a real upstream problem, not ours."
+    },
+    {
+      "type": "timeseries",
+      "title": "Recursor caches",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "pdns_recursor_cache_entries",
+          "legendFormat": "record cache entries",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "pdns_recursor_packetcache_entries",
+          "legendFormat": "packet cache entries",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Capped at 1.5M and 500k in recursor.yml. The RPZ feeds are a separate ~2.3M entries on top, which is why delphi has 6GB."
+    },
+    {
+      "type": "timeseries",
+      "title": "Delphi memory",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 46,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{role=\"delphi\"} / node_memory_MemTotal_bytes{role=\"delphi\"})",
+          "legendFormat": "used",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "The feeds are a fixed cost and a daily refresh holds two copies of a zone at once, so the peak is higher than the steady state."
+    },
+    {
+      "type": "timeseries",
+      "title": "Pythia (authoritative)",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 46,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_auth_udp_queries[5m])",
+          "legendFormat": "queries",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_auth_servfail_packets[5m])",
+          "legendFormat": "SERVFAIL",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(pdns_auth_packetcache_hit[5m])",
+          "legendFormat": "packet cache hits",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Only Delphi ever asks it anything."
+    },
+    {
+      "type": "row",
+      "title": "Hygiene",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Queries dnsdist refused or dropped",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_rule_drop[5m])",
+          "legendFormat": "dropped by rule (per-IP QPS limit)",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_rule_refused[5m])",
+          "legendFormat": "refused by rule (ANY)",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_acl_drops[5m])",
+          "legendFormat": "ACL drops (off-LAN source)",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_dyn_blocked[5m])",
+          "legendFormat": "dynamic blocks",
+          "range": true,
+          "instant": false,
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "qps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "A sustained rule_drop line is a client exceeding 200 qps and being dropped silently - that is a real outage for that device, so check it rather than admiring the graph."
+    },
+    {
+      "type": "timeseries",
+      "title": "Backend health and latency",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 54,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "dnsdist_server_latency",
+          "legendFormat": "{{server}} latency (us)",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_server_healthcheckfailures[5m])",
+          "legendFormat": "{{server}} healthcheck failures",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(dnsdist_downstream_timeouts[5m])",
+          "legendFormat": "downstream timeouts",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "prom",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 2,
+        "current": {},
+        "refresh": 1
+      }
+    ]
+  }
+}

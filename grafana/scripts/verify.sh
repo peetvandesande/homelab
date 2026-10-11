@@ -56,7 +56,7 @@ echo "== provisioned dashboards"
 # nothing. Grafana 13 keeps dashboards in unified storage - the `resource`
 # table, one JSON document per object - not the legacy `dashboard` table,
 # which stays empty.
-DASHBOARD_UIDS=()   # none since esther was retired; add uids as dashboards land
+DASHBOARD_UIDS=(homelab-dns homelab-fleet)
 for uid in ${DASHBOARD_UIDS[@]+"${DASHBOARD_UIDS[@]}"}; do
   title=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
 import sqlite3, json
@@ -66,5 +66,44 @@ print(json.loads(r[0])[\"spec\"][\"title\"] if r else \"\")"' 2>/dev/null)
   if [[ -n "$title" ]]; then pass "dashboard '$uid' provisioned as \"$title\" (https://$HOST:3000/d/$uid)"
   else bad "dashboard '$uid' provisioned" "not in Grafana's database - journalctl -u grafana-server | grep -i provisioning"; fi
 done
+
+echo "== provisioned alert rules"
+# Grafana logs a provisioning error and skips a rule file it cannot reconcile,
+# so the file being on disk proves nothing - ask the API what it loaded. These
+# are read-only in the UI, like the dashboards.
+rules=$(curl -sS --max-time 10 --cacert ../ca/rootca/certs/root.crt \
+  "https://$HOST:3000/api/v1/provisioning/alert-rules" 2>/dev/null)
+if [[ -z "$rules" || "$rules" == *Unauthorized* ]]; then
+  # The provisioning API needs credentials; fall back to Grafana's database,
+  # which verify.sh already reads for datasources and dashboards.
+  rules=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
+import sqlite3
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+print(*[r[0] for r in c.execute(\"select uid from alert_rule\")], sep=\" \")"' 2>/dev/null)
+fi
+for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-empty \
+           rpz-feed-stale host-down disk-low systemd-unit-failed; do
+  if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
+  else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
+done
+
+# The rules carry the datasource uid, substituted at push time. If Grafana ever
+# regenerates the datasource the rules would still name the old one and would
+# silently never evaluate, so check they agree.
+live=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
+import sqlite3
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+r=c.execute(\"select uid from data_source where type=:t and name=:n\",
+            {\"t\":\"prometheus\",\"n\":\"Prometheus\"}).fetchone()
+print(r[0] if r else \"\")"' 2>/dev/null)
+inrules=$(ssh -o BatchMode=yes root@$HOST \
+  'grep -ho "datasourceUid: \"[A-Za-z0-9_-]*\"" /etc/grafana/provisioning/alerting/*.yaml \
+   | sed "s/.*\"\(.*\)\"/\1/" | sort -u | head -1' 2>/dev/null)
+if [[ -n "$live" && "$live" == "$inrules" ]]; then
+  pass "alert rules point at the live Prometheus datasource ($live)"
+else
+  bad "alert rules point at the live Prometheus datasource" \
+      "rules say '${inrules:-none}', Grafana has '${live:-none}' - re-run deploy.sh"
+fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

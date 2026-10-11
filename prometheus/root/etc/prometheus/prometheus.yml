@@ -167,6 +167,18 @@ scrape_configs:
     static_configs:
       - targets: ['192.168.8.56:3100']
 
+  # Grafana's own metrics. Not for pretty graphs: grafana_alerting_* is the only
+  # thing that can tell you the alerting itself has stopped working, and a rule
+  # naming a datasource uid that no longer exists fails silently rather than
+  # erroring. Without this job, every other alert here is unmonitored.
+  - job_name: grafana
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['192.168.8.54:3000']
+        labels: {role: grafana }
+
   # TLS, terminated by nginx on each DNS container. None of the three PowerDNS
   # components can serve TLS itself, so the backend binds loopback and nginx
   # fronts it on the same port this job has always used - the target addresses
