@@ -80,6 +80,10 @@ read-only wherever the container only consumes it:
 --mp0 /hddpool/media,mp=/var/media,backup=0,ro=1
 ```
 
+lenora also **exports `/hddpool/media` over NFS to 192.168.8.0/24** for hosts
+that are not containers on it; `proxmox/root/etc/exports` owns that. It is not
+how containers here get the data — an unprivileged LXC cannot mount NFS.
+
 ## Container defaults
 
 Every container is unprivileged, nesting-enabled and starts at boot:

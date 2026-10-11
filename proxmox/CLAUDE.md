@@ -1,6 +1,7 @@
 # Proxmox VE
 
-The web GUI on **lenora, 192.168.8.21:8006**, served off the lab CA.
+The web GUI on **lenora, 192.168.8.21:8006**, served off the lab CA, plus the
+host's **NFS export** of `/hddpool/media`.
 
 Named for the service rather than the host, because lenora is the hypervisor
 itself and not a container — it is the one entry here that is not a CT.
@@ -14,6 +15,26 @@ alone.
 
 lenora is enrolled like every other host (`ca/scripts/enrol.sh`), so all this
 stack adds is a post-renew hook. There is no separate certificate for it.
+
+## The NFS export
+
+`root/etc/exports` publishes `/hddpool/media` to **192.168.8.0/24**, read-write
+with `all_squash` to `nobody:nogroup` (65534). `deploy.sh` reapplies it with
+`exportfs -ra`, which re-reads the export set without restarting `nfs-server`
+or disturbing existing mounts.
+
+Two things about it:
+
+- **It named the old `192.168.1.0/24` until 11 October 2026.** The LAN moved to
+  192.168.8.0/24 when the GL.iNet router replaced the Livebox, and the export
+  was never updated, so nothing on the current LAN could mount it — and the
+  failure was an access denial on the client, nothing visible on lenora.
+  `verify.sh` now asserts the range, so this cannot rot silently again. The
+  host's previous file is `/etc/exports.bak-2026-10-11-lan8`.
+- **Containers on lenora do not use it.** An unprivileged LXC cannot mount NFS,
+  so they take `/hddpool/media` through the `mp0` bind mount. The export exists
+  for machines that are not containers on this host, which is why a whole-`/24`
+  grant with everything squashed to nobody is an acceptable granularity.
 
 ## Invariants
 

@@ -24,6 +24,17 @@ echo "   certificate and key match"
 
 push "$HOST" root
 
+# ------------------------------------------------------------------ NFS -----
+# /etc/exports is pushed with everything else under root/; reapply it. Only
+# `exportfs -ra` is needed - the export set is re-read, nfs-server is not
+# restarted and existing mounts are not disturbed.
+$SSH "root@$HOST" '
+  set -e
+  exportfs -ra
+  exportfs -v | grep -q "^/hddpool/media" || { echo "/hddpool/media is not exported"; exit 1; }
+'
+echo "   NFS exports reapplied"
+
 $SSH "root@$HOST" '
   set -e
   node=$(hostname)

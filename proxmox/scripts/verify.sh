@@ -31,4 +31,13 @@ h=$(ssh -o BatchMode=yes root@$HOST 'test -x /etc/homelab-tls/post-renew.d/20-pv
 [[ $h == yes ]] && pass "post-renew hook installed and executable" \
   || bad "post-renew hook installed and executable" "missing"
 
+echo "== NFS exports the media dataset to the current LAN"
+# The export named the old 192.168.1.0/24 until October 2026, which silently
+# meant no client on the LAN could mount it.
+exp=$(ssh -o BatchMode=yes root@$HOST 'exportfs -v | tr -d "\n"' 2>/dev/null)
+if grep -q "192.168.8.0/24" <<<"$exp"; then pass "/hddpool/media is exported to 192.168.8.0/24"
+else bad "/hddpool/media is exported to 192.168.8.0/24" "${exp:-nothing exported}"; fi
+if grep -q "all_squash" <<<"$exp"; then pass "the export squashes every client to nobody"
+else bad "the export squashes every client to nobody" "$exp"; fi
+
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

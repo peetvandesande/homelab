@@ -1,0 +1,17 @@
+# NFS exports on lenora. See exports(5).
+#
+# Managed from homelab/proxmox - edit here, not on the host. scripts/deploy.sh
+# pushes this file and runs `exportfs -ra`.
+#
+# The LAN moved to 192.168.8.0/24 in October 2026, when the GL.iNet router
+# replaced the Orange Livebox. This export still named the old 192.168.1.0/24
+# until 11 October 2026, so nothing on the current LAN could mount it.
+#
+# all_squash + anonuid/anongid=65534 maps every client to nobody:nogroup, so
+# the export grants no uid-based access to anything on hddpool. That is why a
+# /24 is an acceptable granularity here.
+#
+# Containers on lenora do NOT use this: an unprivileged LXC cannot mount NFS,
+# so they get /hddpool/media through the mp0 bind mount instead. This export is
+# for machines that are not containers on this host.
+/hddpool/media	192.168.8.0/24(rw,sync,all_squash,anonuid=65534,anongid=65534,no_subtree_check)
