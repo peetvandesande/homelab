@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Keep Themis's VPN-domain shunt in step with the router's policy.
+#
+# The router routes into a tunnel by destination IP and fills those ipsets from
+# the answers its own dnsmasq returns, so a name under a domain policy has to be
+# resolved by the router. dnsdist.conf shunts exactly those names to the
+# tunnel's dnsmasq instance; this keeps the list current without anyone having
+# to remember to.
+#
+# Hourly, driven by vpn-domain-sync.timer. The router is the source of truth and
+# its web UI writes the list, so this only ever reads.
+#
+# Why it restarts dnsdist rather than reloading: dnsdist has no live reload of
+# the rule chain, and mutating a SuffixMatchNode that a registered rule already
+# holds does not reach the rule - tested, the change is invisible to it. So a
+# genuine change means a restart, which costs a few seconds of LAN DNS. That is
+# acceptable only because it happens when *you* edit a router policy, not on a
+# schedule: an unchanged list restarts nothing, which is the normal case.
+#
+# Managed from homelab/dns - edit there, not here.
+set -uo pipefail
+
+ROUTER=192.168.8.1
+KEY=/etc/dnsdist/.ssh/router
+KNOWN=/etc/dnsdist/.ssh/known_hosts
+STATE=/var/lib/dnsdist/vpn-domains.conf
+CONF=/etc/dnsdist/dnsdist.conf
+METRICS=/var/lib/node_exporter/textfile/vpn_domain_sync.prom
+
+log() { logger -t vpn-domain-sync -- "$*"; echo "[vpn-domain-sync] $*"; }
+
+metrics() { # metrics <success 0|1> <changed 0|1> [pool:count ...]
+  local ok=$1 changed=$2; shift 2
+  install -d -m 0755 "$(dirname "$METRICS")"
+  {
+    echo "# HELP vpn_domain_sync_success Whether the last sync from the router succeeded."
+    echo "# TYPE vpn_domain_sync_success gauge"
+    echo "vpn_domain_sync_success $ok"
+    echo "# HELP vpn_domain_sync_last_run_seconds Unix time of the last sync attempt."
+    echo "# TYPE vpn_domain_sync_last_run_seconds gauge"
+    echo "vpn_domain_sync_last_run_seconds $(date +%s)"
+    if (( ok )); then
+      echo "# HELP vpn_domain_sync_last_success_seconds Unix time of the last successful sync."
+      echo "# TYPE vpn_domain_sync_last_success_seconds gauge"
+      echo "vpn_domain_sync_last_success_seconds $(date +%s)"
+    elif [[ -f $METRICS ]]; then
+      grep '^vpn_domain_sync_last_success_seconds' "$METRICS" 2>/dev/null \
+        | tail -1 | sed 's/^/# HELP vpn_domain_sync_last_success_seconds carried over\n# TYPE vpn_domain_sync_last_success_seconds gauge\n/'
+    fi
+    echo "# HELP vpn_domain_sync_changed Whether the last sync installed a changed list."
+    echo "# TYPE vpn_domain_sync_changed gauge"
+    echo "vpn_domain_sync_changed $changed"
+    if (( $# )); then
+      echo "# HELP vpn_domain_sync_domains Domains shunted to each VPN pool."
+      echo "# TYPE vpn_domain_sync_domains gauge"
+      local e; for e in "$@"; do echo "vpn_domain_sync_domains{pool=\"${e%%:*}\"} ${e##*:}"; done
+    fi
+  } > "$METRICS.tmp" && mv -f "$METRICS.tmp" "$METRICS"
+}
+
+fail() { log "FAIL $*"; metrics 0 0; exit 1; }
+
+install -d -m 0755 /var/lib/dnsdist
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+
+# ------------------------------------------------------------------- fetch ---
+# The key is restricted to a forced read-only command on the router, so there is
+# nothing to pass and nothing else it could run.
+ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+    -o UserKnownHostsFile="$KNOWN" "root@$ROUTER" > "$tmp/dump" 2>"$tmp/err" \
+  || fail "cannot read the policy from $ROUTER: $(tr -d '\n' < "$tmp/err" | tail -c 200)"
+
+# Sanity-gate the dump before trusting it. A truncated or error-page response
+# must leave the current list alone rather than quietly emptying the shunt. An
+# *legitimately* empty policy still installs - that is what the domain count
+# metric is for.
+grep -q '^route_policy\.' "$tmp/dump" || fail "dump has no route_policy - refusing to use it"
+grep -q '^==LIST==' "$tmp/dump"       || fail "dump has no domain lists - refusing to use it"
+
+# ------------------------------------------------------------------ render ---
+# Two traps a hand-written version of this gets wrong:
+# the lists also carry bare destination IPs and prefixes the router adds to the
+# set directly (dst_net4399 is entirely those), and the router's files have no
+# trailing newline, so awk rather than `while read`.
+awk '
+  /^==LIST==/ { list = substr($0, 9); next }
+  list != ""  { if ($0 !~ /[:\/]/ && $0 !~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ && NF)
+                  print list "\t" tolower($1); next }
+' "$tmp/dump" | sort -u > "$tmp/domains"
+
+awk -F'[][]|\\.|=' '
+  /^route_policy\.@rule\[[0-9]+\]\.[a-z_]+=/ {
+    idx=$3; key=$5; val=$0; sub(/^[^=]*=/, "", val); gsub(/^.|.$/, "", val)
+    v[idx":"key]=val; seen[idx]=1
+  }
+  /^dhcp\.[a-z0-9]+\.port=/ { t=$2; p=$0; sub(/^[^=]*=/, "", p); gsub(/^.|.$/, "", p); port[t]=p }
+  END { for (i in seen) if (v[i":to_type"]=="ipset" && v[i":enabled"]=="1" && port[v[i":via"]] != "")
+          print v[i":name"] "\t" v[i":to"] "\t" v[i":via"] "\t" port[v[i":via"]] }
+' "$tmp/dump" | sort > "$tmp/rules"
+
+{
+  echo "-- GENERATED on themis by vpn-domain-sync -- do not edit by hand."
+  echo "-- Source of truth: the VPN policy on $ROUTER. Synced hourly."
+  echo "-- Last sync: $(date -Is)"
+  echo
+  echo "vpnPolicies = {"
+} > "$tmp/out"
+
+counts=()
+while IFS=$'\t' read -r name set via port; do
+  [[ -n ${set:-} ]] || continue
+  pool="vpn-$(echo "$name" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9]\+/-/g' -e 's/^-//' -e 's/-$//')"
+  mapfile -t doms < <(awk -F'\t' -v l="$set" '$1==l {print $2}' "$tmp/domains")
+  (( ${#doms[@]} )) || continue
+  {
+    printf '  {\n    pool     = "%s",\n    policy   = "%s",\n' "$pool" "$name"
+    printf '    tunnel   = "%s",\n    set      = "%s",\n' "$via" "$set"
+    printf '    resolver = "%s:%s",\n    domains  = {\n' "$ROUTER" "$port"
+    printf '      "%s",\n' "${doms[@]}"
+    printf '    },\n  },\n'
+  } >> "$tmp/out"
+  counts+=("$pool:${#doms[@]}")
+done < "$tmp/rules"
+echo "}" >> "$tmp/out"
+
+# A dump that carries domains but renders no policies is a parse failure, not a
+# policy with nothing in it. Keep the last good list and shout. Deliberately
+# emptying every policy on the router is the one case this blocks, and it blocks
+# it loudly rather than silently doing the wrong thing the other 99% of the time.
+if (( ${#counts[@]} == 0 )) && [[ -s $tmp/domains ]]; then
+  fail "parsed $(wc -l < "$tmp/domains") domain(s) from the router but rendered no policies - keeping the current list"
+fi
+
+# ----------------------------------------------------------------- install ---
+if [[ -f $STATE ]] && diff -q <(grep -v '^-- Last sync:' "$STATE") \
+                             <(grep -v '^-- Last sync:' "$tmp/out") >/dev/null; then
+  log "no change ($(IFS=' '; echo "${counts[*]:-none}"))"
+  metrics 1 0 "${counts[@]}"
+  exit 0
+fi
+
+# Validate through the real config, which is what will actually load it, then
+# roll back if dnsdist will not have it.
+[[ -f $STATE ]] && cp -p "$STATE" "$tmp/prev"
+install -m 0644 "$tmp/out" "$STATE"
+if ! dnsdist --check-config --config "$CONF" >"$tmp/check" 2>&1; then
+  [[ -f $tmp/prev ]] && install -m 0644 "$tmp/prev" "$STATE" || rm -f "$STATE"
+  fail "rendered list rejected by dnsdist, rolled back: $(tail -1 "$tmp/check")"
+fi
+
+log "list changed ($(IFS=' '; echo "${counts[*]:-none}")) - restarting dnsdist"
+systemctl restart dnsdist
+for _ in $(seq 1 30); do systemctl is-active --quiet dnsdist && break; sleep 1; done
+if ! systemctl is-active --quiet dnsdist; then
+  # Getting the LAN its resolver back matters more than the new list.
+  if [[ -f $tmp/prev ]]; then
+    install -m 0644 "$tmp/prev" "$STATE"
+  else
+    rm -f "$STATE"
+  fi
+  systemctl restart dnsdist
+  fail "dnsdist did not come up with the new list; rolled back and restarted"
+fi
+
+log "synced and dnsdist restarted"
+metrics 1 1 "${counts[@]}"

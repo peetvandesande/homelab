@@ -147,36 +147,93 @@ These names bypass Delphi entirely — no RPZ, no DNSSEC validation. For
 broadcaster domains that is mostly a feature; the ads feed would otherwise block
 `bbc-reporting-api.app`, which the routing policy itself lists.
 
-### The router owns the list
+### The router owns the list, and Themis syncs it hourly
 
-`/etc/domain_mac_list/dst_net6611` on the router is the source of truth — the
-GL.iNet web UI writes it, so this repo must not claim ownership of it.
-`scripts/gen-vpn-domains.sh` reads it and regenerates
-`themis/etc/dnsdist/vpn-domains.conf`; commit the diff, then deploy.
+`/etc/domain_mac_list/<set>` on the router is the source of truth — the GL.iNet
+web UI writes it, so this repo carries no copy of it at all. Edit the policy in
+the UI and within the hour Themis follows; there is nothing to regenerate and
+nothing to commit.
+
+`vpn-domain-sync.timer` on Themis runs `/usr/local/bin/vpn-domain-sync` hourly
+(jittered 5m, `Persistent=true`). It pulls the policy, renders
+`/var/lib/dnsdist/vpn-domains.conf`, and **only** restarts dnsdist if the list
+actually changed — an unchanged list does nothing at all, which is the normal
+case. dnsdist has no live reload of its rule chain, so a genuine change costs a
+few seconds of LAN DNS; that follows a policy you edited, not a schedule.
+
+To apply a change immediately rather than waiting:
 
 ```sh
-./scripts/gen-vpn-domains.sh && git diff themis/etc/dnsdist/vpn-domains.conf
-./scripts/deploy.sh
+ssh root@192.168.8.50 vpn-domain-sync
 ```
 
-`deploy.sh` warns if the committed copy is stale and `verify.sh` fails on it.
-The two drift directions are not symmetric: a **missing** domain means Delphi
-answers it, the set never fills and the routing quietly doesn't happen; an
-**extra** one is harmless.
+The file is under `/var/lib` on purpose: everything in `themis/` here is pushed
+over the host's `/etc`, so a list there would be reverted to the checkout's copy
+on the next deploy.
 
-Two details the generator handles and a hand-written version would get wrong:
+**Failure is designed to be quiet but visible.** A router it cannot reach, a
+truncated dump, a list that renders no policies, or a config dnsdist refuses all
+leave the previous list in place and exit non-zero. If there is no list at all —
+a freshly built Themis before its first sync — dnsdist starts without the shunt,
+so the policy domains resolve normally and the tunnel simply isn't used.
 
-- The same list carries bare destination IPs and prefixes alongside the
-  domains. Those are set members the router adds directly and have no DNS
-  dimension — `dst_net4399` is *entirely* IPs, a site-to-site policy, and
-  generates no dnsmasq lines at all. Filtering them by "looks like hex and
-  dots" would also eat real domains like `face.be`, so the test is for `:`,
-  `/` or a strict dotted quad.
-- **The router's file has no trailing newline**, so a `while read` loop drops
-  its last entry. The generator uses `awk`.
+Nothing about that is obvious from the outside, so it is monitored:
+
+| Metric | Means |
+|---|---|
+| `vpn_domain_sync_success` | 0 after a failed sync |
+| `vpn_domain_sync_last_success_seconds` | staleness — the timer stopped |
+| `vpn_domain_sync_domains{pool=…}` | 0 means the tunnel will never be used |
+| `vpn_domain_sync_changed` | 1 on the run that installed a change |
+
+They reach Prometheus through node-exporter's textfile collector (see
+`node-exporter/CLAUDE.md`) and are alerted on in `grafana/`.
+
+### The two pieces that live on the router
+
+Neither is managed by this repo, and a firmware upgrade may remove both — the
+`vpn_domain_sync_success` alert is what tells you. To put them back:
+
+```sh
+# 1. the read-only dump the sync consumes
+cat > /usr/local/bin/vpn-policy-dump <<'EOF'
+#!/bin/sh
+# Read-only: the VPN policy, the per-tunnel dnsmasq ports, and the domain/IP
+# lists. Consumed by vpn-domain-sync on themis (192.168.8.50).
+uci show route_policy
+uci show dhcp | grep -E "^dhcp\.[a-z0-9]+\.port="
+for f in /etc/domain_mac_list/*; do
+  [ -f "$f" ] || continue
+  echo "==LIST==${f##*/}"
+  cat "$f"
+  echo
+done
+EOF
+chmod 0755 /usr/local/bin/vpn-policy-dump
+
+# 2. authorise Themis's key, forced to that one command - it gets no shell
+#    (the public key is /etc/dnsdist/.ssh/router.pub on themis; deploy.sh
+#     prints it if the sync cannot connect)
+echo 'command="/usr/local/bin/vpn-policy-dump",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... vpn-domain-sync@themis' \
+  >> /etc/dropbear/authorized_keys
+```
+
+`deploy.sh` mints the key if it is missing and prints exactly what to authorise,
+so a rebuilt Themis needs only the paste above.
+
+Two traps the sync handles that a hand-written version gets wrong:
+
+- The lists carry bare destination IPs and prefixes alongside the domains. Those
+  are set members the router adds directly and have no DNS dimension —
+  `dst_net4399` is *entirely* those, a site-to-site policy, and produces no
+  dnsmasq lines at all. Filtering them by "looks like hex and dots" would also
+  eat real domains like `face.be`, so the test is for `:`, `/` or a strict
+  dotted quad.
+- **The router's files have no trailing newline**, so a `while read` loop drops
+  the last entry. It uses `awk`.
 
 The set→resolver mapping is derived, not hardcoded: the rule's `via` names the
-tunnel, and `dhcp.<tunnel>.port` gives its dnsmasq instance. Add a domain to the
+tunnel and `dhcp.<tunnel>.port` gives its dnsmasq instance. Add a domain to the
 Main VPN policy and a second pool on `:2153` appears by itself.
 
 ## Adding a device to a policy set
@@ -289,7 +346,7 @@ real access control is the `allow`/`deny` in the vhost.
 | `scripts/bootstrap.sh`| Proxmox host | creates the three CTs; skips existing ones |
 | `scripts/deploy.sh`   | workstation  | pushes config, validates, enables services |
 | `scripts/verify.sh`   | workstation  | end-to-end smoke test; exits non-zero on failure |
-| `scripts/gen-vpn-domains.sh` | workstation | regenerates `vpn-domains.conf` from the router |
+| `vpn-domain-sync`     | themis (hourly) | pulls the VPN domain policy from the router |
 
 `deploy.sh` copies files one at a time and writes them atomically as
 `root:root`. It does **not** stream a tarball into `/` — tar carries the

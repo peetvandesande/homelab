@@ -1,0 +1,12 @@
+# Sync the VPN-domain shunt from the router. See /usr/local/bin/vpn-domain-sync.
+# Managed from homelab/dns.
+[Unit]
+Description=Sync dnsdist VPN-domain shunt from the router
+After=network-online.target dnsdist.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vpn-domain-sync
+# It restarts dnsdist on a real change, so it must not be killed mid-restart.
+TimeoutStartSec=180

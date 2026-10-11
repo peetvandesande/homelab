@@ -40,3 +40,21 @@ A TLS-only Go server answers plain HTTP with **400 "Client sent an HTTP request
 to an HTTPS server"** — it does not refuse the connection. Any check that keys
 off curl's exit status will call a correctly-configured exporter broken. Assert
 "not 200", not "connection failed".
+
+## The textfile collector is on everywhere
+
+The drop-in adds `--collector.textfile.directory=/var/lib/node_exporter/textfile`
+on all eleven hosts, and `scripts/deploy.sh` creates that directory
+`root:prometheus 0775`. It is how a job that is not a service publishes state to
+Prometheus — a `.prom` file written atomically into that directory, scraped as
+part of the `node` job with the host's own labels.
+
+It is on everywhere rather than just where it is used, for the same reason this
+drop-in is byte-identical everywhere: a host-specific collector flag belongs in
+`$ARGS` in `/etc/default/prometheus-node-exporter`, which differs between lenora
+and the containers. An empty directory costs nothing, and
+`node_textfile_scrape_error` reports a file it cannot parse.
+
+Today's only writer is `vpn-domain-sync` on themis (`dns/`). Write the file to
+`<name>.prom.tmp` and `mv` it into place — node-exporter will happily scrape a
+half-written file otherwise.

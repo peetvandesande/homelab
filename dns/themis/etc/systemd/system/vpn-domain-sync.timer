@@ -1,0 +1,20 @@
+# Hourly, jittered. Persistent so a box that was off catches up once on boot
+# rather than skipping until the next hour.
+#
+# The interval is cheap: an unchanged list does nothing at all. Only a policy
+# you actually edited on the router causes a dnsdist restart.
+# Managed from homelab/dns.
+[Unit]
+Description=Hourly sync of the dnsdist VPN-domain shunt
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+# Not at the same moment as the RPZ refresh on delphi, and not the instant the
+# box boots - dnsdist needs to be up first or the restart-on-change races it.
+OnBootSec=5m
+Unit=vpn-domain-sync.service
+
+[Install]
+WantedBy=timers.target

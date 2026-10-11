@@ -26,8 +26,9 @@ on, so Themis hands those names back to it. See invariant 11.
   `8.168.192.in-addr.arpa.` to it and never asks the internet. It also holds
   the split-horizon override for `ca.peetvandesande.com` — see invariant 5.
 
-`README.md` has the operational detail — how to add a kids device, add an
-internal name, what each script does. This file is the part you must not get
+`README.md` has the operational detail — how to add a device to a policy set,
+add an internal name, what each script does, and the router-side pieces the
+hourly sync needs. This file is the part you must not get
 wrong.
 
 ## Working on this
@@ -167,6 +168,45 @@ the rest came out of putting the stack behind the lab CA.
     DNSSEC validation. For broadcaster domains that is mostly a feature — the
     ads feed would otherwise block `bbc-reporting-api.app`, which the routing
     policy itself lists.
+
+13. **The domain list is host state, not repo state, and a change means a
+    dnsdist restart.** `vpn-domain-sync` pulls the policy from the router hourly
+    and writes `/var/lib/dnsdist/vpn-domains.conf`. Four things about that are
+    load-bearing:
+
+    - **`/var/lib`, not `/etc`.** Everything under `themis/` here is pushed over
+      the host's `/etc`, so a list in `/etc/dnsdist` would be reverted to
+      whatever the checkout happens to hold on the next deploy. The repo does
+      not carry a copy at all; the router is the only source.
+    - **`dnsdist.conf` tolerates the file being absent**, because `dofile` on a
+      missing file is fatal and a freshly built Themis has no list until its
+      first sync. No list means no shunt, which degrades to "the tunnel is not
+      used" rather than "DNS is down".
+    - **A real change restarts dnsdist.** There is no live reload of the rule
+      chain, and mutating a `SuffixMatchNode` a registered rule already holds
+      does not reach the rule — tested on 1.9.16, the addition is invisible to
+      `showRules()`. An *unchanged* list restarts nothing, which is the normal
+      case, so the few seconds of dropped LAN DNS only ever follow a policy you
+      edited yourself.
+    - **It validates with `dnsdist --check-config` against the real config, and
+      rolls back** — restoring the previous list and restarting again — if
+      dnsdist will not start with the new one. Getting the LAN its resolver back
+      beats installing the new list.
+
+    **An empty render is treated as a parse failure, not an empty policy.** If
+    the dump carries domains but no policy comes out of it, the sync keeps the
+    last good list and exits non-zero. That gate exists because the first
+    version of the script had an off-by-one in its parser, rendered nothing,
+    and emptied the shunt silently — the behaviour it now refuses to repeat.
+    The cost is that deliberately removing every domain on the router needs the
+    list cleared by hand; that is the right way round.
+
+    The router side is one script and one key: `/usr/local/bin/vpn-policy-dump`
+    on the router, and an ed25519 key in `/etc/dnsdist/.ssh/router` on Themis
+    whose `authorized_keys` entry forces that command. The key cannot get a
+    shell. Both are outside this repo, which does not manage the router — a
+    firmware upgrade may remove them, and the `vpn_domain_sync_success` alert is
+    what tells you. `README.md` has the script to paste back.
 
 12. **Allowlisting is `discardPolicy()`, not a passthru RPZ zone.** The obvious
     design is a small local RPZ loaded first with `CNAME rpz-passthru.` entries.

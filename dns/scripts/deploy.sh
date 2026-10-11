@@ -149,15 +149,6 @@ if [[ -z "${DNSDIST_API_KEY_HASHED:-}" ]]; then
   echo "DNSDIST_API_KEY_HASHED='${DNSDIST_API_KEY_HASHED}'" >> secrets.env
 fi
 
-# The router owns the VPN domain policy; this repo only mirrors it. A stale
-# mirror means a policy domain gets resolved by Delphi and never lands in the
-# router's ipset, so warn loudly - verify.sh turns the same check into an error.
-if out=$(mktemp); OUT=$out ./scripts/gen-vpn-domains.sh >/dev/null 2>&1; then
-  cmp -s "$out" themis/etc/dnsdist/vpn-domains.conf \
-    || echo "WARNING: vpn-domains.conf is stale - run scripts/gen-vpn-domains.sh and commit"
-fi
-rm -f "${out:-}"
-
 push "$THEMIS" themis
 $SSH root@$THEMIS '
   set -e
@@ -175,7 +166,33 @@ $SSH root@$THEMIS '
 '
 restart_assert "$THEMIS" dnsdist
 enable_nginx "$THEMIS"
-echo "   themis ok"
+
+# ------------------------------------------------- VPN-domain shunt sync -----
+# The router owns the VPN domain policy and its web UI writes the list, so
+# Themis pulls it hourly rather than this repo carrying a copy to go stale.
+# The key is restricted to a forced read-only command on the router; mint it
+# here if it is missing and print what to authorise, because a sync that cannot
+# reach the router leaves the shunt empty and the tunnel unused.
+$SSH root@$THEMIS '
+  set -e
+  install -d -m 0700 /etc/dnsdist/.ssh
+  [ -f /etc/dnsdist/.ssh/router ] || ssh-keygen -t ed25519 -N "" \
+    -C "vpn-domain-sync@themis" -f /etc/dnsdist/.ssh/router >/dev/null
+  chmod 0600 /etc/dnsdist/.ssh/router
+  systemctl daemon-reload
+  systemctl enable --now vpn-domain-sync.timer >/dev/null
+'
+if $SSH root@$THEMIS '/usr/local/bin/vpn-domain-sync' ; then
+  echo "   themis ok"
+else
+  echo
+  echo "   VPN-domain sync could not read the router. On 192.168.8.1:"
+  echo "     1. install /usr/local/bin/vpn-policy-dump (see dns/README.md)"
+  echo "     2. add to /etc/dropbear/authorized_keys, one line:"
+  echo "        command=\"/usr/local/bin/vpn-policy-dump\",no-port-forwarding,no-agent-forwarding,no-pty \\"
+  $SSH root@$THEMIS 'cat /etc/dnsdist/.ssh/router.pub' | sed 's/^/          /'
+  echo "   The stack is up; only domain-based VPN routing is affected."
+fi
 
 echo
 echo "== deployed - now run scripts/verify.sh"

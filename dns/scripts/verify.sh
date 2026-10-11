@@ -9,6 +9,11 @@
 cd "$(dirname "$0")/.."
 THEMIS=192.168.8.50
 DIG="dig +time=3 +tries=1 @$THEMIS"
+# Our own root. Defined up here because the sync check needs it too, not just
+# the TLS section further down.
+CA=../ca/rootca/certs/root.crt
+ROUTER=${ROUTER:-192.168.8.1}
+RSSH="ssh -o BatchMode=yes -o ConnectTimeout=5 root@$ROUTER"
 fail=0
 
 pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
@@ -79,9 +84,9 @@ echo "== VPN policy domains: resolved by the router, not Delphi"
 # The router routes by destination IP and fills the ipset from the answers its
 # own dnsmasq returns. So the real assertion is not that the name resolves -
 # it is that what Themis handed back is in the set the routing rule matches on.
-ROUTER=${ROUTER:-192.168.8.1}
-RSSH="ssh -o BatchMode=yes -o ConnectTimeout=5 root@$ROUTER"
-vpn_set=$(sed -n 's/^    set *= *"\([^"]*\)".*/\1/p' themis/etc/dnsdist/vpn-domains.conf | head -1)
+# The set name comes from the router, which owns the policy - there is no
+# committed copy to read since the sync took over.
+vpn_set=$($RSSH 'awk -F/ "{print \$3}" /var/run/dnsmasq/via_domain | cut -d, -f1 | sort -u' 2>/dev/null | head -1)
 vpn_ips=$($DIG bbc.co.uk A +short | grep -E '^[0-9.]+$')
 if [[ -z "$vpn_ips" ]]; then
   bad "bbc.co.uk resolves through Themis" "empty"
@@ -103,24 +108,38 @@ fi
 # blocking a telemetry name the routing policy itself lists.
 check_eq "bbc-reporting-api.app is not filtered" "NOERROR" "$(status bbc-reporting-api.app A)"
 
-echo "== the router is the source of truth for the VPN domain policy"
-if out=$(mktemp); OUT=$out ./scripts/gen-vpn-domains.sh >/dev/null 2>&1; then
-  if cmp -s "$out" themis/etc/dnsdist/vpn-domains.conf; then
-    pass "vpn-domains.conf matches the router"
-  else
-    bad "vpn-domains.conf matches the router" \
-        "stale - run scripts/gen-vpn-domains.sh, commit the diff and redeploy"
-  fi
+echo "== the hourly sync from the router"
+# The router owns the policy and Themis pulls it hourly, so the check is no
+# longer "does the committed copy match" - it is "did the sync run, succeed, and
+# find anything". A sync that silently stops leaves a shunt that slowly goes
+# stale, which is invisible from the outside.
+M=$(curl -sS --max-time 8 --cacert "$CA" https://192.168.8.50:9100/metrics 2>/dev/null)
+# Prometheus exposition renders large numbers as 1.79e+09, so convert rather
+# than string-slicing a timestamp.
+m() { printf '%s\n' "$M" | awk -v k="$1" '$1==k {printf "%d", $2; exit}'; }
+check_eq "last sync succeeded" "1" "$(m vpn_domain_sync_success)"
+last=$(m vpn_domain_sync_last_success_seconds)
+if [[ -z "$last" ]]; then
+  bad "a sync has succeeded in the last 2h" "no vpn_domain_sync_last_success_seconds metric"
 else
-  bad "vpn-domains.conf matches the router" "could not read the policy from $ROUTER"
+  age=$(( $(date +%s) - last ))
+  if (( age < 7200 )); then
+    pass "a sync has succeeded in the last 2h (${age}s ago)"
+  else
+    bad "a sync has succeeded in the last 2h" "${age}s ago - is vpn-domain-sync.timer running?"
+  fi
 fi
-rm -f "${out:-}"
+doms=$(printf '%s\n' "$M" | awk -F' ' '/^vpn_domain_sync_domains\{/ {s+=$2} END {print s+0}')
+if (( doms > 0 )); then
+  pass "the shunt covers $doms domain(s)"
+else
+  bad "the shunt covers at least one domain" "0 - the tunnel will never be used"
+fi
 
 echo "== hygiene"
 check_eq "ANY is refused" "REFUSED" "$(status example.com ANY)"
 
 echo "== encrypted transports (dnsdist)"
-CA=../ca/rootca/certs/root.crt
 # Verified against our own root, and against the IP - every lab certificate
 # carries an IP SAN, which is what a client pinning the address verifies.
 if a=$(./scripts/dns-tls-query.py dot 192.168.8.50 853 grafana.home "$CA" 2>&1); then

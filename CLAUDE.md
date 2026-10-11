@@ -223,6 +223,11 @@ eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 `/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the
 next deploy.
 
+Jobs that are not services publish state through node-exporter's **textfile
+collector**, enabled fleet-wide: drop a `.prom` file into
+`/var/lib/node_exporter/textfile` and it is scraped with the host's own labels.
+`dns/`'s `vpn-domain-sync` is the first user.
+
 When you stand up a service, wire it up in the same change — an unmonitored
 service is not finished:
 

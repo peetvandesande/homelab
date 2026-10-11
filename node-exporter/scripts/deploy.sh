@@ -33,6 +33,9 @@ for ip in "${FLEET[@]}"; do
     set -e
     # node-exporter runs as prometheus on every host, including lenora.
     usermod -aG tlscert prometheus
+    # Textfile collector drop-box. Readable by node-exporter, writable by root
+    # jobs that publish state into it.
+    install -d -o root -g prometheus -m 0775 /var/lib/node_exporter/textfile
     chmod +x /etc/homelab-tls/post-renew.d/10-node-exporter
     systemctl daemon-reload
     systemctl restart prometheus-node-exporter
