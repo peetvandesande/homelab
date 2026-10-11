@@ -50,7 +50,12 @@ than fought.
   added NIC and keeps a removed one until it restarts; and the guest keeps the
   NetworkManager profile after the NIC goes, which is what lets a restored NIC
   come straight back up.
-- The router is not otherwise managed from here.
+- **`router/` documents it; it holds no config.** The device's settings live in
+  `uci`, written by the GL.iNet web UI, so a mirror here would be a second
+  source of truth that always loses. What `router/` records is the part
+  `uci show` cannot tell you — which settings the rest of the lab depends on,
+  and which ones silently break something. Read `router/CLAUDE.md` before
+  changing anything on the device.
 
 ## Storage
 

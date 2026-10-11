@@ -193,35 +193,14 @@ They reach Prometheus through node-exporter's textfile collector (see
 
 ### The two pieces that live on the router
 
-Neither is managed by this repo, and a firmware upgrade may remove both — the
-`vpn_domain_sync_success` alert is what tells you. To put them back:
-
-```sh
-# 1. the read-only dump the sync consumes
-cat > /usr/local/bin/vpn-policy-dump <<'EOF'
-#!/bin/sh
-# Read-only: the VPN policy, the per-tunnel dnsmasq ports, and the domain/IP
-# lists. Consumed by vpn-domain-sync on themis (192.168.8.50).
-uci show route_policy
-uci show dhcp | grep -E "^dhcp\.[a-z0-9]+\.port="
-for f in /etc/domain_mac_list/*; do
-  [ -f "$f" ] || continue
-  echo "==LIST==${f##*/}"
-  cat "$f"
-  echo
-done
-EOF
-chmod 0755 /usr/local/bin/vpn-policy-dump
-
-# 2. authorise Themis's key, forced to that one command - it gets no shell
-#    (the public key is /etc/dnsdist/.ssh/router.pub on themis; deploy.sh
-#     prints it if the sync cannot connect)
-echo 'command="/usr/local/bin/vpn-policy-dump",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... vpn-domain-sync@themis' \
-  >> /etc/dropbear/authorized_keys
-```
+The sync needs a read-only dump command on the router and an `authorized_keys`
+entry that forces Themis's key to it. Neither is in this repo — the router is
+documented, not managed, in `router/` — and a firmware upgrade can remove both.
+The `vpn_domain_sync_success` alert is what tells you, and
+**`router/README.md` has both to paste back**.
 
 `deploy.sh` mints the key if it is missing and prints exactly what to authorise,
-so a rebuilt Themis needs only the paste above.
+so a rebuilt Themis needs only that paste.
 
 Two traps the sync handles that a hand-written version gets wrong:
 

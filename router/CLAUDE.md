@@ -1,0 +1,110 @@
+# router
+
+**GL.iNet GL-BE14000 running OpenWrt, 192.168.8.1.** Documentation only — there
+is no configuration here to deploy.
+
+## This directory holds no config, deliberately
+
+Every other top-level directory mirrors a container filesystem and has a
+`deploy.sh` that pushes it. This one does not, and must not grow one.
+
+The router's configuration lives in `uci` on the device, written by the GL.iNet
+web UI. A mirror in this repo would be a second source of truth for something a
+UI also edits, and it would lose every time: the UI writes `uci` directly, so
+the mirror goes stale the moment anyone touches a setting. The same reasoning is
+already applied to DHCP reservations, which the top-level `CLAUDE.md` says live
+on the router and not here.
+
+What this directory *is* for is the part `uci show` cannot tell you — why a
+setting is the way it is, which settings other things in the lab depend on, and
+which ones will silently break something if changed.
+
+**A previous `router/` was removed in October 2026** (`a56cb93`). That was not a
+decision against documenting the router: the directory contained a status dump
+from the Orange Livebox, a device that had already left the lab. Dead content,
+removed for being dead. This is different in kind — current, and about
+dependencies rather than a snapshot.
+
+`README.md` has the reference detail: networks, the routing-rule priority map,
+how the VPN policy routing works, and the two pieces of router-side state the
+DNS stack needs.
+
+## What depends on the router
+
+Three things in this repo break if the router changes underneath them, and none
+of them is obvious from the router's own UI.
+
+1. **The lab's DNS filtering depends on `dhcp.lan.dhcp_option` being
+   `6,192.168.8.50`.** Hand out anything else and every client resolves around
+   Themis, unfiltered. This was reverted once already — see `dns/CLAUDE.md`.
+
+2. **Domain-based VPN routing depends on the router resolving those names.**
+   Policy routing matches on destination IP, and the only thing that fills those
+   ipsets is the router's own dnsmasq, from the answers it returns. Since clients
+   use Themis, Themis shunts exactly the policy domains back to the tunnel's
+   dnsmasq instance so the sets keep filling. That is `dns/CLAUDE.md`
+   invariant 11, and it is the reason the two systems are coupled at all.
+
+3. **`vpn-domain-sync` on Themis reads the policy off the router hourly**, over
+   SSH with a key restricted to one read-only command. Both the command and the
+   key authorisation live on the router and are not in this repo, so a firmware
+   upgrade can remove them. `README.md` has both to paste back.
+
+## Invariants — changing any of these breaks the lab
+
+1. **Two settings must stay off.** Both would undo the DNS architecture:
+
+   - **`noresolv` plus `server=192.168.8.50` on the main dnsmasq.** Themis
+     forwards the VPN policy domains *to* the router, so pointing the router's
+     upstream back at Themis is a resolution loop.
+   - **The force-DNS redirect** ("override DNS settings of all clients"). The
+     `dns_redirect` chain is empty today. Filling it would hijack clients'
+     queries to `.50` straight back to the router, which is both a loop and a
+     bypass of everything Themis does.
+
+2. **`dhcp.dnsinfra` stays at `6,192.168.8.1`.** The tag covers themis, delphi
+   and pythia. It is the same value as the LAN-wide option *was*, which makes it
+   look redundant — it is not. Delphi is Themis's backend, so pointing it at
+   Themis is a loop, and it could not resolve at boot. The tagged option wins
+   because it is more specific.
+
+3. **`server=/home/192.168.8.52` and the matching reverse zone stay.** They let
+   the router resolve lab names without going through Themis, which is what
+   keeps the router working when the DNS stack is down.
+
+4. **AdGuard Home must stay disabled.** It is installed (`adguardhome.config
+   .enabled=0`). Enabling its "handle client requests" adds `adg_redirect` NAT
+   rules that take DNS *away* from dnsmasq, which stops the VPN ipsets filling
+   altogether. AdGuard supports only legacy `ipset`, not `nftset`, and the only
+   workaround is an unofficial sync script. The lab's own filtering replaces what
+   it would have done anyway.
+
+5. **The routing-policy domain lists are the source of truth for the shunt.**
+   `/etc/domain_mac_list/<set>` is written by the web UI. Themis mirrors it, not
+   the other way round. Edit the policy in the UI; the hourly sync follows.
+
+6. **Site-to-site policy rules sit at priority 19000, outside GL's bands.**
+   GL owns 10000 and 20000. Anything in (9920, 32766) works; 19000 was chosen to
+   avoid sharing a band GL's own scripts rewrite. The lower bound matters as much
+   as the upper: staying above `9920 iif br-lan blackhole` and the 6000 `fwmark`
+   rules is what keeps LAN traffic under the VPN policy rather than these.
+
+7. **`ip4table`/`ip6table` on a tunnel interface beats a per-route `table`
+   option.** A `config route6` with `table 'main'` on `wgclient1` lands in table
+   1001, not main. This is not obvious and cost a debugging session: "force the
+   route into main" is not achievable that way. Use a policy rule pointing at the
+   table that already holds the route.
+
+8. **`/usr/bin/rtp2.sh` rebuilds table 9910 by copying `main`** (`VPN_DIRECT_TABLE
+   =9910`). So a route in `main` appears in 9910 shortly afterwards, and a route
+   that exists *only* in 9910 or main and not in `uci` was added by hand at
+   runtime and will not survive a reboot. Check `proto`: netifd routes say
+   `proto static`, hand-added ones say nothing at all.
+
+## Backups
+
+The device keeps `/etc/config/<name>.bak-<date>-<reason>` files from previous
+changes — `dhcp.bak-2026-10-09-dns`, `network.bak-2026-10-11-ipv6-s2s` and so
+on. They are the only record of what a setting used to be, since this repo
+carries no mirror. Keep making them before a change, and keep the reason in the
+filename.
