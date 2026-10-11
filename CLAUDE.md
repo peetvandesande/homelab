@@ -226,6 +226,15 @@ eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 `/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the
 next deploy.
 
+**`openipmi.service` is masked on all eleven hosts.** It ships as a dependency
+of `ipmitool`, is an LSB init script that loads the in-band IPMI driver, and
+failed everywhere — there is no `/dev/ipmi*` on any host, lenora included, so
+the BMC is not exposed in-band there either. It was the fleet's only failed
+unit, which made `systemd-unit-failed` in `grafana/` useless until it went.
+Nothing re-applies the mask, so a newly built container will reintroduce it and
+the alert will say so. If you ever want in-band `ipmitool` on lenora, unmask it
+and load `ipmi_si`/`ipmi_devintf`; out-of-band over LAN never needed it.
+
 Jobs that are not services publish state through node-exporter's **textfile
 collector**, enabled fleet-wide: drop a `.prom` file into
 `/var/lib/node_exporter/textfile` and it is scraped with the host's own labels.

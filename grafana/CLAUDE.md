@@ -119,13 +119,7 @@ folder and read-only in the UI. Seventeen rules in two groups, `dns` and
    instances to carry for a metric that is almost always zero. Its
    `noDataState` is `OK` to match, and that asymmetry is deliberate.
 
-9. **Two known-noisy things are excluded, deliberately.** `openipmi.service`
-   is failed on all eleven hosts — an unprivileged LXC has no IPMI device, and
-   it is failed on lenora as well — so `systemd-unit-failed` filters it out.
-   Masking the unit across the fleet is the real fix; the exclusion exists so
-   the rule is usable before someone does that, not to hide it.
-
-   And **the `pve` job is excluded from the target-down rules.** Its exporter on
+9. **The `pve` job is excluded from the target-down rules.** Its exporter on
    127.0.0.1:9221 has never run, and one permanently firing alert teaches you to
    ignore all of them. Fix the exporter or delete the job; do not "fix" it by
    widening the rule.

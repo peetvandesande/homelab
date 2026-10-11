@@ -865,12 +865,7 @@ groups:
             # hence noDataState: OK.
             model:
               editorMode: code
-              # openipmi.service is excluded, not suppressed by accident: it is
-              # failed on all eleven hosts. An unprivileged LXC has no IPMI
-              # device, and it is failed on lenora too. Masking it everywhere is
-              # the real fix; until someone does, alerting on it would fire
-              # permanently and teach you to ignore this rule.
-              expr: 'node_systemd_unit_state{job="node",state="failed",name!="openipmi.service"} == 1'
+              expr: 'node_systemd_unit_state{job="node",state="failed"} == 1'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
