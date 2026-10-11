@@ -27,9 +27,14 @@ than fought.
   router or the tunnel is never used. `dns/` handles this by shunting exactly
   those names back to the tunnel's dnsmasq instance — read `dns/CLAUDE.md`
   invariant 11 before changing anything about who resolves what.
-- **DHCP pool is .100-.249** (`dhcp.lan.start=100`, `limit=150`). Every lab
+- **DHCP pool is .100-.239** (`dhcp.lan.start=100`, `limit=140`). Every lab
   host sits **below .100**, outside the pool, as a static reservation keyed by
   MAC. Keep it that way: a reservation inside the pool races the dynamic range.
+- **`.240-.254` is for client devices that need a stable address** but are not
+  lab hosts — today that means anything named in a DNS policy set, which stops
+  working the moment the device's address drifts. The pool was narrowed from
+  `limit=150` to make room: at .100-.249 this range was *inside* it. Below .100
+  stays for servers and services.
 - **Reservations are the source of truth for lab addressing.** They live on the
   router (`uci show dhcp`), not in this repo. When you add a container, add the
   reservation first — see the Container defaults below.
