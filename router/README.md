@@ -210,6 +210,28 @@ ip -6 route get fd33:5692:1834:204::254  from fd33:5692:1834:1000::1
 ping -c2 -I 192.168.8.1 192.168.204.254
 ```
 
+## Static route to lenora's SDN
+
+`network.lab_sdn`: **`192.168.32.0/21` via 192.168.8.21** (lenora), on `lan`.
+Added 2026-10-11 (`network.bak-2026-10-11-sdn-route`) so any Proxmox SDN
+subnet carved out of that range is reachable from the LAN without a route per
+subnet. lenora must forward (`net.ipv4.ip_forward=1`, already set), and an SDN
+zone that SNATs makes the route unnecessary for outbound traffic but not for
+reaching its guests.
+
+It lands in `main` as `proto static` and is copied into table 9910 by
+`rtp2.sh` (invariant 8), which is what makes clients under a VPN policy use it:
+rule 800 consults 9910 before the 6000 `fwmark` rules can send them into a
+tunnel. `rtp2.sh` only rebuilds 9910 on interface events, so a `network reload`
+alone leaves the route out of 9910 until the next one. Check it:
+
+```sh
+ip route show table 9910 | grep 192.168.32
+ip route get 192.168.33.1 from 192.168.8.150 iif br-lan mark 0x1000  # via 192.168.8.21, not wgclient1
+```
+
+IPv4 only. There is no IPv6 equivalent.
+
 ## Installed but deliberately off
 
 | Feature | State | Why |
