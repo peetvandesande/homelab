@@ -242,6 +242,46 @@ the serial in both**, then `./scripts/deploy.sh`.
 zone's non-existence and every internal lookup SERVFAILs before Pythia's
 answer is even considered.
 
+## Lab zones (API-managed)
+
+The Proxmox labs (`openstack-lab`, `nutanix-lab`) share `192.168.32.0/21`,
+which the router routes to lenora. Only one lab runs at a time. A lab
+registers its own names: its bootstrap playbook creates a zone such as
+`openstack.home` and the reverse zones for its subnets through Pythia's API,
+and its teardown deletes them.
+
+These zones live in a second backend on Pythia, **gsqlite3**
+(`/var/lib/powerdns/labs.sqlite3`), not in this repo. They change every time
+a lab is built or removed, and the bind backend can't be written through the
+API. Pythia answers from whichever backend has the most specific zone, so
+`openstack.home` works inside `home.` without a delegation.
+
+The fixed pieces are in this repo:
+
+- `pdns.conf` launches `gsqlite3,bind`. gsqlite3 comes first, so zones created
+  through the API land there.
+- nginx on Pythia allows lenora (`192.168.8.21`) to reach `/api/` on `:8081`.
+  The labs call the API from lenora, which has a static address and trusts
+  the lab CA. The API key is `AUTH_API_KEY` in `secrets.env`.
+- Delphi forwards `32-39.168.192.in-addr.arpa.` to Pythia and has an NTA for
+  each one. The forward zones need nothing extra, because `home.` already
+  covers them.
+- Themis and Delphi accept queries from `192.168.32.0/21`, so lab nodes and
+  instances can use `192.168.8.50` as their resolver.
+
+`deploy.sh` installs `pdns-backend-sqlite3` and creates the database the
+first time. After that it never touches the database's contents. To see
+what a lab has registered:
+
+```sh
+ssh root@192.168.8.52 pdnsutil list-all-zones
+ssh root@192.168.8.52 pdnsutil list-zone openstack.home
+```
+
+While no lab is running, reverse lookups in `192.168.32.0/21` return
+SERVFAIL, because Delphi forwards them to a zone that doesn't exist. That is
+expected.
+
 ## Overriding a public name internally (split-horizon)
 
 `ca.peetvandesande.com` is the worked example: publicly a CNAME to an OVH VPS,

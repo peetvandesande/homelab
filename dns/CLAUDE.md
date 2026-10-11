@@ -25,6 +25,10 @@ on, so Themis hands those names back to it. See invariant 11.
 - **Pythia** holds the lab's own zones. Delphi forwards `home.` and
   `8.168.192.in-addr.arpa.` to it and never asks the internet. It also holds
   the split-horizon override for `ca.peetvandesande.com` — see invariant 5.
+  The Proxmox labs' zones (`openstack.home`, `32-39.168.192.in-addr.arpa.`)
+  are in a second, API-managed gsqlite3 backend that the labs write to
+  themselves; their contents are deliberately not in this repo – see "Lab
+  zones" in README.md.
 
 `README.md` has the operational detail — how to add a device to a policy set,
 add an internal name, what each script does, and the router-side pieces the

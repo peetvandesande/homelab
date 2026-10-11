@@ -92,6 +92,15 @@ done
 push "$PYTHIA" pythia
 $SSH root@$PYTHIA '
   set -e
+  # The lab zones backend. The database is created once and then belongs to
+  # the API; a deploy never touches its contents
+  if ! dpkg -s pdns-backend-sqlite3 sqlite3 >/dev/null 2>&1; then
+    apt-get update -qq && apt-get install -y -qq pdns-backend-sqlite3 sqlite3 >/dev/null
+  fi
+  if [ ! -s /var/lib/powerdns/labs.sqlite3 ]; then
+    sqlite3 /var/lib/powerdns/labs.sqlite3 < /usr/share/pdns-backend-sqlite3/schema/schema.sqlite3.sql
+  fi
+  chown pdns:pdns /var/lib/powerdns/labs.sqlite3 && chmod 0640 /var/lib/powerdns/labs.sqlite3
   install -d -o pdns -g pdns -m 0755 /var/lib/powerdns/zones
   chown pdns:pdns /var/lib/powerdns/zones/*.zone
   chown root:pdns /etc/powerdns/pdns.conf && chmod 0640 /etc/powerdns/pdns.conf

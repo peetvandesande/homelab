@@ -23,6 +23,13 @@
 addNTA("home.", "internal zone, unsigned by design")
 addNTA("8.168.192.in-addr.arpa.", "internal reverse zone, unsigned by design")
 
+-- The Proxmox lab range, 192.168.32.0/21: one reverse zone per /24, held in
+-- Pythia's gsqlite3 backend while a lab runs. Same reasoning as above; keep in
+-- step with the forward-zones in recursor.yml.
+for i = 32, 39 do
+  addNTA(i .. ".168.192.in-addr.arpa.", "lab reverse zone, unsigned by design")
+end
+
 -- ca.peetvandesande.com is a different shape of the same problem, and a nastier
 -- one: peetvandesande.com IS signed, with a valid DS at the parent and an RRSIG
 -- over the public CNAME. Our internal answer is unsigned, so validation does

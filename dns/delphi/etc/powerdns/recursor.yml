@@ -19,6 +19,7 @@ incoming:
   # has to be the client range - not 192.168.8.50.
   allow_from:
     - 192.168.8.0/24
+    - 192.168.32.0/21  # Proxmox lab networks, routed by lenora
     - 127.0.0.0/8
   proxy_protocol_from:
     - 192.168.8.50/32
@@ -35,6 +36,42 @@ recursor:
       forwarders:
         - 192.168.8.52
     - zone: 8.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    # Reverse zones of the Proxmox lab range, 192.168.32.0/21. They live in
+    # Pythia's gsqlite3 backend and exist only while a lab is running; the
+    # forward zone (openstack.home etc.) is covered by home. above. Keep in
+    # step with the addNTA() loop in recursor.lua.
+    - zone: 32.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 33.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 34.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 35.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 36.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 37.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 38.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: 39.168.192.in-addr.arpa.
       recurse: false
       forwarders:
         - 192.168.8.52
