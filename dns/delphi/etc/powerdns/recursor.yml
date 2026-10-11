@@ -46,6 +46,13 @@ recursor:
       recurse: false
       forwarders:
         - 192.168.8.52
+    # Same again for the mail server: ruby answers IMAP only on its WireGuard
+    # address, so the public name has to resolve inside the lab. Needs the
+    # matching addNTA() too.
+    - zone: mail.peetvandesande.com.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
 
   lua_config_file: /etc/powerdns/recursor.lua
   lua_dns_script: /etc/powerdns/policy.lua

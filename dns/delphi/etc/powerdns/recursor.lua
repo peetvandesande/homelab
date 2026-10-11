@@ -33,6 +33,7 @@ addNTA("8.168.192.in-addr.arpa.", "internal reverse zone, unsigned by design")
 -- fully validated. Keep it in step with the forward-zone in recursor.yml and
 -- the zone on Pythia; all three are needed and none works alone.
 addNTA("ca.peetvandesande.com.", "split-horizon to pistis, unsigned internally")
+addNTA("mail.peetvandesande.com.", "split-horizon to ruby over wgclient1, unsigned internally")
 
 -- No defpol is set: the hagezi feeds already carry their own actions
 -- (CNAME . == NXDOMAIN), and overriding them would discard that intent.

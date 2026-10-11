@@ -165,6 +165,9 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   (192.168.8.55), because the CA's certificates name it. Split-horizon on a
   DNSSEC-signed domain needs three coordinated pieces — read `dns/CLAUDE.md`
   invariant 5 before touching it.
+- **`mail.peetvandesande.com` is overridden internally too**, to ruby's
+  WireGuard address 192.168.254.254, because ruby serves IMAP only there.
+  Same three pieces, same invariant 5. A only — no AAAA, deliberately.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.

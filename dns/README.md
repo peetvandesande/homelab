@@ -17,7 +17,7 @@ IPv6 SLAAC, root login by key only.
 client ──▶ themis ──▶ delphi ──▶ internet
            (tag)   │  (filter)      │
                    │      └──▶ pythia   (home., 8.168.192.in-addr.arpa.,
-                   │                      and ca.peetvandesande.com.)
+                   │                      ca. and mail.peetvandesande.com.)
                    └──▶ router :2253 ──▶ wgclient2 tunnel
                         (VPN policy domains - fills the routing ipset)
 ```
@@ -247,6 +247,14 @@ answer is even considered.
 `ca.peetvandesande.com` is the worked example: publicly a CNAME to an OVH VPS,
 internally an A record for pistis (192.168.8.55), because that is where the
 CA's CRL and AIA files live. See `homelab/ca`.
+
+`mail.peetvandesande.com` is the second one, and overridden for a different
+reason: ruby, the mail server, serves IMAP only on its WireGuard address.
+Internally the name is an A record for 192.168.254.254, reachable from the LAN
+because that address is a member of `dst_net4399`, the Main VPN policy's ipset
+— see `router/README.md`. Publicly it has an AAAA as well; the internal zone
+deliberately has none, because ruby's v6 address does not answer from the LAN
+and an AAAA would be preferred over the A and hang the client.
 
 It takes **three** changes, and it is broken until all three are in place:
 

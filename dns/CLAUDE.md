@@ -71,8 +71,8 @@ the rest came out of putting the stack behind the lab CA.
    `dnssec.validation=validate` the resolver proves its non-existence and every
    internal lookup SERVFAILs before Pythia's answer is considered.
 
-5. **`ca.peetvandesande.com` is split-horizon, and needs three separate pieces
-   to be — none of which works alone.** A zone on Pythia
+5. **`ca.peetvandesande.com` and `mail.peetvandesande.com` are split-horizon,
+   and each needs three separate pieces to be — none of which works alone.** A zone on Pythia
    (`pythia/var/lib/powerdns/zones/ca.peetvandesande.com.zone` plus a block in
    `bindbackend.conf`), a `forward_zones` entry on Delphi, and an `addNTA()` in
    `delphi/etc/powerdns/recursor.lua`.
@@ -95,6 +95,14 @@ the rest came out of putting the stack behind the lab CA.
    strings are frozen into the certificate for ten years. The name had to be
    one that outlives any particular host, so internally it is pointed at
    whichever host serves the files — today pistis, 192.168.8.55.
+
+   `mail.peetvandesande.com` is the same mechanism for a different reason:
+   ruby serves IMAP only on its WireGuard address, so the public answer
+   (145.239.73.18) times out from the LAN while 192.168.254.254 answers. It is
+   **A only on purpose** — the public name has an AAAA, ruby's v6 twin does not
+   answer from the LAN, and an AAAA here would be preferred over the A and hang
+   every mail client. The address is reachable only because it is in the
+   router's `dst_net4399` ipset; nothing in `dns/` routes it.
 
 6. **No PowerDNS component here can serve TLS on its own webserver, so nginx
    fronts all three.** The authoritative server and the recursor have no
