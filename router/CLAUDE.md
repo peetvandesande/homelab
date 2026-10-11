@@ -36,7 +36,8 @@ of them is obvious from the router's own UI.
 
 1. **The lab's DNS filtering depends on `dhcp.lan.dhcp_option` being
    `6,192.168.8.50`.** Hand out anything else and every client resolves around
-   Themis, unfiltered. This was reverted once already — see `dns/CLAUDE.md`.
+   Themis, unfiltered. It is `6,192.168.8.50` since 11 October 2026; an earlier
+   attempt was reverted on 9 October — see `dns/CLAUDE.md`.
 
 2. **Domain-based VPN routing depends on the router resolving those names.**
    Policy routing matches on destination IP, and the only thing that fills those

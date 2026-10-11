@@ -171,12 +171,12 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.
-- **Clients do not use Themis yet.** The DHCP cutover happened in October 2026
-  and was reverted on 9 October: the router hands out `6,192.168.8.1`, because
-  sending clients straight to Themis stopped the router seeing the queries its
-  domain-based VPN routing depends on. The shunt described in `dns/CLAUDE.md`
-  invariant 11 fixes that, so the option can go back to `6,192.168.8.50` — but
-  until it does, every client on the LAN resolves unfiltered through the router.
+- **Clients use Themis.** `dhcp.lan.dhcp_option` is `6,192.168.8.50`, with
+  `15,home`. The first attempt at this, in early October 2026, was reverted on
+  9 October because sending clients straight to Themis stopped the router
+  seeing the queries its domain-based VPN routing depends on; the shunt in
+  `dns/CLAUDE.md` invariant 11 fixes that, and the cutover was redone on
+  11 October 2026 (`dhcp.bak-2026-10-11-themis-cutover` on the router).
 - **The DNS stack itself stays on the router (192.168.8.1)**, via a dnsmasq
   `dnsinfra` tag on the themis, delphi and pythia reservations. Pointing Delphi
   at Themis would loop, and it could not resolve at boot. The tagged option

@@ -266,12 +266,14 @@ the per-device masks for the subnet and nothing else changes.
 
 Built and verified, including across cold boots. `scripts/verify.sh` passes.
 
-**The LAN is not pointed here yet.** The October cutover was reverted on the
-router on 9 October 2026 — `dhcp.lan.dhcp_option` is `6,192.168.8.1`, because
-sending clients straight to Themis stopped the router seeing the queries its
-domain-based VPN routing depends on. Invariant 11 is the fix for that, so the
-option can go back to `6,192.168.8.50`; until it does, every client on the LAN
-is resolving unfiltered through the router to Orange.
+**The LAN is pointed here.** `dhcp.lan.dhcp_option` on the router is
+`6,192.168.8.50` plus `15,home`, so every client resolves through Themis and
+is filtered. The first attempt was reverted on 9 October 2026 because it
+stopped the router seeing the queries its domain-based VPN routing depends on;
+invariant 11 is the fix, and the cutover was redone on 11 October 2026.
+
+The containers stay on `192.168.8.1` via the `dnsinfra` tag — that is not a
+leftover, see `router/CLAUDE.md` invariant 2.
 
 Two things that must stay off on the router, both of which would undo this:
 

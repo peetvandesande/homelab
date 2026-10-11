@@ -363,11 +363,10 @@ labels now describe this stack, and the two service jobs were repointed.
 
 ## Still to do
 
-- **Point clients at Themis.** `dhcp.lan.dhcp_option` on the router is
-  `6,192.168.8.1`; it needs to be `6,192.168.8.50`. It was briefly, in October
-  2026, and was reverted because it stopped the router's domain-based VPN
-  routing working — which the shunt above now fixes. Until this changes, the
-  LAN resolves unfiltered through the router.
+- ~~**Point clients at Themis.**~~ Done on 11 October 2026:
+  `dhcp.lan.dhcp_option` is `6,192.168.8.50` with `15,home`. An earlier attempt
+  was reverted on 9 October because it stopped the router's domain-based VPN
+  routing working; the shunt above is what made it stick.
 
   The containers themselves stay on `192.168.8.1` deliberately (the `dnsinfra`
   tag) — Delphi is Themis's backend, and pointing it at Themis would be a
