@@ -114,8 +114,20 @@ $SSH root@$DELPHI '
   chown root:pdns /etc/powerdns/recursor.yml && chmod 0640 /etc/powerdns/recursor.yml
   systemctl daemon-reload
   # Feeds must be on disk before the recursor starts: rpzFile() on a missing
-  # file is a fatal startup error, not a warning.
-  /usr/local/bin/rpz-update
+  # file is a fatal startup error, not a warning. A feed that has never
+  # downloaded has no previous copy to fall back on, so assert rather than
+  # restart into a recursor that will not come up.
+  /usr/local/bin/rpz-update || echo "   (one or more feeds failed to refresh)"
+  missing=
+  while read -r name _ _; do
+    [ -z "${name:-}" ] && continue
+    case "$name" in \#*) continue ;; esac
+    [ -s "/var/lib/powerdns/rpz/$name.rpz" ] || missing="$missing $name"
+  done < /etc/powerdns/rpz-feeds.conf
+  if [ -n "$missing" ]; then
+    echo "feeds never downloaded:$missing - refusing to restart the recursor" >&2
+    exit 1
+  fi
   systemctl reset-failed pdns-recursor 2>/dev/null || true
   systemctl enable --now pdns-recursor >/dev/null
   systemctl enable --now rpz-update.timer >/dev/null
@@ -137,6 +149,15 @@ if [[ -z "${DNSDIST_API_KEY_HASHED:-}" ]]; then
   echo "DNSDIST_API_KEY_HASHED='${DNSDIST_API_KEY_HASHED}'" >> secrets.env
 fi
 
+# The router owns the VPN domain policy; this repo only mirrors it. A stale
+# mirror means a policy domain gets resolved by Delphi and never lands in the
+# router's ipset, so warn loudly - verify.sh turns the same check into an error.
+if out=$(mktemp); OUT=$out ./scripts/gen-vpn-domains.sh >/dev/null 2>&1; then
+  cmp -s "$out" themis/etc/dnsdist/vpn-domains.conf \
+    || echo "WARNING: vpn-domains.conf is stale - run scripts/gen-vpn-domains.sh and commit"
+fi
+rm -f "${out:-}"
+
 push "$THEMIS" themis
 $SSH root@$THEMIS '
   set -e
@@ -144,8 +165,9 @@ $SSH root@$THEMIS '
   # root - User=_dnsdist in the unit. Group membership is how it gets in.
   getent group tlscert >/dev/null || groupadd --system tlscert
   usermod -aG tlscert _dnsdist
-  chown root:_dnsdist /etc/dnsdist/dnsdist.conf /etc/dnsdist/kids-devices.conf 2>/dev/null || true
-  chmod 0640 /etc/dnsdist/dnsdist.conf /etc/dnsdist/kids-devices.conf
+  chown root:_dnsdist /etc/dnsdist/*.conf 2>/dev/null || true
+  chmod 0640 /etc/dnsdist/*.conf
+  rm -f /etc/dnsdist/kids-devices.conf
   systemctl daemon-reload
   dnsdist --check-config --config /etc/dnsdist/dnsdist.conf
   systemctl reset-failed dnsdist 2>/dev/null || true

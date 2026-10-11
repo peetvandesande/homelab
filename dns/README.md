@@ -8,29 +8,40 @@ Three containers on `lenora`, in the Infrastructure pool.
 | 106 | delphi | 192.168.8.51 | pdns-recursor 5.2   | recursion + RPZ filtering              |
 | 107 | pythia | 192.168.8.52 | pdns-server 4.9     | authoritative for `home.`              |
 
-All three are Debian 13, unprivileged, `onboot=1`, IPv4 static + IPv6 SLAAC,
-root login by key only.
+All three are Debian 13, unprivileged, `onboot=1`, IPv4 by DHCP reservation +
+IPv6 SLAAC, root login by key only.
 
 ## How a query flows
 
 ```
 client ──▶ themis ──▶ delphi ──▶ internet
-           (tag)      (filter)      │
-                          └──▶ pythia   (home., 8.168.192.in-addr.arpa.,
-                                         and ca.peetvandesande.com.)
+           (tag)   │  (filter)      │
+                   │      └──▶ pythia   (home., 8.168.192.in-addr.arpa.,
+                   │                      and ca.peetvandesande.com.)
+                   └──▶ router :2253 ──▶ wgclient2 tunnel
+                        (VPN policy domains - fills the routing ipset)
 ```
 
 Themis decides *who* is asking and stamps a policy tag. Delphi decides *what*
 they may have. Pythia answers for the lab's own names, plus the handful of
-public names deliberately overridden internally.
+public names deliberately overridden internally. The one set of names Themis
+answers differently is the router's VPN policy domains — see below.
+
+### The policy sets
+
+| Set | Feeds | Who |
+|---|---|---|
+| default | ads, malware | everything with no tag |
+| `kids` | + adult, gambling, nosafesearch, social, dohbypass | listed devices |
+| `iot` | + native_samsung, native_lgwebos, native_roku, native_tiktok | listed subnets |
 
 ### The tag
 
-Themis matches the client against `kidsDevices` and, on a hit, attaches a
-PROXY protocol TLV (type 224, value `kids`) before forwarding. Delphi's
-`policy.lua` reads that TLV in `prerpz()` and, when it is *absent*, calls
-`discardPolicy()` on the adult and social feeds — so the default is the
-lighter policy and the kids policy is opt-in per device.
+Themis matches the client against each `clientPolicies[<set>]` netmask group
+and, on a hit, attaches a PROXY protocol TLV (type 224) carrying the set name
+before forwarding. Delphi's `policy.lua` reads that TLV in `prerpz()` and calls
+`discardPolicy()` on every feed outside that set — so the default is the
+lightest policy and everything else is opt-in per device.
 
 Two things worth knowing about this:
 
@@ -44,22 +55,42 @@ Two things worth knowing about this:
 
 ### Cache separation
 
-Themis keeps a **separate packet cache per pool** (`""` and `"kids"`). This is
-not an optimisation — dnsdist keys its cache on the question, not on the tag,
+Themis keeps a **separate packet cache per pool**, one pool per policy set. This
+is not an optimisation — dnsdist keys its cache on the question, not on the tag,
 so a single shared cache would serve a kids NXDOMAIN to an adult device and
 vice versa. Verified: with the same name queried from both a tagged and an
 untagged client seconds apart, each gets its own verdict.
 
+A new policy set needs its own pool and cache, which is why `POLICY_SETS` in
+`dnsdist.conf` drives both.
+
 ## Filtering
 
 Feeds are listed in `delphi/etc/powerdns/rpz-feeds.conf` and land in
-`/var/lib/powerdns/rpz/`:
+`/var/lib/powerdns/rpz/<name>.rpz`. The name is the join between three files:
+the feed list, the `FEEDS` table in `recursor.lua`, and `ALL_POLICIES` plus
+`POLICY_SETS` in `policy.lua`. Miss it out of `ALL_POLICIES` and the feed can
+never be discarded, so it silently applies to everyone.
 
-| Feed      | Source (hagezi)  | Applies to |
-|-----------|------------------|------------|
-| `malware` | `tif.medium.txt` | everyone   |
-| `adult`   | `nsfw.txt`       | kids only  |
-| `social`  | `social.txt`     | kids only  |
+All eleven come from [hagezi](https://github.com/hagezi/dns-blocklists):
+
+| Feed | Source | Lines | Set |
+|---|---|---|---|
+| `ads` | `pro.txt` | 387k | default |
+| `malware` | `tif.medium.txt` | 1.27M | default |
+| `adult` | `nsfw.txt` | 180k | kids |
+| `gambling` | `gambling.medium.txt` | 414k | kids |
+| `nosafesearch` | `nosafesearch.txt` | 422 | kids |
+| `social` | `social.txt` | 1.8k | kids |
+| `dohbypass` | `doh-vpn-proxy-bypass.txt` | 31k | kids |
+| `native_samsung` | `native.samsung.txt` | 416 | iot |
+| `native_lgwebos` | `native.lgwebos.txt` | 476 | iot |
+| `native_roku` | `native.roku.txt` | 162 | iot |
+| `native_tiktok` | `native.tiktok.txt` | 910 | iot |
+
+That is ~2.3M entries; Delphi has 6GB for it. `native.apple` and
+`native.amazon` are deliberately left out — they break device setup, Alexa and
+Prime Video rather than just telemetry.
 
 `rpz-update.timer` refreshes them daily (randomised up to 2h, `Persistent=true`)
 and then runs `rec_control reload-lua-config` — `rpzFile()` reads from disk
@@ -67,23 +98,98 @@ once at load and does not poll.
 
 The updater refuses to install a feed that fails to download, has no SOA, or
 falls under the line-count tripwire in the config. A stale feed beats an empty
-one silently unblocking everything.
+one silently unblocking everything. A feed that has *never* downloaded has
+nothing to fall back on and `rpzFile()` on a missing file is a fatal startup
+error, so `deploy.sh` asserts every declared feed is present before it restarts
+the recursor.
 
-The commented block in `rpz-feeds.conf` has IOT-telemetry and ad feeds ready to
-enable. They're off because they need a matching `rpzFile()` block in
-`recursor.lua`, and because which vendor lists you want depends on what's
-actually on the network.
+Every hagezi list ships a canary domain named after the list file —
+`h4g3z1-pro.web.app`, `h4g3z1-nsfw.web.app` and so on. `verify.sh` derives them
+from the URLs in `rpz-feeds.conf` and tests each feed exactly, which is why
+adding a feed needs no change to the test.
 
-## Adding a kids device
+## Allowlisting
+
+Two files on Delphi, both plain lists of domains, one per line; an entry covers
+the name and everything under it.
+
+| File | Overrides |
+|---|---|
+| `allowlist.conf` | every feed **except** malware |
+| `allowlist-malware.conf` | every feed, malware included |
+
+Both apply to all clients, tagged ones included. There is no per-set allowlist.
+
+It is done in `policy.lua` rather than as a passthru RPZ zone on purpose: RPZ
+precedence across zones is by resolution stage, not load order, since recursor
+4.4, so a passthru in one zone is not dependably the last word.
+
+## The router's VPN policy domains
+
+The router sends traffic into a WireGuard tunnel by **destination IP**: its
+dnsmasq adds the addresses from the answers it returns to an ipset
+(`/var/run/dnsmasq/via_domain` → `ipset=/bbc.co.uk/dst_net6611`), and the policy
+matches on that set. Nothing else fills it. So if Themis answers those names,
+the routing never fires.
+
+Themis therefore shunts them straight to the **tunnel's own dnsmasq instance**
+(`192.168.8.1:2253` for wgclient2), which is marked into that tunnel and
+resolves through it — so Fastly and Akamai hand back UK edges, and dnsmasq fills
+the set as it answers. The router's main instance on `:53` is the fallback for
+when the tunnel is down.
+
+The rule is first in the chain and terminal, so **a kids-tagged device still
+gets it**: the laptop reaches iPlayer and Bitesize through the UK tunnel while
+everything else it asks for stays filtered. That is the whole reason the shunt
+exists rather than a device-based VPN rule.
+
+These names bypass Delphi entirely — no RPZ, no DNSSEC validation. For
+broadcaster domains that is mostly a feature; the ads feed would otherwise block
+`bbc-reporting-api.app`, which the routing policy itself lists.
+
+### The router owns the list
+
+`/etc/domain_mac_list/dst_net6611` on the router is the source of truth — the
+GL.iNet web UI writes it, so this repo must not claim ownership of it.
+`scripts/gen-vpn-domains.sh` reads it and regenerates
+`themis/etc/dnsdist/vpn-domains.conf`; commit the diff, then deploy.
+
+```sh
+./scripts/gen-vpn-domains.sh && git diff themis/etc/dnsdist/vpn-domains.conf
+./scripts/deploy.sh
+```
+
+`deploy.sh` warns if the committed copy is stale and `verify.sh` fails on it.
+The two drift directions are not symmetric: a **missing** domain means Delphi
+answers it, the set never fills and the routing quietly doesn't happen; an
+**extra** one is harmless.
+
+Two details the generator handles and a hand-written version would get wrong:
+
+- The same list carries bare destination IPs and prefixes alongside the
+  domains. Those are set members the router adds directly and have no DNS
+  dimension — `dst_net4399` is *entirely* IPs, a site-to-site policy, and
+  generates no dnsmasq lines at all. Filtering them by "looks like hex and
+  dots" would also eat real domains like `face.be`, so the test is for `:`,
+  `/` or a strict dotted quad.
+- **The router's file has no trailing newline**, so a `while read` loop drops
+  its last entry. The generator uses `awk`.
+
+The set→resolver mapping is derived, not hardcoded: the rule's `via` names the
+tunnel, and `dhcp.<tunnel>.port` gives its dnsmasq instance. Add a domain to the
+Main VPN policy and a second pool on `:2153` appears by itself.
+
+## Adding a device to a policy set
 
 The LAN is flat — one `/24`, no VLANs — so there is no kids subnet to match on
 and membership is an explicit list.
 
 1. Give the device a **DHCP reservation** on the router first, or its address
    will drift and it will silently fall out of the policy.
-2. Add a line to `themis/etc/dnsdist/kids-devices.conf`.
+2. Add a line to `themis/etc/dnsdist/client-policies.conf`.
 3. `./scripts/deploy.sh`
-4. From that device: `dig @192.168.8.50 bsky.app` should be `NXDOMAIN`.
+4. From that device: `dig @192.168.8.50 h4g3z1-social.web.app` should be
+   `NXDOMAIN`, and `dig @192.168.8.50 bbc.co.uk` should still answer.
 
 If you ever put kids on their own VLAN, replace the per-device masks with the
 subnet and nothing else changes.
@@ -183,6 +289,7 @@ real access control is the `allow`/`deny` in the vhost.
 | `scripts/bootstrap.sh`| Proxmox host | creates the three CTs; skips existing ones |
 | `scripts/deploy.sh`   | workstation  | pushes config, validates, enables services |
 | `scripts/verify.sh`   | workstation  | end-to-end smoke test; exits non-zero on failure |
+| `scripts/gen-vpn-domains.sh` | workstation | regenerates `vpn-domains.conf` from the router |
 
 `deploy.sh` copies files one at a time and writes them atomically as
 `root:root`. It does **not** stream a tarball into `/` — tar carries the
@@ -210,15 +317,26 @@ labels now describe this stack, and the two service jobs were repointed.
 
 ## Still to do
 
-- **Point clients at Themis.** Nothing uses it yet: hand out `192.168.8.50` as
-  the only DNS server via DHCP on the router. The containers themselves stay
-  on `192.168.8.1` deliberately — Delphi is Themis's backend, and pointing it
-  at Themis would be a resolution loop at boot.
-- **Populate `kids-devices.conf`.** It is empty, so every device currently gets
-  the malware feed only.
-- **Grafana dashboards and alerts** off the `dns` job.
-- **DoH on Themis** if you want phones filtered off-LAN. Deliberately not
-  enabled; it needs a certificate and a port forward.
+- **Point clients at Themis.** `dhcp.lan.dhcp_option` on the router is
+  `6,192.168.8.1`; it needs to be `6,192.168.8.50`. It was briefly, in October
+  2026, and was reverted because it stopped the router's domain-based VPN
+  routing working — which the shunt above now fixes. Until this changes, the
+  LAN resolves unfiltered through the router.
+
+  The containers themselves stay on `192.168.8.1` deliberately (the `dnsinfra`
+  tag) — Delphi is Themis's backend, and pointing it at Themis would be a
+  resolution loop at boot.
+
+  Two things must stay off on the router, both of which would undo the shunt:
+  `noresolv` + `server=192.168.8.50` on its main dnsmasq (Themis forwards *to*
+  the router, so that is a loop), and the force-DNS redirect, which would hijack
+  clients' queries to `.50` straight back to the router.
+- **Populate `client-policies.conf`.** It is empty, so every device gets the
+  default set.
+- **Grafana dashboards and alerts** off the `dns` job, including a memory alert
+  on Delphi — it carries ~2.3M RPZ entries now.
+- **DoH from outside** if you want phones filtered off-LAN. It works on the LAN
+  already; it needs a port forward.
 
 ## Gotchas
 

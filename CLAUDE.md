@@ -20,6 +20,13 @@ The LAN is routed by a **GL.iNet GL-BE14000 running OpenWrt**, at
 this lab is on 192.168.8.0/24 — that is the GL-iNet default range, kept rather
 than fought.
 
+- **The router's DNS is load-bearing for routing, not just names.** Policy-based
+  routing sends traffic into a WireGuard tunnel by *destination IP*, and the
+  only thing that fills those ipsets is the router's own dnsmasq, from the
+  answers it returns. So a name under a domain policy has to be resolved by the
+  router or the tunnel is never used. `dns/` handles this by shunting exactly
+  those names back to the tunnel's dnsmasq instance — read `dns/CLAUDE.md`
+  invariant 11 before changing anything about who resolves what.
 - **DHCP pool is .100-.249** (`dhcp.lan.start=100`, `limit=150`). Every lab
   host sits **below .100**, outside the pool, as a static reservation keyed by
   MAC. Keep it that way: a reservation inside the pool races the dynamic range.
@@ -151,14 +158,23 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.
-- **Clients use Themis (192.168.8.50) as their only resolver.** The DHCP
-  cutover happened in October 2026: the router hands out `6,192.168.8.50` on
-  the LAN, so every client's queries go through dnsdist and its RPZ filtering.
+- **Clients do not use Themis yet.** The DHCP cutover happened in October 2026
+  and was reverted on 9 October: the router hands out `6,192.168.8.1`, because
+  sending clients straight to Themis stopped the router seeing the queries its
+  domain-based VPN routing depends on. The shunt described in `dns/CLAUDE.md`
+  invariant 11 fixes that, so the option can go back to `6,192.168.8.50` — but
+  until it does, every client on the LAN resolves unfiltered through the router.
 - **The DNS stack itself stays on the router (192.168.8.1)**, via a dnsmasq
   `dnsinfra` tag on the themis, delphi and pythia reservations. Pointing Delphi
   at Themis would loop, and it could not resolve at boot. The tagged option
   wins over the LAN-wide one because it is more specific — verify that with a
-  throwaway `dhclient -1 -sf /bin/true -lf ...` if you ever change it.
+  throwaway `dhclient -1 -sf /bin/true -lf ...` if you ever change it. It is
+  the same value as the LAN-wide option today, which makes it look redundant;
+  it is not, and it has to stay when the LAN moves back to Themis.
+- **Two router settings must stay off**, both of which would break the stack:
+  `noresolv` plus `server=192.168.8.50` on the main dnsmasq (Themis forwards
+  the VPN policy domains *to* the router, so that is a loop), and the force-DNS
+  redirect, which would hijack clients' queries to `.50` back to the router.
 - **Pythia is the only authority for `home.`** The router forwards `home.` and
   `8.168.192.in-addr.arpa` to it and no longer names its own DHCP leases into
   the zone. It did both for a while, and odhcpd was injecting AAAA records for
@@ -267,6 +283,8 @@ enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
   connect and look.
 
 Encrypted DNS is live on Themis: DoT on :853 and DoH on :443, off the same CA.
+Queries over all three transports go through one rule chain, so filtering and
+the VPN shunt apply to them identically.
 
 The Proxmox web GUI (lenora:8006) is on the CA too — see `proxmox/CLAUDE.md`.
 Only `pveproxy-ssl.*` was replaced; `pve-ssl.*` stays on Proxmox's internal CA

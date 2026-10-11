@@ -36,29 +36,43 @@ addNTA("ca.peetvandesande.com.", "split-horizon to pistis, unsigned internally")
 
 -- No defpol is set: the hagezi feeds already carry their own actions
 -- (CNAME . == NXDOMAIN), and overriding them would discard that intent.
+--
+-- One rpzFile() per feed, driven from a table so policyName and filename
+-- cannot drift apart. The names here are the handles policy.lua uses in
+-- discardPolicy(); its ALL_POLICIES list must contain every one of them, or a
+-- feed becomes undiscardable and applies to everyone.
+--
+-- zoneSizeHint is only a load-time allocation hint, but a wrong one costs a
+-- rehash of the whole zone on every daily refresh. Keep them near the real
+-- line counts - rpz-update logs them.
+--
+-- rpzFile() on a missing file is a fatal startup error, not a warning. That is
+-- deliberate: a feed that silently failed to download should stop the deploy,
+-- not quietly unblock half the list. deploy.sh asserts every file is present
+-- before it restarts the recursor.
+local FEEDS = {
+  -- Default set: everyone gets these.
+  {name = "ads",            hint =  400000, why = "advertising/tracking"},
+  {name = "malware",        hint = 1300000, why = "malware/threat feed"},
+  -- kids set.
+  {name = "adult",          hint =  200000, why = "adult content"},
+  {name = "gambling",       hint =  450000, why = "gambling"},
+  {name = "nosafesearch",   hint =     500, why = "safe-search bypass"},
+  {name = "social",         hint =    2000, why = "social media"},
+  {name = "dohbypass",      hint =   35000, why = "DoH/VPN/proxy bypass"},
+  -- iot set: vendor telemetry.
+  {name = "native_samsung", hint =     500, why = "Samsung telemetry"},
+  {name = "native_lgwebos", hint =     500, why = "LG webOS telemetry"},
+  {name = "native_roku",    hint =     200, why = "Roku telemetry"},
+  {name = "native_tiktok",  hint =    1000, why = "TikTok telemetry"},
+}
 
--- Applies to everyone.
-rpzFile("/var/lib/powerdns/rpz/malware.rpz", {
-  policyName        = "malware",
-  zoneSizeHint      = 600000,
-  ignoreDuplicates  = true,
-  extendedErrorCode = 15,
-  extendedErrorExtra= "blocked: malware/threat feed",
-})
-
--- Kids only - discarded for everyone else in policy.lua.
-rpzFile("/var/lib/powerdns/rpz/adult.rpz", {
-  policyName        = "adult",
-  zoneSizeHint      = 200000,
-  ignoreDuplicates  = true,
-  extendedErrorCode = 15,
-  extendedErrorExtra= "blocked: adult content",
-})
-
-rpzFile("/var/lib/powerdns/rpz/social.rpz", {
-  policyName        = "social",
-  zoneSizeHint      = 2000,
-  ignoreDuplicates  = true,
-  extendedErrorCode = 15,
-  extendedErrorExtra= "blocked: social media",
-})
+for _, f in ipairs(FEEDS) do
+  rpzFile("/var/lib/powerdns/rpz/" .. f.name .. ".rpz", {
+    policyName        = f.name,
+    zoneSizeHint      = f.hint,
+    ignoreDuplicates  = true,
+    extendedErrorCode = 15,
+    extendedErrorExtra= "blocked: " .. f.why,
+  })
+end

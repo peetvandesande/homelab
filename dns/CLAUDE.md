@@ -2,8 +2,11 @@
 
 Distributed PowerDNS across three Debian LXC containers on `lenora`.
 
-The intent is local zones for the lab plus DNS filtering for IOT, kids and
-malware protection.
+Local zones for the lab, plus DNS filtering: ads and malware for everyone, and
+optional per-client policy sets for kids and IOT devices. One further job sits
+on top, and it is a routing concern rather than a filtering one - the router's
+domain-based VPN policy only works if the router resolves the names it routes
+on, so Themis hands those names back to it. See invariant 11.
 
 | CT  | Host   | IP           | Runs                | Role                              |
 |-----|--------|--------------|---------------------|-----------------------------------|
@@ -12,12 +15,13 @@ malware protection.
 | 107 | pythia | 192.168.8.52 | pdns-server 4.9     | authoritative for `home.` + overrides |
 
 - **Themis** decides *who* is asking, stamps a policy tag, and hands the query
-  to Delphi. Also where Prometheus scrapes, and where DoT (:853) and DoH
+  to Delphi - except for the router's VPN policy domains, which it sends to the
+  router instead. Also where Prometheus scrapes, and where DoT (:853) and DoH
   (:443) terminate.
-- **Delphi** does all recursion and all filtering. It loads several RPZ feeds
-  and applies each only to queries carrying the matching tag, so one recursor
-  gives two policies. Malware applies to everyone; adult-content and
-  social-media only to kids.
+- **Delphi** does all recursion and all filtering. It loads eleven RPZ feeds and
+  applies each only to queries carrying the matching tag, so one recursor serves
+  every policy set. Ads and malware apply to everyone; the rest are opt-in per
+  client.
 - **Pythia** holds the lab's own zones. Delphi forwards `home.` and
   `8.168.192.in-addr.arpa.` to it and never asks the internet. It also holds
   the split-horizon override for `ca.peetvandesande.com` — see invariant 5.
@@ -46,17 +50,20 @@ the rest came out of putting the stack behind the lab CA.
    labels protobuf output; it does *not* gate whether a zone matches. The
    working mechanism is `prerpz()` in `delphi/etc/powerdns/policy.lua`, and its
    polarity is inverted from how the design reads: every RPZ loads for every
-   query, and the kids-only feeds are *discarded* when the tag is absent.
+   query, and the feeds outside this client's policy set are *discarded*. The
+   default set is the lightest one, so a bug here under-blocks rather than
+   breaking the LAN.
 
 2. **The tag rides in a PROXY protocol TLV (type 224), not EDNS.** PROXY also
    carries the real client IP, so Delphi's logs name the device that asked.
    Consequence: Delphi's `allow_from` must be the **client** range, not
    `192.168.8.50`. Set it to the proxy and every client is refused.
 
-3. **Themis keeps a separate packet cache per pool** (`""` and `"kids"`).
-   dnsdist keys its cache on the question, not the tag — one shared cache
-   would serve a kids NXDOMAIN to an adult device. The pool split exists only
-   for this.
+3. **Themis keeps a separate packet cache per pool** — one pool per policy set
+   (`""`, `"kids"`, `"iot"`). dnsdist keys its cache on the question, not the
+   tag — one shared cache would serve a kids NXDOMAIN to an adult device. The
+   pool split exists only for this, and a new policy set must get its own pool
+   and cache or it will be served another set's verdicts.
 
 4. **`addNTA("home.")` in `delphi/etc/powerdns/recursor.lua` is load-bearing.**
    `home.` is unsigned and does not exist at the root, so with
@@ -130,33 +137,108 @@ the rest came out of putting the stack behind the lab CA.
     protects them exactly as it does `:53`. Verified across a cold boot with
     zero restarts.
 
+11. **The router's VPN policy domains are shunted to the router, and must not
+    be cached here.** The router routes by destination IP: its dnsmasq adds the
+    addresses from the answers *it* returns to an ipset, and the policy matches
+    on that set. Nothing else fills it, so a name under a domain policy has to
+    be answered by the router or the routing silently never fires.
+
+    Three parts, and it is broken or subtly wrong without all three:
+
+    - **Each tunnel's own dnsmasq instance is the target**, not the main one -
+      `192.168.8.1:2253` for wgclient2, `:2153` for wgclient1. Those instances
+      are marked into their tunnel and resolve through it, which is what makes
+      a CDN hand back edges in the right country. The main instance on `:53` is
+      the fallback for when a tunnel is down; it fills the set from the same
+      `via_domain` file, just with addresses from the wrong country.
+    - **`setPoolServerPolicy(firstAvailable, …)`**, because dnsdist's default
+      `leastOutstanding` would alternate between the tunnel resolver and the
+      fallback under load, and answers would flip country query to query.
+    - **No packet cache on those pools.** A router reboot flushes the ipset, and
+      a cache hit here would mean nothing ever refills it. This is the one place
+      in the stack where not caching is the point.
+
+    **The shunt rule comes first in the chain and is terminal**, ahead of policy
+    tagging. That is deliberate: it is what lets a kids-tagged laptop reach
+    iPlayer and Bitesize through the UK tunnel while everything else it asks for
+    stays filtered. Reverse the order and tagged clients lose VPN routing.
+
+    Consequence to accept: these names bypass Delphi, so they get no RPZ and no
+    DNSSEC validation. For broadcaster domains that is mostly a feature — the
+    ads feed would otherwise block `bbc-reporting-api.app`, which the routing
+    policy itself lists.
+
+12. **Allowlisting is `discardPolicy()`, not a passthru RPZ zone.** The obvious
+    design is a small local RPZ loaded first with `CNAME rpz-passthru.` entries.
+    Don't: since recursor 4.4 RPZ precedence is by *resolution stage*, not load
+    order, and a passthru match in one zone is not documented to stop another
+    zone applying. `allowlist.conf` is read by `policy.lua` and discards
+    policies per query, which is unambiguous and is the mechanism this file
+    already depends on.
+
+    **The plain allowlist cannot punch through the malware feed**, by design;
+    `allowlist-malware.conf` is the one that can, and every entry in it is a
+    deliberate security decision.
+
 Also worth knowing: recursor 5.x rejects the old `key=value` `recursor.conf`,
 so settings are YAML in `recursor.yml`. `rec_control show-yaml <oldfile>`
 converts one, but check its output — it collapses multi-zone `forward-zones`
 into a single broken entry.
 
-## Kids membership is a per-device list
+## Policy sets, and why membership is a per-device list
 
-The design says Themis tags on **source subnet**. It cannot: the LAN is flat,
-one `/24`, no VLANs. Membership is an explicit per-device IP list in
-`themis/etc/dnsdist/kids-devices.conf` — a deliberate decision, not an
-oversight.
+A policy set is a named bundle of feeds. The names appear in three places and
+must agree: `POLICY_SETS` in `themis/etc/dnsdist/dnsdist.conf` (which pools to
+build), `clientPolicies[…]` in `themis/etc/dnsdist/client-policies.conf` (who is
+in it), and `POLICY_SETS` in `delphi/etc/powerdns/policy.lua` (which feeds it
+means). A feed name must also be in `ALL_POLICIES` there, or it can never be
+discarded and so applies to everyone.
 
-Devices need a **DHCP reservation on the router first**, or their address
-drifts and they silently fall out of the policy. If kids ever get their own
-VLAN, swap the per-device masks for the subnet and nothing else changes.
+| Set | Feeds |
+|---|---|
+| default (no tag) | ads, malware |
+| `kids` | + adult, gambling, nosafesearch, social, dohbypass |
+| `iot` | + native_samsung, native_lgwebos, native_roku, native_tiktok |
+
+`dohbypass` carries more weight than its size suggests: a browser with DoH
+switched on routes around this entire stack, and that feed is what closes it.
+
+The design says Themis tags on **source subnet**. For kids it cannot: the LAN is
+flat, one `/24`, no VLANs. Membership is an explicit per-device IP list — a
+deliberate decision, not an oversight. The `iot` set is written to be scoped by
+subnet instead, because VLAN 10 exists for exactly that; nothing uses `tag=10`
+today, and Themis has no address on that network, so enabling it also means
+adding `192.168.10.0/24` to `setACL()`.
+
+Devices need a **DHCP reservation on the router first**, or their address drifts
+and they silently fall out of the policy. If kids ever get their own VLAN, swap
+the per-device masks for the subnet and nothing else changes.
 
 ## Current state
 
-Built and verified, including across cold boots. Not yet done:
+Built and verified, including across cold boots. `scripts/verify.sh` passes.
 
-- **`kids-devices.conf` is empty**, so every device currently gets the malware
-  feed only. The kids path itself is proven working — it was tested end to end
-  with a temporary entry, including cache isolation between the two policies.
-- **IOT filtering is not enabled.** Feeds are staged and commented in
-  `delphi/etc/powerdns/rpz-feeds.conf`; enabling one also needs a matching
-  `rpzFile()` block in `recursor.lua`. Which vendor lists are wanted depends on
-  what is actually on the network.
+**The LAN is not pointed here yet.** The October cutover was reverted on the
+router on 9 October 2026 — `dhcp.lan.dhcp_option` is `6,192.168.8.1`, because
+sending clients straight to Themis stopped the router seeing the queries its
+domain-based VPN routing depends on. Invariant 11 is the fix for that, so the
+option can go back to `6,192.168.8.50`; until it does, every client on the LAN
+is resolving unfiltered through the router to Orange.
+
+Two things that must stay off on the router, both of which would undo this:
+
+- **`noresolv` + `server=192.168.8.50` on the router's main dnsmasq.** Themis
+  forwards the VPN domains *to* the router, so that would be a loop.
+- **The force-DNS redirect** ("override DNS settings of all clients"). The
+  `dns_redirect` chain is empty today; filling it would hijack clients' queries
+  to `.50` back to the router.
+
+Not yet done:
+
+- **`client-policies.conf` is empty**, so every device gets the default set.
+  Both other sets are proven working — tested end to end with a temporary entry,
+  including cache isolation and the shunt still winning for a tagged client.
 - **DoH is not reachable from outside.** It works on the LAN (`:443`), but
   there is no port forward, so it is internal-only for now.
-- **No Grafana dashboards or alerts** off the `dns` job.
+- **No Grafana dashboards or alerts** off the `dns` job. Delphi now carries
+  ~2.3M RPZ entries in 6GB; a memory alert off the `node` job is overdue.

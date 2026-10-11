@@ -47,13 +47,74 @@ else
   bad "DNSSEC AD flag set on a signed zone" "no ad flag"
 fi
 
-echo "== filtering: malware feed applies to everyone"
-check_eq "aniwave.ac blocked" "NXDOMAIN" "$(status aniwave.ac A)"
+echo "== filtering: policy sets"
+# Every hagezi list ships a canary domain named after the list file, so each
+# feed can be tested exactly rather than by picking a name out of it and hoping
+# it stays listed. Derived from the URLs in rpz-feeds.conf, so adding a feed
+# there is enough - nothing here needs editing.
+canary() { # canary <feed-name>
+  awk -v f="$1" '$1==f { n=$3; sub(/.*\//,"",n); sub(/\.txt$/,"",n); gsub(/\./,"-",n);
+                         print "h4g3z1-" n ".web.app"; exit }' delphi/etc/powerdns/rpz-feeds.conf
+}
+check_feed() { # check_feed <feed> <NXDOMAIN|NOERROR> <note>
+  local c; c=$(canary "$1")
+  [[ -n "$c" ]] || { bad "$1 feed canary" "no such feed in rpz-feeds.conf"; return; }
+  check_eq "$1 $3" "$2" "$(status "$c" A)"
+}
 
-echo "== filtering: kids-only feeds must NOT apply to this device"
-echo "   (if this workstation is in kids-devices.conf these will read NXDOMAIN)"
-check_eq "czechvideo.ac allowed here" "NOERROR" "$(status czechvideo.ac A)"
-check_eq "bsky.app allowed here"      "NOERROR" "$(status bsky.app A)"
+echo "   default set - applies to every client"
+check_feed malware "NXDOMAIN" "blocks its canary"
+check_feed ads     "NXDOMAIN" "blocks its canary"
+
+echo "   kids set - must NOT apply to this workstation"
+echo "   (if this host is in client-policies.conf these will read NXDOMAIN)"
+for f in adult gambling nosafesearch social dohbypass; do
+  check_feed "$f" "NOERROR" "not applied here"
+done
+
+echo "   iot set - must NOT apply to this workstation"
+check_feed native_samsung "NOERROR" "not applied here"
+
+echo "== VPN policy domains: resolved by the router, not Delphi"
+# The router routes by destination IP and fills the ipset from the answers its
+# own dnsmasq returns. So the real assertion is not that the name resolves -
+# it is that what Themis handed back is in the set the routing rule matches on.
+ROUTER=${ROUTER:-192.168.8.1}
+RSSH="ssh -o BatchMode=yes -o ConnectTimeout=5 root@$ROUTER"
+vpn_set=$(sed -n 's/^    set *= *"\([^"]*\)".*/\1/p' themis/etc/dnsdist/vpn-domains.conf | head -1)
+vpn_ips=$($DIG bbc.co.uk A +short | grep -E '^[0-9.]+$')
+if [[ -z "$vpn_ips" ]]; then
+  bad "bbc.co.uk resolves through Themis" "empty"
+elif [[ -z "$vpn_set" ]]; then
+  bad "vpn-domains.conf names an ipset" "no set found - was it generated?"
+else
+  miss=0
+  for ip in $vpn_ips; do
+    $RSSH "ipset test $vpn_set $ip" >/dev/null 2>&1 || miss=$((miss+1))
+  done
+  if (( miss )); then
+    bad "every address returned for bbc.co.uk is in $vpn_set" \
+        "$miss of $(echo "$vpn_ips" | wc -w | tr -d ' ') missing - the shunt is not reaching the tunnel's dnsmasq"
+  else
+    pass "every address returned for bbc.co.uk is in $vpn_set (policy routing will fire)"
+  fi
+fi
+# Shunted names bypass Delphi entirely, which is what keeps the ads feed from
+# blocking a telemetry name the routing policy itself lists.
+check_eq "bbc-reporting-api.app is not filtered" "NOERROR" "$(status bbc-reporting-api.app A)"
+
+echo "== the router is the source of truth for the VPN domain policy"
+if out=$(mktemp); OUT=$out ./scripts/gen-vpn-domains.sh >/dev/null 2>&1; then
+  if cmp -s "$out" themis/etc/dnsdist/vpn-domains.conf; then
+    pass "vpn-domains.conf matches the router"
+  else
+    bad "vpn-domains.conf matches the router" \
+        "stale - run scripts/gen-vpn-domains.sh, commit the diff and redeploy"
+  fi
+else
+  bad "vpn-domains.conf matches the router" "could not read the policy from $ROUTER"
+fi
+rm -f "${out:-}"
 
 echo "== hygiene"
 check_eq "ANY is refused" "REFUSED" "$(status example.com ANY)"

@@ -53,9 +53,12 @@ recursor:
 dnssec:
   validation: validate
 
-# The threat feed alone is ~500k names; give the caches room.
+# Memory budget. The feeds are the fixed cost: ~2.3M RPZ entries across eleven
+# zones, and a daily refresh holds the old and new copy of a zone at once, so
+# peak is higher than steady state. The caches are what is left over. Raise the
+# container's RAM before raising these - delphi has 6GB.
 recordcache:
-  max_entries: 2000000
+  max_entries: 1500000
 packetcache:
   max_entries: 500000
 
