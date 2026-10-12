@@ -1,6 +1,7 @@
 # Applied to /opt/mailcow-dockerized/mailcow.conf by scripts/deploy.sh, one
-# key at a time. The rest of mailcow.conf, including every password, is
-# generated on the host and never leaves it.
+# key at a time, together with API_KEY from hermes/secrets.env. The rest of
+# mailcow.conf, including every password, is generated on the host and never
+# leaves it.
 
 # The lab CA issues the certificate; nothing here can do http-01 anyway.
 SKIP_LETS_ENCRYPT=y
@@ -18,3 +19,8 @@ SKIP_FTS=y
 SKIP_SOGO=n
 
 ENABLE_IPV6=true
+
+# The API, for labs that create their customers' domains and mailboxes. Only
+# lenora may call it, as with Pythia's API for lab zones. The key is API_KEY
+# in hermes/secrets.env.
+API_ALLOW_FROM=192.168.8.21

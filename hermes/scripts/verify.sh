@@ -51,6 +51,23 @@ grep -q "Verify return code: 0 (ok)" <<<"$out" \
   || bad "hermes:25 STARTTLS verifies" "$(grep -m1 'Verify return code' <<<"$out" || echo 'no handshake')"
 renewal_ok hermes "$HOST"
 
+echo "== API"
+# The key is the labs' (secrets.env); it must work from lenora and nowhere
+# else. Headers go over stdin, so the key is not on a command line.
+API_KEY=$(sed -n 's/^API_KEY=//p' secrets.env 2>/dev/null)
+if [[ -z $API_KEY ]]; then
+  bad "API key in hermes/secrets.env" "missing - run deploy.sh"
+else
+  API_URL=https://hermes.home/api/v1/get/status/version
+  code=$($SSH "root@$LENORA" "curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H @- $API_URL" \
+         <<<"X-API-Key: $API_KEY" 2>/dev/null)
+  [[ $code == 200 ]] && pass "API answers lenora with the key (HTTP 200)" \
+    || bad "API answers lenora with the key" "HTTP ${code:-no answer} - deploy.sh run since secrets.env changed?"
+  code=$($CURL -o /dev/null -w '%{http_code}' -H @- "$API_URL" <<<"X-API-Key: $API_KEY" 2>/dev/null)
+  [[ $code == 401 || $code == 403 ]] && pass "API refuses the workstation, key or not (HTTP $code)" \
+    || bad "API refuses the workstation" "HTTP ${code:-no answer} - is API_ALLOW_FROM wider than lenora?"
+fi
+
 echo "== relay policy"
 # lenora is in mynetworks (it stands in for SNAT'd lab zones), so it may relay;
 # default_transport then bounces what it relays, which this does not exercise.

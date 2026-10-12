@@ -41,7 +41,8 @@ root is the only login after that.
 every deploy. It skips ClamAV, Olefy, full-text search and ACME. Rspamd cannot
 be skipped. The skipped containers still start, idle, because that is how
 mailcow does it. SOGo stays: it is the webmail, and the webmail is the reason
-this VM exists. Everything else in `mailcow.conf`, including every password, is
+this VM exists. The API key comes from `secrets.env` (see "Adding a lab's
+customers"). Everything else in `mailcow.conf`, including every password, is
 generated on the VM and stays there.
 
 ## Invariants
@@ -92,10 +93,13 @@ generated on the VM and stays there.
 ## Adding a lab's customers
 
 Per domain in the admin UI: Mail Setup → Domains → add `acme.test`, then the
-mailboxes. A lab that wants to do this from its bootstrap can use the mailcow
-API. Set `API_KEY` and `API_ALLOW_FROM=192.168.8.21` in `mailcow.conf`, the same
-shape as Pythia's API for lab zones, so only lenora can call it. That is not
-set up yet.
+mailboxes. A lab that wants to do this from its playbooks uses the mailcow API
+from lenora, the same shape as Pythia's API for lab zones:
+`API_ALLOW_FROM=192.168.8.21` is in the overrides, and the read-write key is
+`API_KEY` in `hermes/secrets.env` (git-ignored), which `deploy.sh` generates
+once and writes into `mailcow.conf`. mailcow loads it into its `api` table
+when php-fpm starts, so a changed key needs a deploy, which recreates php-fpm.
+openstack-lab's `cloud.yml` is the example.
 
 Lab hosts send to `192.168.8.57:25` as their smarthost and need no MX records.
 An app that insists on MX lookup needs an MX in the lab's own `<lab>.home` zone,

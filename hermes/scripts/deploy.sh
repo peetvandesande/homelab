@@ -15,6 +15,15 @@ require_enrolled "$HOST"
 $SSH "root@$HOST" "test -f $MC/mailcow.conf" \
   || { echo "$HOST has no mailcow.conf - run scripts/bootstrap.sh first"; exit 1; }
 
+# The API key the labs use (API_ALLOW_FROM in the overrides). Generated here
+# once, so the labs can read it from this repository, like dns/secrets.env.
+if [[ ! -f secrets.env ]]; then
+  (umask 077; echo "API_KEY=$(openssl rand -hex 24)" > secrets.env)
+  echo "== generated API_KEY in hermes/secrets.env"
+fi
+# shellcheck disable=SC1091
+source secrets.env
+
 # What each file needs when it changes: the engine a restart, postfix and
 # rspamd a container restart. Hash before and after the push, so an unchanged
 # deploy bounces nothing.
@@ -41,18 +50,25 @@ if changed daemon.json; then
 fi
 
 echo "== mailcow.conf overrides"
+# The key goes over stdin, so it is not on a command line on either side.
 $SSH "root@$HOST" "
   set -e
   cd $MC
-  grep -E '^[A-Z_]+=' /etc/homelab-mailcow/mailcow.conf.overrides | while IFS='=' read -r k v; do
-    if grep -q \"^\$k=\" mailcow.conf; then
-      sed -i \"s|^\$k=.*|\$k=\$v|\" mailcow.conf
+  set_key() {
+    if grep -q \"^\$1=\" mailcow.conf; then
+      sed -i \"s|^\$1=.*|\$1=\$2|\" mailcow.conf
     else
-      echo \"\$k=\$v\" >> mailcow.conf
+      echo \"\$1=\$2\" >> mailcow.conf
     fi
+  }
+  read -r key
+  grep -E '^[A-Z_]+=' /etc/homelab-mailcow/mailcow.conf.overrides | while IFS='=' read -r k v; do
+    set_key \"\$k\" \"\$v\"
     echo \"   \$k=\$v\"
   done
-"
+  set_key API_KEY \"\$key\"
+  echo '   API_KEY from secrets.env'
+" <<<"$API_KEY"
 
 echo "== certificate and stack"
 $SSH "root@$HOST" "
