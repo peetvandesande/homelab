@@ -70,12 +70,14 @@ scrape_configs:
         labels: {role: pistis }
       - targets: ['192.168.8.56:9100']
         labels: {role: loki }
+      - targets: ['192.168.8.57:9100']
+        labels: {role: hermes }
       - targets: ['192.168.8.60:9100']
         labels: {role: jellyfin }
       - targets: ['192.168.8.61:9100']
         labels: {role: navidrome }
 
-  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same eleven
+  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same twelve
   # targets as `node` - keep the two lists identical; a host in one and not
   # the other is either unmonitored or unlogged.
   - job_name: alloy
@@ -101,6 +103,8 @@ scrape_configs:
         labels: {role: pistis }
       - targets: ['192.168.8.56:12345']
         labels: {role: loki }
+      - targets: ['192.168.8.57:12345']
+        labels: {role: hermes }
       - targets: ['192.168.8.60:12345']
         labels: {role: jellyfin }
       - targets: ['192.168.8.61:12345']

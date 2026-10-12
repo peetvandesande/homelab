@@ -1,0 +1,15 @@
+myhostname = hermes.home
+# Managed from homelab/hermes - edit there. mailcow's postfix entrypoint
+# rewrites this file on every start to put the myhostname line first, which is
+# why it is already first here: the file on the host stays identical to this.
+
+# The labs (192.168.32.0/21) and lenora, for SDN zones that SNAT, may relay
+# without authentication. The rest is mailcow's own networks, which an explicit
+# mynetworks would otherwise drop.
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 [fe80::]/10 172.22.1.0/24 [fd4d:6169:6c63:6f77::]/64 192.168.32.0/21 192.168.8.21/32
+
+# Nothing leaves by default. Mail for a domain hermes does not host bounces
+# straight back to the sender, instead of being tried against the internet.
+# The exceptions are mailcow transport maps (Configuration > Routing), which
+# are consulted before this and can send a named domain on via ruby.
+default_transport = error:5.7.1 hermes delivers only to its own domains

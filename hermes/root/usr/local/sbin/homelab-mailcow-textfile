@@ -1,0 +1,20 @@
+#!/bin/sh
+# Publish the state of every mailcow container through node-exporter's textfile
+# collector. mailcow has no Prometheus endpoint of its own, and its watchdog
+# only restarts things - this is what lets Grafana see a container that is
+# down or unhealthy.
+set -eu
+out=/var/lib/node_exporter/textfile/mailcow.prom
+tmp=$out.$$
+{
+  echo '# HELP mailcow_container_up 1 if the mailcow container is running and not unhealthy.'
+  echo '# TYPE mailcow_container_up gauge'
+  docker ps -a --filter label=com.docker.compose.project=mailcowdockerized \
+    --format '{{.Label "com.docker.compose.service"}}|{{.State}}|{{.Status}}' \
+  | while IFS='|' read -r svc state status; do
+      up=0
+      [ "$state" = running ] && case "$status" in *unhealthy*) ;; *) up=1 ;; esac
+      echo "mailcow_container_up{service=\"$svc\"} $up"
+    done
+} > "$tmp"
+mv -f "$tmp" "$out"

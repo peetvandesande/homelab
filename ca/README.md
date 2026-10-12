@@ -40,13 +40,13 @@ Order from nothing: `bootstrap.sh` → `make-intermediate.sh` → `deploy.sh` �
 
 ## What holds a certificate today
 
-Eleven hosts are enrolled — every container plus lenora — and these services
+Twelve hosts are enrolled — every container, the hermes VM and lenora — and these services
 serve TLS off the G3 intermediate:
 
 | Host | Service | Port |
 |---|---|---|
-| all eleven | prometheus-node-exporter | 9100 |
-| all eleven | Grafana Alloy `/metrics` | 12345 |
+| all twelve | prometheus-node-exporter | 9100 |
+| all twelve | Grafana Alloy `/metrics` | 12345 |
 | .53 | Prometheus API | 9090 |
 | .54 | Grafana UI | 3000 |
 | .60 | Jellyfin `/metrics` for Prometheus | 8920 (UI is plain HTTP on 8096) |
@@ -55,6 +55,7 @@ serve TLS off the G3 intermediate:
 | .56 | Loki API and `/metrics` | 3100 |
 | .27 | Docker Engine `/metrics`, via nginx | 9323 |
 | .21 | Proxmox VE web GUI | 8006 |
+| .57 | mailcow UI and SOGo; SMTP, IMAP | 443; 25/465/587, 993 |
 
 Each lives in its own directory at the top of `homelab/`, with the fleet-wide
 node-exporter in `node-exporter/`. **Deploy order matters**: node-exporter

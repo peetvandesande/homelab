@@ -140,7 +140,7 @@ written down. Confirm before relying on these.
 
 Three things to be aware of:
 
-- **The Infrastructure IP range is nearly gone** (.50-.56 used) while its ID
+- **The Infrastructure IP range is nearly gone** (.50-.57 used) while its ID
   range has 93 free slots. The ranges are badly matched in size; widen the IP
   allocation before it bites.
 - **`lexie` (CT 100) sits at 192.168.8.24 and `moby` (CT 108) at
@@ -149,9 +149,9 @@ Three things to be aware of:
   inside the range pencilled in for Non-Production. Existing anomalies —
   don't take them as precedent, and don't "tidy" them without asking.
 - **`homeassistant` (VM 302) is at 192.168.8.90**, pooled into Production
-  but outside its range, by choice. It is the lab's only VM: Home Assistant
-  OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will not boot with
-  them), with the Sonoff Zigbee dongle passed through as `usb0`. Its address
+  but outside its range, by choice. It is one of two VMs, with `hermes`:
+  Home Assistant OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will
+  not boot with them), with the Sonoff Zigbee dongle passed through as `usb0`. Its address
   is set inside HAOS (`ha network update`), not by Proxmox. Music Assistant
   runs there as a Supervisor app (`d5369777_music_assistant`, host network,
   :8095). It is **on the LAN only** — a second NIC on VLAN 10 was tried in
@@ -223,16 +223,30 @@ bind mount, not lenora's NFS export: an unprivileged LXC cannot mount NFS.
 Reach for a container on moby when a service ships as an image and wants
 nothing from the host; reach for an LXC when it wants to look like a machine.
 
+## Mail
+
+`hermes` (VM 109, 192.168.8.57) runs **mailcow** for the Proxmox labs, so
+their made-up customers have mailboxes to read in SOGo at
+`https://hermes.home/SOGo/`. It is a VM because mailcow does not support LXC.
+It is cut down to Rspamd plus webmail – no ClamAV, Olefy, full-text search or
+ACME – and the lab CA supplies its certificate.
+
+Lab hosts on 192.168.32.0/21 (and lenora, for SDN zones that SNAT) relay
+through `192.168.8.57:25` without authentication. **Nothing leaves by
+default**: mail for a domain hermes does not host bounces. A domain that really
+must go out is routed via ruby with a mailcow transport map. See
+`hermes/CLAUDE.md`.
+
 ## Monitoring
 
 Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
-(192.168.8.54) for dashboards and alerting. Two dashboards and seventeen alert
+(192.168.8.54) for dashboards and alerting. Two dashboards and eighteen alert
 rules are provisioned from `grafana/` — `homelab-dns` and `homelab-fleet`, with
 rule groups `dns` and `fleet`. The rules evaluate but **notify nowhere**: no
 contact point is configured, so they are UI-only until one is. Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
-eleven hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
+twelve hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
 `/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the
@@ -278,9 +292,9 @@ prometheus-pve-exporter on 127.0.0.1:9221 is not running.
 ## TLS
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS
-off the lab's own CA (`ca/`). Eleven hosts are enrolled — all ten containers
-plus lenora. The Home Assistant VM holds a certificate too but is **not
-enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
+off the lab's own CA (`ca/`). Twelve hosts are enrolled — all ten containers,
+the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
+**not enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
 `homeassistant/`.
 
 - **Get a certificate with `ca/scripts/enrol.sh <ip> <name>`.** It installs the
@@ -297,10 +311,10 @@ enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
   keeps the IP on purpose rather than by inertia: `homelab-tls-renew`, because
   renewing every certificate in the lab should not depend on DNS being up.
 - **Per-service TLS config lives in that service's own top-level directory**
-  (`grafana/`, `homeassistant/`, `jellyfin/`, `loki/`, `moby/`, `navidrome/`,
-  `prometheus/`), one per container. `node-exporter/` and `alloy/` are the
-  exceptions: one service on eleven hosts, so one directory rather than eleven
-  copies.
+  (`grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`, `loki/`, `moby/`,
+  `navidrome/`, `prometheus/`), one per container or VM. `node-exporter/` and
+  `alloy/` are the exceptions: one service on twelve hosts, so one directory
+  rather than twelve copies.
 - **The Home Assistant VM is the one host that cannot renew itself.** HAOS has
   no step-cli and no openssl, and `/ssl` is read-only to the core container, so
   a timer on lenora drives it over the guest agent. The key is still generated

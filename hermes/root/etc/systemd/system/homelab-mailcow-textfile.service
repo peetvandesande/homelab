@@ -1,0 +1,7 @@
+[Unit]
+Description=Publish mailcow container state for node-exporter
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-mailcow-textfile

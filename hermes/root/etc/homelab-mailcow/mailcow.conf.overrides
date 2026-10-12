@@ -1,0 +1,20 @@
+# Applied to /opt/mailcow-dockerized/mailcow.conf by scripts/deploy.sh, one
+# key at a time. The rest of mailcow.conf, including every password, is
+# generated on the host and never leaves it.
+
+# The lab CA issues the certificate; nothing here can do http-01 anyway.
+SKIP_LETS_ENCRYPT=y
+SKIP_IP_CHECK=y
+SKIP_HTTP_VERIFICATION=y
+AUTODISCOVER_SAN=n
+
+# As light as mailcow goes. Rspamd cannot be skipped; ClamAV, Olefy (Office
+# macro scanning) and full-text search can.
+SKIP_CLAMD=y
+SKIP_OLEFY=y
+SKIP_FTS=y
+
+# SOGo is the webmail, which is the point of this host.
+SKIP_SOGO=n
+
+ENABLE_IPV6=true

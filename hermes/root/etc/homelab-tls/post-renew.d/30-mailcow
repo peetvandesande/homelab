@@ -1,0 +1,18 @@
+#!/bin/sh
+# mailcow serves whatever is in data/assets/ssl. host.crt is already
+# leaf+intermediate, which is what postfix, dovecot and nginx all want. Each
+# reads the certificate at start, so this is a restart of the three, as the
+# mailcow docs prescribe for a certificate it did not obtain itself.
+#
+# 30: after the light restarts (10, 15); this one takes mail down for seconds.
+set -e
+dir=/opt/mailcow-dockerized
+[ -f "$dir/mailcow.conf" ] || exit 0
+ssl=$dir/data/assets/ssl
+# Unchanged (a re-run of enrol.sh's hooks, or a deploy) - nothing to restart.
+cmp -s /etc/homelab-tls/host.crt "$ssl/cert.pem" && cmp -s /etc/homelab-tls/host.key "$ssl/key.pem" && exit 0
+install -m 0644 /etc/homelab-tls/host.crt "$ssl/cert.pem"
+install -m 0600 /etc/homelab-tls/host.key "$ssl/key.pem"
+cd "$dir"
+docker compose ps -q nginx-mailcow 2>/dev/null | grep -q . || exit 0
+exec docker compose restart postfix-mailcow dovecot-mailcow nginx-mailcow

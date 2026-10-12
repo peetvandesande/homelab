@@ -739,6 +739,56 @@ groups:
                   evaluator:
                     type: lt
                     params: [1]
+      - uid: mailcow-container-down
+        title: "mailcow container down"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "mailcow {{ $labels.service }} is down or unhealthy"
+          description: >-
+            Published by homelab-mailcow-textfile on hermes, from docker ps. mailcow's own watchdog restarts what it can; this is for what it could not. ClamAV, Olefy and FTS are skipped but their containers still run idle, so they count too.
+        noDataState: NoData
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'mailcow_container_up'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
       - uid: disk-low
         title: "Root filesystem nearly full"
         condition: B

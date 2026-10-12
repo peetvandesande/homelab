@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ship every host's journal to Loki with Grafana Alloy, across the whole fleet.
 #
-# One directory for eleven hosts, like node-exporter/: this is one service
+# One directory for twelve hosts, like node-exporter/: this is one service
 # replicated, not a per-container concern. Idempotent - installs the pinned
 # package where it is missing, pushes the same four files everywhere, and
 # proves each host is both serving TLS on :12345 and actually landing lines in
@@ -31,11 +31,11 @@ ALLOY_VER="1.19.2"
 FLEET=(
   192.168.8.21 192.168.8.50 192.168.8.51 192.168.8.52 192.168.8.53
   192.168.8.54 192.168.8.55 192.168.8.56 192.168.8.60 192.168.8.61
-  192.168.8.27
+  192.168.8.27 192.168.8.57
 )
 [[ $# -gt 0 ]] && FLEET=("$@")
 
-# Loki must be reachable before touching a single host, or eleven Alloys come up
+# Loki must be reachable before touching a single host, or twelve Alloys come up
 # and buffer against nothing.
 $CURL -o /dev/null -f "https://$LOKI:3100/ready" \
   || { echo "loki at $LOKI is not ready - deploy loki/ first"; exit 1; }
@@ -47,7 +47,7 @@ for ip in "${FLEET[@]}"; do
   $SSH "root@$ip" "
     set -e
     export DEBIAN_FRONTEND=noninteractive
-    # Same repo Grafana (.54) and Loki (.56) install from; the other eight
+    # Same repo Grafana (.54) and Loki (.56) install from; the other nine
     # hosts, lenora included, gain it here.
     if [ ! -s /etc/apt/keyrings/grafana.gpg ]; then
       apt-get install -y -qq curl ca-certificates gnupg >/dev/null

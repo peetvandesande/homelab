@@ -1,0 +1,7 @@
+{
+  "log-driver": "journald",
+  "log-opts": {
+    "tag": "{{.Name}}"
+  },
+  "ipv6": true
+}

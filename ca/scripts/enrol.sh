@@ -41,6 +41,7 @@ FLEET=(
   "192.168.8.27 moby"
   "192.168.8.60 jellyfin"
   "192.168.8.61 navidrome"
+  "192.168.8.57 hermes"
 )
 
 enrol_one() { # enrol_one <ip> <name> [extra sans...]
