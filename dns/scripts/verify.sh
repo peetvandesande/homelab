@@ -144,6 +144,7 @@ fi
 
 echo "== hygiene"
 check_eq "ANY is refused" "REFUSED" "$(status example.com ANY)"
+check_eq "Firefox DoH canary is NXDOMAIN for every client" "NXDOMAIN" "$(status use-application-dns.net A)"
 
 echo "== encrypted transports (dnsdist)"
 # Verified against our own root, and against the IP - every lab certificate
