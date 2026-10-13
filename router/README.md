@@ -8,7 +8,7 @@ whole lab. Documentation only — see `CLAUDE.md` for why there is no config her
 | Firmware | GL.iNet 4.9.2, OpenWrt, kernel 5.4.281, aarch64 |
 | Firewall | **fw3 / iptables + ipset** (`route_policy.global.use_fw4` unset) |
 | dnsmasq | 2.85, compiled with `ipset` and **without `nftset`** |
-| WAN | `eth1.832`, Orange; `2a01:cb1c:d:3500::/56` delegated |
+| WAN | `eth1.832`, Orange XGS-PON; `2a01:cb1c:d:3500::/56` delegated – see `ORANGE.md` |
 
 It replaced an Orange Livebox in October 2026, which is why the lab sits on
 192.168.8.0/24 — the GL.iNet default, kept rather than fought.

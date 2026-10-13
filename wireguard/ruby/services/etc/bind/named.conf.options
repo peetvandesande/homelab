@@ -1,0 +1,54 @@
+// /etc/bind/named.conf.options - vps-5ca50660.vps.ovh.net
+//
+// This BIND is a RESOLVER ONLY. It is authoritative for nothing that the
+// public Internet can see, and it does not listen on the public addresses.
+
+options {
+    directory "/var/cache/bind";
+
+    // Internal addresses only. The public addresses are deliberately absent,
+    // so nothing on ens3 answers DNS even if the firewall were flushed.
+    //
+    // A match list here selects which LOCAL addresses named binds to, so
+    // 192.168.204.0/24 means "the wg0 address" and 172.16.0.0/16 means "the
+    // Docker bridge gateways", including the br-<hash> ones created later.
+    // fd33:5692:1834:204::/64 is wg0's IPv6 (ULA) address, likewise.
+    listen-on { 127.0.0.1; 192.168.204.0/24; 172.16.0.0/16; };
+    listen-on-v6 { ::1; fd33:5692:1834:204::/64; };
+
+    // Default is yes in 9.16+, stated explicitly because it is what removes
+    // the start-ordering problem: named picks up wg0 (both address families)
+    // and new Docker bridges as they appear rather than failing to bind at
+    // boot.
+    automatic-interface-scan yes;
+
+    // ------------------------------------------------------------------
+    // DNSSEC VALIDATION: OFF BY CHOICE.
+    //
+    // This is the single line that disables Postfix DANE. See DEPLOYMENT.md
+    // section 4 for what it does and does not affect. In particular it is
+    // NOT what protects the split-horizon answer for mail.peetvandesande.com
+    // - leaving the public zone unsigned at the registrar is what does that,
+    // and that is already the case.
+    //
+    // To restore DANE: change this to "auto", then set
+    //   smtp_tls_security_level = dane
+    //   smtp_dns_support_level = dnssec
+    // in /etc/postfix/main.cf.
+    // ------------------------------------------------------------------
+    dnssec-validation no;
+
+    // Closed by default; each view grants back its own clients.
+    recursion no;
+    allow-recursion { none; };
+    allow-query { none; };
+    allow-transfer { none; };
+    allow-update { none; };
+
+    qname-minimization relaxed;
+    minimal-responses yes;
+
+    version none;
+    hostname none;
+    server-id none;
+};

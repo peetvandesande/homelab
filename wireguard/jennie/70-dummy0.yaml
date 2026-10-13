@@ -1,0 +1,8 @@
+# jennie: service address reachable across the VPN
+network:
+  version: 2
+  dummy-devices:
+    dummy0:
+      addresses:
+        - "192.168.254.2/32"
+        - "fd33:5692:1834:254::2/128"

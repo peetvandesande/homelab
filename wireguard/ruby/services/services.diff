@@ -1,0 +1,229 @@
+--- /etc/bind/named.conf.options
++++ /etc/bind/named.conf.options.new
+@@ -12,12 +12,14 @@
+     // A match list here selects which LOCAL addresses named binds to, so
+     // 192.168.204.0/24 means "the wg0 address" and 172.16.0.0/16 means "the
+     // Docker bridge gateways", including the br-<hash> ones created later.
++    // fd33:5692:1834:204::/64 is wg0's IPv6 (ULA) address, likewise.
+     listen-on { 127.0.0.1; 192.168.204.0/24; 172.16.0.0/16; };
+-    listen-on-v6 { ::1; };
++    listen-on-v6 { ::1; fd33:5692:1834:204::/64; };
+ 
+     // Default is yes in 9.16+, stated explicitly because it is what removes
+-    // the start-ordering problem: named picks up wg0 and new Docker bridges
+-    // as they appear rather than failing to bind at boot.
++    // the start-ordering problem: named picks up wg0 (both address families)
++    // and new Docker bridges as they appear rather than failing to bind at
++    // boot.
+     automatic-interface-scan yes;
+ 
+     // ------------------------------------------------------------------
+--- /etc/bind/named.conf.local
++++ /etc/bind/named.conf.local.new
+@@ -11,6 +11,19 @@
+ // declared inside the internal view below.
+ 
+ // ===========================================================================
++// VPN sources: everything reachable over WireGuard. A site's own traffic to
++// this host leaves from its tunnel address, hence the transit range.
++// 172.31.1.0/24 does not overlap the internal view's 172.16.0.0/16.
++// ===========================================================================
++acl "vpn" {
++    192.168.204.0/24;       // wg0 clients
++    192.168.8.0/21;         // home LANs
++    192.168.254.0/24;       // site service addresses (dummy interfaces)
++    172.31.1.0/24;          // site-to-site transit links
++    fd33:5692:1834::/48;    // VPN ULA: clients, home LANs, sites, transit
++};
++
++// ===========================================================================
+ // INTERNAL - the host itself and Docker containers
+ //
+ // No local copy of peetvandesande.com. The mail server and its containers
+@@ -40,7 +53,8 @@
+ };
+ 
+ // ===========================================================================
+-// WIREGUARD - VPN peers, with split-horizon overrides
++// WIREGUARD - everything on the VPN (clients, home, jennie), with
++// split-horizon overrides
+ //
+ // This zone deliberately contradicts the public copy: mail and imap resolve
+ // to 192.168.204.254 so peers reach submission over the tunnel rather than
+@@ -55,12 +69,12 @@
+ // people's domains.
+ // ===========================================================================
+ view "wireguard" {
+-    match-clients { 192.168.204.0/24; };
++    match-clients { vpn; };
+ 
+     recursion yes;
+-    allow-recursion { 192.168.204.0/24; };
+-    allow-query      { 192.168.204.0/24; };
+-    allow-query-cache { 192.168.204.0/24; };
++    allow-recursion { vpn; };
++    allow-query      { vpn; };
++    allow-query-cache { vpn; };
+ 
+     zone "." { type hint; file "/usr/share/dns/root.hints"; };
+     zone "localhost" { type primary; file "/etc/bind/db.local"; };
+--- /etc/postfix/master.cf
++++ /etc/postfix/master.cf.new
+@@ -100,52 +100,47 @@
+   -o smtpd_milters=unix:/rspamd/proxy.sock
+ 
+ # --------------------------------------------------------------------------
+-# SUBMISSION over IPv6 on the VPN - DISABLED
++# SUBMISSION and SMTPS over IPv6 on the VPN
+ #
+-# The WireGuard tunnel currently carries IPv4 only, so no IPv6 submission
+-# listener exists and none of the public IPv6 address is bound to 587 or 465.
++# wg0 also carries IPv6 now: ULA prefix fd33:5692:1834:204::/64, with the
++# server on fd33:5692:1834:204::254. Same gate as the IPv4 services above:
++# Postfix binds only that address, so 587/465 are never reachable on ens3.
+ #
+-# To add IPv6 inside the tunnel later:
+-#   1. assign a ULA prefix to wg0, e.g. fd00:204::1/64, and give each peer an
+-#      address from it;
+-#   2. add "fd00:204::/64  OK" ABOVE the ::/0 REJECT line in
+-#      /etc/postfix/wireguard_clients.cidr;
+-#   3. uncomment the two services below;
+-#   4. permit 587/465 on iifname "wg0" in nftables (the inet table already
+-#      covers both families);
+-#   5. postfix stop && postfix start.
++# The address must exist when Postfix starts, or the bind fails and master
++# exits. postfix@-.service.d/local-deps.conf orders Postfix after
++# systemd-networkd has configured wg0.
+ #
+ # Do NOT bind these to 2001:41d0:305:2100::1:3a0e under any circumstances.
+ # --------------------------------------------------------------------------
+-#[fd00:204::1]:submission inet n -      y       -       -       smtpd
+-#  -o syslog_name=postfix/submission6
+-#  -o smtpd_tls_security_level=encrypt
+-#  -o smtpd_tls_auth_only=yes
+-#  -o smtpd_sasl_auth_enable=yes
+-#  -o smtpd_client_restrictions=$mua_client_restrictions
+-#  -o smtpd_helo_restrictions=$mua_helo_restrictions
+-#  -o smtpd_sender_restrictions=$mua_sender_restrictions
+-#  -o smtpd_relay_restrictions=$mua_relay_restrictions
+-#  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
+-#  -o smtpd_data_restrictions=reject_unauth_pipelining
+-#  -o smtpd_client_message_rate_limit=100
+-#  -o milter_macro_daemon_name=ORIGINATING
+-#  -o smtpd_milters=unix:/rspamd/proxy.sock
+-#
+-#[fd00:204::1]:smtps      inet n -      y       -       -       smtpd
+-#  -o syslog_name=postfix/smtps6
+-#  -o smtpd_tls_wrappermode=yes
+-#  -o smtpd_tls_security_level=encrypt
+-#  -o smtpd_sasl_auth_enable=yes
+-#  -o smtpd_client_restrictions=$mua_client_restrictions
+-#  -o smtpd_helo_restrictions=$mua_helo_restrictions
+-#  -o smtpd_sender_restrictions=$mua_sender_restrictions
+-#  -o smtpd_relay_restrictions=$mua_relay_restrictions
+-#  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
+-#  -o smtpd_data_restrictions=reject_unauth_pipelining
+-#  -o smtpd_client_message_rate_limit=100
+-#  -o milter_macro_daemon_name=ORIGINATING
+-#  -o smtpd_milters=unix:/rspamd/proxy.sock
++[fd33:5692:1834:204::254]:submission inet n -      y       -       -       smtpd
++  -o syslog_name=postfix/submission6
++  -o smtpd_tls_security_level=encrypt
++  -o smtpd_tls_auth_only=yes
++  -o smtpd_sasl_auth_enable=yes
++  -o smtpd_client_restrictions=$mua_client_restrictions
++  -o smtpd_helo_restrictions=$mua_helo_restrictions
++  -o smtpd_sender_restrictions=$mua_sender_restrictions
++  -o smtpd_relay_restrictions=$mua_relay_restrictions
++  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
++  -o smtpd_data_restrictions=reject_unauth_pipelining
++  -o smtpd_client_message_rate_limit=100
++  -o milter_macro_daemon_name=ORIGINATING
++  -o smtpd_milters=unix:/rspamd/proxy.sock
++
++[fd33:5692:1834:204::254]:smtps      inet n -      y       -       -       smtpd
++  -o syslog_name=postfix/smtps6
++  -o smtpd_tls_wrappermode=yes
++  -o smtpd_tls_security_level=encrypt
++  -o smtpd_sasl_auth_enable=yes
++  -o smtpd_client_restrictions=$mua_client_restrictions
++  -o smtpd_helo_restrictions=$mua_helo_restrictions
++  -o smtpd_sender_restrictions=$mua_sender_restrictions
++  -o smtpd_relay_restrictions=$mua_relay_restrictions
++  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
++  -o smtpd_data_restrictions=reject_unauth_pipelining
++  -o smtpd_client_message_rate_limit=100
++  -o milter_macro_daemon_name=ORIGINATING
++  -o smtpd_milters=unix:/rspamd/proxy.sock
+ 
+ #628       inet  n       -       y       -       -       qmqpd
+ 
+--- /etc/dovecot/conf.d/20-managesieve.conf
++++ /etc/dovecot/conf.d/20-managesieve.conf.new
+@@ -11,7 +11,9 @@
+ 
+ service managesieve-login {
+   inet_listener sieve {
+-    listen = 192.168.204.254 192.168.254.254
++    # wg0 and dummy0, each in both address families. The addresses must
++    # exist when dovecot starts (see dovecot.service.d/dovecot-local-deps.conf).
++    listen = 192.168.204.254 192.168.254.254 fd33:5692:1834:204::254 fd33:5692:1834:254::254
+     port = 4190
+   }
+ 
+--- /etc/systemd/system/dovecot.service.d/dovecot-local-deps.conf
++++ /etc/systemd/system/dovecot.service.d/dovecot-local-deps.conf.new
+@@ -1,20 +1,22 @@
+-# /etc/systemd/system/dovecot.service.d/local-deps.conf
++# /etc/systemd/system/dovecot.service.d/dovecot-local-deps.conf
+ #
+-# Dovecot binds 192.168.204.254 for imaps and managesieve. If wg0 is not yet
+-# configured the bind fails and dovecot refuses to start - the same trap that
+-# catches Postfix, and for the same reason.
++# Dovecot binds wg0 and dummy0 addresses (192.168.204.254,
++# fd33:5692:1834:204::254, 192.168.254.254, fd33:5692:1834:254::254) for
++# managesieve. If an address is not yet configured the bind fails and dovecot
++# refuses to start - the same trap that catches Postfix, and for the same
++# reason.
++#
++# wg0 and dummy0 are managed by systemd-networkd (netplan), so wait for
++# networkd to report each of them routable, i.e. addresses configured. This
++# replaced "After=wg-quick@wg0.service" when wg0 moved from wg-quick to netplan.
+ #
+ # named is included because Dovecot resolves the MySQL host and does reverse
+ # lookups on client addresses; without DNS it starts but logs are unhelpful.
+ #
+ # Install with:
+-#   mkdir -p /etc/systemd/system/dovecot.service.d
+ #   cp dovecot-local-deps.conf /etc/systemd/system/dovecot.service.d/
+ #   systemctl daemon-reload
+-#
+-# Confirm the unit name first: systemctl list-units 'dovecot*'
+-# Debian 13 ships dovecot.service; some builds also carry a socket unit.
+ 
+ [Unit]
+-After=network-online.target named.service mariadb.service wg-quick@wg0.service
+-Wants=network-online.target named.service mariadb.service
++After=network-online.target named.service mariadb.service systemd-networkd-wait-online@wg0:routable.service systemd-networkd-wait-online@dummy0:routable.service
++Wants=network-online.target named.service mariadb.service systemd-networkd-wait-online@wg0:routable.service systemd-networkd-wait-online@dummy0:routable.service
+--- /dev/null
++++ /etc/systemd/system/postfix@-.service.d/local-deps.conf
+@@ -0,0 +1,18 @@
++# /etc/systemd/system/postfix@-.service.d/local-deps.conf
++#
++# Postfix binds submission/smtps to wg0's addresses (192.168.204.254 and
++# fd33:5692:1834:204::254). If either is not yet configured when master
++# starts, the bind fails and Postfix exits. The stock unit only orders after
++# network.target, which does not wait for any interface.
++#
++# wg0 is managed by systemd-networkd (netplan): wait for networkd to report it
++# routable, i.e. addresses configured.
++#
++# Install with:
++#   mkdir -p /etc/systemd/system/postfix@-.service.d
++#   cp local-deps.conf /etc/systemd/system/postfix@-.service.d/
++#   systemctl daemon-reload
++
++[Unit]
++After=systemd-networkd-wait-online@wg0:routable.service
++Wants=systemd-networkd-wait-online@wg0:routable.service

@@ -1,0 +1,40 @@
+# ruby: wg2, S2S to jennie over IPv6; jennie is also an Internet exit for clients
+network:
+  version: 2
+  tunnels:
+    wg2:
+      mode: wireguard
+      port: 51822
+      key: "<ruby wg2 private key>"
+      mtu: 1420
+      addresses:
+        - "172.31.1.5/30"
+        - "fd33:5692:1834:ff02::1/64"
+      peers:
+        # jennie
+        - keys:
+            public: "+0MxQ46pU2YUBHPrY7cLHr+ahAhS5fMXImlLRvBoOgk="
+            shared: "<psk ruby-jennie>"
+          endpoint: "[2001:41d0:801:2000::180f]:51822"
+          keepalive: 25
+          # Any destination: jennie is an Internet exit. Only jennie's own
+          # addresses are routed here from the main table (below); everything
+          # else reaches wg2 through table 200 and the routing-policy rules.
+          allowed-ips: ["0.0.0.0/0", "::/0"]
+      routes:
+        - { to: "192.168.254.2/32", scope: link }
+        - { to: "fd33:5692:1834:254::2/128", scope: link }
+        # Table 200 "via-jennie": Internet exit through jennie.
+        - { to: "0.0.0.0/0", scope: link, table: 200 }
+        - { to: "::/0", scope: link, table: 200 }
+      routing-policy:
+        # VPN and private destinations always use the main table, so clients
+        # sent to table 200 still reach ruby, each other, home and jennie.
+        - { to: "fd33:5692:1834::/48", table: 254, priority: 900 }
+        - { to: "192.168.0.0/16", table: 254, priority: 900 }
+        - { to: "172.16.0.0/12", table: 254, priority: 900 }
+        # Client IPv6 Internet exits via jennie (ruby has no NAT66).
+        - { from: "fd33:5692:1834:204::/64", table: 200, priority: 1000 }
+        # Client IPv4 Internet exits via ruby by default. To send a client's
+        # IPv4 via jennie instead, add a rule for it, e.g. iphone-peet:
+        # - { from: "192.168.204.2/32", table: 200, priority: 1000 }

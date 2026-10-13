@@ -1,0 +1,35 @@
+# Let WireGuard traffic past Docker's FORWARD chains.
+#
+# Docker's ip6 filter FORWARD chain has policy DROP ("ip6tables": true), and a
+# drop in any chain on the forward hook wins over /etc/nftables.conf's accepts.
+# DOCKER-USER is the chain Docker reserves for this. The rules are narrow, so
+# Docker's own isolation still applies to anything heading for a container:
+#
+#   IPv6: tunnel <-> tunnel only. There is no NAT66, so VPN IPv6 traffic never
+#         goes to the Internet (nftables.conf drops it explicitly as well).
+#   IPv4: tunnel <-> tunnel, plus client Internet egress and its replies.
+#         IPv4's FORWARD policy is currently ACCEPT, so these are insurance
+#         against Docker switching it to DROP.
+#
+# PartOf/WantedBy docker.service: re-applied whenever dockerd (re)starts.
+# -C before -I keeps it idempotent.
+[Unit]
+Description=Docker DOCKER-USER exceptions for WireGuard
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'for t in /usr/sbin/iptables /usr/sbin/ip6tables; do \
+  $t -C DOCKER-USER -i wg+ -o wg+ -j ACCEPT 2>/dev/null || $t -I DOCKER-USER -i wg+ -o wg+ -j ACCEPT; \
+done'
+ExecStart=/bin/sh -c 't=/usr/sbin/iptables; \
+  $t -C DOCKER-USER -i ens3 -o wg+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || $t -I DOCKER-USER -i ens3 -o wg+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT; \
+  $t -C DOCKER-USER -i wg+ -o ens3 -j ACCEPT 2>/dev/null || $t -I DOCKER-USER -i wg+ -o ens3 -j ACCEPT'
+ExecStop=-/bin/sh -c 'for t in /usr/sbin/iptables /usr/sbin/ip6tables; do $t -D DOCKER-USER -i wg+ -o wg+ -j ACCEPT; done'
+ExecStop=-/usr/sbin/iptables -D DOCKER-USER -i wg+ -o ens3 -j ACCEPT
+ExecStop=-/usr/sbin/iptables -D DOCKER-USER -i ens3 -o wg+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+[Install]
+WantedBy=docker.service

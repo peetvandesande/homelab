@@ -1,0 +1,35 @@
+# jennie: wg2, S2S to ruby over IPv6
+network:
+  version: 2
+  tunnels:
+    wg2:
+      mode: wireguard
+      port: 51822
+      key: "<jennie wg2 private key>"
+      mtu: 1420
+      addresses:
+        - "172.31.1.6/30"
+        - "fd33:5692:1834:ff02::2/64"
+      peers:
+        # ruby
+        - keys:
+            public: "MPXjtJL97lxcRrzdaSH+e1m1Ye/mivJDwIiVjwdj7CY="
+            shared: "<psk ruby-jennie>"
+          endpoint: "[2001:41d0:305:2100::1:3a0e]:51822"
+          keepalive: 25
+          allowed-ips:
+            - "172.31.1.5/32"
+            - "fd33:5692:1834:ff02::1/128"
+            - "192.168.204.0/24"
+            - "fd33:5692:1834:204::/64"
+            - "192.168.254.253/32"
+            - "192.168.254.254/32"
+            - "fd33:5692:1834:254::254/128"
+            - "fd33:5692:1834:254::253/128"
+      routes:
+        - { to: "192.168.204.0/24", scope: link }
+        - { to: "fd33:5692:1834:204::/64", scope: link }
+        - { to: "192.168.254.253/32", scope: link }
+        - { to: "192.168.254.254/32", scope: link }
+        - { to: "fd33:5692:1834:254::254/128", scope: link }
+        - { to: "fd33:5692:1834:254::253/128", scope: link }

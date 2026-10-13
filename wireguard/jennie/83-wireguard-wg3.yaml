@@ -1,0 +1,25 @@
+# jennie: wg3, S2S to home (router dials in to [2001:41d0:801:2000::180f]:51823)
+network:
+  version: 2
+  tunnels:
+    wg3:
+      mode: wireguard
+      port: 51823
+      key: "<jennie wg3 private key>"
+      mtu: 1388
+      addresses:
+        - "172.31.1.9/30"
+        - "fd33:5692:1834:ff03::1/64"
+      peers:
+        # home
+        - keys:
+            public: "<home wg3 public key>"
+            shared: "<psk home-jennie>"
+          allowed-ips:
+            - "172.31.1.10/32"
+            - "fd33:5692:1834:ff03::2/128"
+            - "192.168.8.0/21"
+            - "fd33:5692:1834:1000::/56"
+      routes:
+        - { to: "192.168.8.0/21", scope: link }
+        - { to: "fd33:5692:1834:1000::/56", scope: link }

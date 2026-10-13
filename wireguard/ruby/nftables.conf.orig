@@ -1,0 +1,209 @@
+#!/usr/sbin/nft -f
+#
+# /etc/nftables.conf - vps-5ca50660.vps.ovh.net
+#
+# ===========================================================================
+# ADDRESS ROLES
+#   145.239.73.18		mail, web		primary, ens3
+#   2001:41d0:305:2100::1:3a0e	mail, web		primary, ens3
+#   46.105.253.72		WireGuard		additional, ens3
+#   				WG, proxy outbound
+#   192.168.204.0/24		WireGuard peers		wg0)
+#   172.16.0.0/16		Docker			docker0, br-*
+# ===========================================================================
+#
+# Apply:  nft -c -f /etc/nftables.conf   (check, changes nothing)
+#         systemctl enable --now nftables
+#
+# ===========================================================================
+# NOTE FOR ANYONE ARRIVING FROM RAW iptables
+#
+# 1. Nothing is predefined. iptables hands you filter/nat/mangle with
+#    INPUT/FORWARD/OUTPUT already attached. Here you declare the table, then
+#    each base chain's type, hook, priority and policy explicitly.
+#
+# 2. "inet" covers IPv4 and IPv6 in one table. No separate ip6tables pass.
+#    Where a rule must be family-specific, "ip saddr" matches IPv4 only and
+#    "ip6 saddr" IPv6 only; a rule with neither matches both.
+#
+# 3. MULTIPLE CHAINS CAN ATTACH TO THE SAME HOOK, ordered by priority, and a
+#    packet must be accepted by EVERY one of them. Docker keeps its own rules
+#    in the ip/ip6 filter and nat tables via iptables-nft. Ours accepting
+#    something does not override Docker's drop, but ours dropping something
+#    does override Docker's accept. That asymmetry drives the forward chain
+#    design below.
+#
+# 4. THERE IS NO "flush ruleset" HERE, deliberately. It would wipe Docker's
+#    tables too, and container networking stays broken until dockerd is
+#    restarted. On boot the ordering hides this; "systemctl restart nftables"
+#    at 15:00 on a Tuesday does not. The declare-then-delete idiom below
+#    clears only our own tables.
+#
+# 5. iptables-translate rewrites an existing rule into nft syntax, and
+#    iptables-restore-translate does a whole saved ruleset. Useful for
+#    porting the parts of your old scripts not covered here.
+#
+# 6. Debugging: "nft -a list ruleset" shows rule handles, and
+#    "nft monitor trace" combined with a "meta nftrace set 1" rule gives you
+#    a per-packet path through the chains.
+# ===========================================================================
+
+define PUB4 = 145.239.73.18
+define PUB6 = 2001:41d0:305:2100::1:3a0e
+define WG4  = 46.105.253.72
+define WGNET = 192.168.204.0/24
+define DUMMY0 = 192.168.254.254
+define DOCKERNET = 172.16.0.0/16
+
+# Clear only our own tables. Declaring first makes the delete safe when the
+# table does not yet exist.
+table inet filter
+delete table inet filter
+table ip wgnat
+delete table ip wgnat
+
+# ===========================================================================
+table inet filter {
+
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # --- ICMP -----------------------------------------------------------
+        # ICMPv6 is NOT optional. Dropping neighbour discovery or
+        # packet-too-big breaks IPv6 connectivity and path MTU discovery,
+        # which presents as large messages stalling mid-DATA.
+        ip protocol icmp icmp type { echo-request, destination-unreachable, time-exceeded, parameter-problem } accept
+        icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+
+        # --- Administrative access ------------------------------------------
+        tcp dport 22 accept
+
+        # --- WireGuard: the ONLY service on 46.105.253.72 -------------------
+        # wg(8) has no bind-address option, so its socket accepts on every
+        # local address. Restricting it to the additional IP is done here, by
+        # matching the destination address rather than just the port.
+        # WireGuard replies from the address the handshake arrived on, so the
+        # return path needs nothing further.
+        iifname "ens3" ip daddr $WG4 udp dport 51820 accept
+
+        # --- Mail, DNS and web: primary addresses only ----------------------
+        # Matching "ip daddr $PUB4" is what keeps these off 46.105.253.72.
+        iifname "ens3" ip  daddr $PUB4 tcp dport 25 accept
+        iifname "ens3" ip6 daddr $PUB6 tcp dport 25 accept
+
+        iifname "ens3" ip  daddr $PUB4 tcp dport { 80, 443 } accept
+        iifname "ens3" ip6 daddr $PUB6 tcp dport { 80, 443 } accept
+
+        # NO DNS ON ens3. BIND is a resolver for loopback, Docker and the
+        # VPN only, and named.conf.options does not bind the public
+        # addresses. Nothing to permit here; the drop policy covers it.
+
+        # --- Mail submission is NEVER reachable from the public interface ---
+        # Postfix does not bind 465/587 on ens3, so this should never match.
+        # It exists so a future master.cf mistake fails closed, and so the
+        # counter makes that mistake visible.
+        # "drop" rather than "reject": a scanner sees a timeout instead of a
+        # signal that the service exists somewhere else.
+        iifname "ens3" tcp dport { 465, 587, 993, 995, 4190 } counter drop
+
+        # --- Mail and DNS services, WireGuard side only ---------------------
+        iifname "wg0" tcp dport 22 accept
+        iifname "wg0" udp dport 53 accept
+        iifname "wg0" tcp dport 53 accept
+        iifname "wg0" tcp dport { 80, 443 } accept
+        # 587 submission, 465 smtps, 993 IMAPS, 4190 ManageSieve
+        iifname "wg0" tcp dport { 465, 587, 993, 4190 } accept
+        iifname "wg0" tcp dport 19080 accept
+	# UDP 60000-61000 for mosh
+	iifname "wg0" udp dport 60000-61000 accept
+
+        # --- Container injection into port 25 -------------------------------
+        # Matched on source address, not interface: Docker user-defined
+        # networks create br-<hash> interfaces whose names are unpredictable,
+        # whereas default-address-pools guarantees the source address.
+        ip saddr $DOCKERNET tcp dport 25 accept
+
+        # --- Container name resolution --------------------------------------
+        # Containers must be pointed at 172.16.0.1 explicitly; see
+        # docker-daemon.json for why a loopback nameserver does not reach them.
+        # TCP as well as UDP: truncated responses retry over TCP.
+        ip saddr $DOCKERNET udp dport 53 accept
+        ip saddr $DOCKERNET tcp dport 53 accept
+
+	# --- Webmail container to the mail services on dummy0 --------------
+        # Matched on source AND destination: only the Docker bridge range may
+        # reach these, and only on the dummy0 address. The WireGuard address
+        # keeps its own separate rules above.
+        ip saddr $DOCKERNET ip daddr $DUMMY0 tcp dport { 587, 993, 4190 } accept
+
+        counter comment "unmatched input, dropped by policy"
+    }
+
+    # -----------------------------------------------------------------------
+    # FORWARD
+    #
+    # Policy is ACCEPT, not drop, because of point 3 in the header note:
+    # Docker sets bridge-nf-call-iptables=1, so container-to-container traffic
+    # on the same bridge traverses this hook too. A drop policy here would
+    # need accept rules for every br-<hash> interface Docker invents at
+    # runtime. Docker's own isolation rules still apply regardless of what
+    # this chain does, because both chains must accept.
+    #
+    # Control is therefore expressed as explicit drops, which DO override
+    # Docker's accepts. See DEPLOYMENT.md section 5 for the stricter
+    # drop-policy variant if you would rather run that.
+    # -----------------------------------------------------------------------
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+
+        # MSS clamping. WireGuard's MTU is 1420, and any path that swallows
+        # ICMP "packet too big" will otherwise blackhole large TCP segments:
+        # SSH banners arrive, file transfers hang. Cheap insurance.
+        tcp flags syn tcp option maxseg size set rt mtu
+
+        # Peers may reach each other inside the tunnel.
+        iifname "wg0" oifname "wg0" accept
+
+        # Peers must NOT reach the container networks or any other private
+        # space via this host. Without these, a VPN client can talk straight
+        # to any container port that is bound in the bridge network.
+        iifname "wg0" ip daddr $DOCKERNET counter drop
+        iifname "wg0" ip daddr { 10.0.0.0/8, 172.16.0.0/12, 169.254.0.0/16 } counter drop
+
+        # Peers to the Internet. Redundant under an accept policy; kept as a
+        # statement of intent, and as the line to move first if you switch
+        # the policy to drop.
+        iifname "wg0" oifname "ens3" accept
+        iifname "ens3" oifname "wg0" ct state established,related accept
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
+
+# ===========================================================================
+# NAT for WireGuard egress
+#
+# Separate "ip" family table: the tunnel is IPv4-only, and keeping NAT out of
+# the inet table avoids any interaction with Docker's ip nat table.
+#
+# snat, NOT masquerade. masquerade picks whatever source address the routing
+# table would have chosen, which is the primary 145.239.73.18. An explicit
+# snat is what pins peer egress to 46.105.253.72, and it is cheaper because
+# it does not re-check the interface address on every connection.
+#
+# The rule is narrow enough not to collide with Docker's own masquerade rule:
+# that one matches ip saddr 172.16.0.0/16, this one 192.168.204.0/24.
+# ===========================================================================
+table ip wgnat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+
+        ip saddr 192.168.204.0/24 oifname "ens3" counter snat to 46.105.253.72
+    }
+}

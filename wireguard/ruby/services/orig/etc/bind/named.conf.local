@@ -1,0 +1,96 @@
+// /etc/bind/named.conf.local - vps-5ca50660.vps.ovh.net
+//
+// View selection is by query source address, and the first matching view
+// wins. A query from a source matching neither view gets REFUSED, which
+// combined with the listen-on list in named.conf.options means the public
+// addresses have no DNS service at all.
+//
+// Debian's /etc/bind/named.conf includes named.conf.default-zones, which
+// declares zones OUTSIDE any view. That is a configuration error once views
+// exist. The supplied named.conf drops that include; the default zones are
+// declared inside the internal view below.
+
+// ===========================================================================
+// INTERNAL - the host itself and Docker containers
+//
+// No local copy of peetvandesande.com. The mail server and its containers
+// resolve the domain recursively, exactly as the outside world does. A
+// split-horizon answer here is how you end up with mail that works
+// internally and fails externally, with nothing visible from the console.
+// ===========================================================================
+view "internal" {
+    match-clients { 127.0.0.0/8; ::1; 172.16.0.0/16; };
+
+    recursion yes;
+    allow-recursion { 127.0.0.0/8; ::1; 172.16.0.0/16; };
+    allow-query      { 127.0.0.0/8; ::1; 172.16.0.0/16; };
+    allow-query-cache { 127.0.0.0/8; ::1; 172.16.0.0/16; };
+
+    zone "." { type hint; file "/usr/share/dns/root.hints"; };
+    zone "localhost" { type primary; file "/etc/bind/db.local"; };
+    zone "127.in-addr.arpa" { type primary; file "/etc/bind/db.127"; };
+    zone "0.in-addr.arpa" { type primary; file "/etc/bind/db.0"; };
+    zone "255.in-addr.arpa" { type primary; file "/etc/bind/db.255"; };
+
+    zone "docker.local" {
+        type master;
+        file "/var/lib/bind/db.docker.local";
+        allow-update { 127.0.0.0/8; ::1; };
+    };
+};
+
+// ===========================================================================
+// WIREGUARD - VPN peers, with split-horizon overrides
+//
+// This zone deliberately contradicts the public copy: mail and imap resolve
+// to 192.168.204.254 so peers reach submission over the tunnel rather than
+// hairpinning out to the public address and being refused.
+//
+// It is unsigned, and the public zone at the registrar must stay unsigned
+// too. If the parent ever publishes a DS record for peetvandesande.com, a
+// peer running its own validating stub resolver (Android Private DNS,
+// systemd-resolved with DNSSEC=yes, a local unbound) will treat these
+// answers as BOGUS and fail to resolve them. That is the actual constraint,
+// and it has nothing to do with whether this server validates other
+// people's domains.
+// ===========================================================================
+view "wireguard" {
+    match-clients { 192.168.204.0/24; };
+
+    recursion yes;
+    allow-recursion { 192.168.204.0/24; };
+    allow-query      { 192.168.204.0/24; };
+    allow-query-cache { 192.168.204.0/24; };
+
+    zone "." { type hint; file "/usr/share/dns/root.hints"; };
+    zone "localhost" { type primary; file "/etc/bind/db.local"; };
+
+    zone "mail.peetvandesande.com" {
+        type primary;
+        file "/etc/bind/wireguard/mail.peetvandesande.com";
+        notify no;
+    };
+
+    zone "ruby.peetvandesande.com" {
+        type primary;
+        file "/etc/bind/wireguard/ruby.peetvandesande.com";
+        notify no;
+    };
+
+    zone "sogode.com" {
+        type primary;
+        file "/etc/bind/wireguard/sogode.com";
+        notify no;
+    };
+
+    zone "www.sogode.com" {
+        type primary;
+        file "/etc/bind/wireguard/www.sogode.com";
+        notify no;
+    };
+
+    zone "204.168.192.in-addr.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/204.168.192.in-addr.arpa";
+    };
+};

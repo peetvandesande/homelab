@@ -1,0 +1,25 @@
+# ruby: wg1, S2S to home (router dials in to [2001:41d0:305:2100::1:3a0e]:51821)
+network:
+  version: 2
+  tunnels:
+    wg1:
+      mode: wireguard
+      port: 51821
+      key: "<ruby wg1 private key>"
+      mtu: 1388
+      addresses:
+        - "172.31.1.1/30"
+        - "fd33:5692:1834:ff01::1/64"
+      peers:
+        # home
+        - keys:
+            public: "vQww1GLubYz6J+77gFW9/2IbiShgx+E+peEuSX4VSVg="
+            shared: "<psk home>"
+          allowed-ips:
+            - "172.31.1.2/32"
+            - "fd33:5692:1834:ff01::2/128"
+            - "192.168.8.0/21"
+            - "fd33:5692:1834:1000::/56"
+      routes:
+        - { to: "192.168.8.0/21", scope: link }
+        - { to: "fd33:5692:1834:1000::/56", scope: link }

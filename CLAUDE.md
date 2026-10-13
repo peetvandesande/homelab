@@ -55,7 +55,15 @@ than fought.
   source of truth that always loses. What `router/` records is the part
   `uci show` cannot tell you — which settings the rest of the lab depends on,
   and which ones silently break something. Read `router/CLAUDE.md` before
-  changing anything on the device.
+  changing anything on the device. `router/ORANGE.md` covers the fibre WAN.
+- **The router's two WireGuard tunnels go to ruby and jennie**, two OVH servers
+  outside the lab. `wireguard/` holds that design and its unfinished rollout.
+
+## Secrets outside the repo
+
+This repo is public. Besides the gitignored `secrets.env` files, secrets with no
+deploy script to template them live outside git in `~/projects/homelab-private/`:
+WireGuard keys and filled configs, and the Orange WAN credentials.
 
 ## Storage
 

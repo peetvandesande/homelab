@@ -1,0 +1,211 @@
+#
+# Postfix master process configuration file.
+# Host: vps-5ca50660.vps.ovh.net
+#
+# Execute "postfix reload" after editing. Adding or removing a listener
+# address requires "postfix stop && postfix start", not a reload.
+#
+# ==========================================================================
+# service type  private unpriv  chroot  wakeup  maxproc command + args
+#               (yes)   (yes)   (no)    (never) (100)
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# PUBLIC MX - port 25
+#
+# Deliberately unbound, so it accepts on every address in both families:
+#   145.239.73.18                    inbound Internet mail  (IPv4)
+#   2001:41d0:305:2100::1:3a0e       inbound Internet mail  (IPv6)
+#   127.0.0.1 / ::1                  local injection, unauthenticated
+#   172.16.0.1                       Docker gateway, unauthenticated
+#
+# AUTH is never offered here. smtpd_sasl_auth_enable is already "no" globally;
+# it is restated as an explicit assertion at the point of highest exposure.
+# TLS stays optional (may) - a public MX that mandates TLS loses mail.
+# --------------------------------------------------------------------------
+smtp      inet  n       -       y       -       -       smtpd
+  -o syslog_name=postfix/public
+  -o smtpd_tls_security_level=may
+  -o smtpd_sasl_auth_enable=no
+  -o smtpd_client_connection_count_limit=10
+
+# Optional, once the migration is stable: front port 25 with postscreen.
+#smtp      inet  n       -       y       -       1       postscreen
+#smtpd     pass  -       -       y       -       -       smtpd
+#dnsblog   unix  -       -       y       -       0       dnsblog
+#tlsproxy  unix  -       -       y       -       0       tlsproxy
+
+# --------------------------------------------------------------------------
+# SUBMISSION - port 587, ::1 only
+#
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# SUBMISSION - port 587, WireGuard only
+#
+# The 192.168.204.254: prefix is the primary control. Postfix binds that single
+# address, so the kernel refuses any connection to 587 arriving on ens3, over
+# either address family. No restriction list, typo or later -o override can
+# reopen it. Everything below is defence in depth.
+#
+# Substitute the server's own address on wg0 if it is not 192.168.204.254.
+# --------------------------------------------------------------------------
+[::1]:587  inet  n       -       y       -       -       smtpd
+    -o syslog_name=postfix/rc-sub
+    -o smtpd_tls_security_level=none
+    -o smtpd_sasl_auth_enable=yes
+    -o smtpd_sasl_type=dovecot
+    -o smtpd_sasl_path=private/auth
+    -o smtpd_sasl_security_options=noanonymous
+    -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+    -o smtpd_sender_restrictions=reject_sender_login_mismatch,permit_sasl_authenticated,reject
+    -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+    -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+    -o smtpd_helo_restrictions=
+    -o milter_macro_daemon_name=ORIGINATING
+    -o cleanup_service_name=rc-cleanup
+    -o smtpd_tls_auth_only=no
+192.168.204.254:submission inet n  -      y       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_tls_auth_only=yes
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_client_restrictions=$mua_client_restrictions
+  -o smtpd_helo_restrictions=$mua_helo_restrictions
+  -o smtpd_sender_restrictions=$mua_sender_restrictions
+  -o smtpd_relay_restrictions=$mua_relay_restrictions
+  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
+  -o smtpd_data_restrictions=reject_unauth_pipelining
+  -o smtpd_client_message_rate_limit=100
+  -o milter_macro_daemon_name=ORIGINATING
+  -o smtpd_milters=unix:/rspamd/proxy.sock
+
+# --------------------------------------------------------------------------
+# SMTPS - port 465 implicit TLS (RFC 8314), WireGuard only
+# Same gate as 587.
+# --------------------------------------------------------------------------
+192.168.204.254:smtps      inet n  -      y       -       -       smtpd
+  -o syslog_name=postfix/smtps
+  -o smtpd_tls_wrappermode=yes
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_client_restrictions=$mua_client_restrictions
+  -o smtpd_helo_restrictions=$mua_helo_restrictions
+  -o smtpd_sender_restrictions=$mua_sender_restrictions
+  -o smtpd_relay_restrictions=$mua_relay_restrictions
+  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
+  -o smtpd_data_restrictions=reject_unauth_pipelining
+  -o smtpd_client_message_rate_limit=100
+  -o milter_macro_daemon_name=ORIGINATING
+  -o smtpd_milters=unix:/rspamd/proxy.sock
+
+# --------------------------------------------------------------------------
+# SUBMISSION over IPv6 on the VPN - DISABLED
+#
+# The WireGuard tunnel currently carries IPv4 only, so no IPv6 submission
+# listener exists and none of the public IPv6 address is bound to 587 or 465.
+#
+# To add IPv6 inside the tunnel later:
+#   1. assign a ULA prefix to wg0, e.g. fd00:204::1/64, and give each peer an
+#      address from it;
+#   2. add "fd00:204::/64  OK" ABOVE the ::/0 REJECT line in
+#      /etc/postfix/wireguard_clients.cidr;
+#   3. uncomment the two services below;
+#   4. permit 587/465 on iifname "wg0" in nftables (the inet table already
+#      covers both families);
+#   5. postfix stop && postfix start.
+#
+# Do NOT bind these to 2001:41d0:305:2100::1:3a0e under any circumstances.
+# --------------------------------------------------------------------------
+#[fd00:204::1]:submission inet n -      y       -       -       smtpd
+#  -o syslog_name=postfix/submission6
+#  -o smtpd_tls_security_level=encrypt
+#  -o smtpd_tls_auth_only=yes
+#  -o smtpd_sasl_auth_enable=yes
+#  -o smtpd_client_restrictions=$mua_client_restrictions
+#  -o smtpd_helo_restrictions=$mua_helo_restrictions
+#  -o smtpd_sender_restrictions=$mua_sender_restrictions
+#  -o smtpd_relay_restrictions=$mua_relay_restrictions
+#  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
+#  -o smtpd_data_restrictions=reject_unauth_pipelining
+#  -o smtpd_client_message_rate_limit=100
+#  -o milter_macro_daemon_name=ORIGINATING
+#  -o smtpd_milters=unix:/rspamd/proxy.sock
+#
+#[fd00:204::1]:smtps      inet n -      y       -       -       smtpd
+#  -o syslog_name=postfix/smtps6
+#  -o smtpd_tls_wrappermode=yes
+#  -o smtpd_tls_security_level=encrypt
+#  -o smtpd_sasl_auth_enable=yes
+#  -o smtpd_client_restrictions=$mua_client_restrictions
+#  -o smtpd_helo_restrictions=$mua_helo_restrictions
+#  -o smtpd_sender_restrictions=$mua_sender_restrictions
+#  -o smtpd_relay_restrictions=$mua_relay_restrictions
+#  -o smtpd_recipient_restrictions=$mua_recipient_restrictions
+#  -o smtpd_data_restrictions=reject_unauth_pipelining
+#  -o smtpd_client_message_rate_limit=100
+#  -o milter_macro_daemon_name=ORIGINATING
+#  -o smtpd_milters=unix:/rspamd/proxy.sock
+
+#628       inet  n       -       y       -       -       qmqpd
+
+# ==========================================================================
+# Internal Postfix services
+# ==========================================================================
+pickup    unix  n       -       y       60      1       pickup
+cleanup   unix  n       -       y       -       0       cleanup
+qmgr      unix  n       -       n       300     1       qmgr
+#qmgr     unix  n       -       n       300     1       oqmgr
+tlsmgr    unix  -       -       y       1000?   1       tlsmgr
+rewrite   unix  -       -       y       -       -       trivial-rewrite
+bounce    unix  -       -       y       -       0       bounce
+defer     unix  -       -       y       -       0       bounce
+trace     unix  -       -       y       -       0       bounce
+verify    unix  -       -       y       -       1       verify
+flush     unix  n       -       y       1000?   0       flush
+proxymap  unix  -       -       n       -       -       proxymap
+proxywrite unix -       -       n       -       1       proxymap
+
+# Outbound source addresses are pinned in main.cf via smtp_bind_address and
+# smtp_bind_address6, so no per-transport -o smtp_bind_address is required.
+smtp      unix  -       -       n       -       -       smtp
+relay     unix  -       -       n       -       -       smtp
+        -o syslog_name=postfix/$service_name
+        -o smtp_fallback_relay=
+
+showq     unix  n       -       y       -       -       showq
+error     unix  -       -       y       -       -       error
+retry     unix  -       -       y       -       -       error
+discard   unix  -       -       y       -       -       discard
+local     unix  -       n       n       -       -       local
+virtual   unix  -       n       n       -       -       virtual
+lmtp      unix  -       -       y       -       -       lmtp
+anvil     unix  -       -       y       -       1       anvil
+scache    unix  -       -       y       -       1       scache
+postlog   unix-dgram n  -       n       -       1       postlogd
+
+# ==========================================================================
+# Interfaces to non-Postfix software
+# ==========================================================================
+
+maildrop  unix  -       n       n       -       -       pipe
+  flags=DRXhu user=vmail argv=/usr/bin/maildrop -d ${recipient}
+
+uucp      unix  -       n       n       -       -       pipe
+  flags=Fqhu user=uucp argv=uux -r -n -z -a$sender - $nexthop!rmail ($recipient)
+
+ifmail    unix  -       n       n       -       -       pipe
+  flags=F user=ftn argv=/usr/lib/ifmail/ifmail -r $nexthop ($recipient)
+
+bsmtp     unix  -       n       n       -       -       pipe
+  flags=Fq. user=bsmtp argv=/usr/lib/bsmtp/bsmtp -t$nexthop -f$sender $recipient
+
+scalemail-backend unix -       n       n       -       2       pipe
+  flags=R user=scalemail argv=/usr/lib/scalemail/bin/scalemail-store ${nexthop} ${user} ${extension}
+
+mailman   unix  -       n       n       -       -       pipe
+  flags=FRX user=list argv=/usr/lib/mailman/bin/postfix-to-mailman.py ${nexthop} ${user}
+
+# Strip roundcube headers
+rc-cleanup unix  n  -  y  -  0  cleanup
+  -o header_checks=pcre:/etc/postfix/rc_submission_header_checks,regexp:/etc/postfix/header_checks

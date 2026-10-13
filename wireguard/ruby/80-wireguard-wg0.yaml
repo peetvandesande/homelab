@@ -1,0 +1,28 @@
+# ruby: wg0, road-warrior clients
+network:
+  version: 2
+  tunnels:
+    wg0:
+      mode: wireguard
+      port: 51820
+      key: "<ruby wg0 private key>"
+      mtu: 1388
+      addresses:
+        - "192.168.204.254/24"
+        - "fd33:5692:1834:204::254/64"
+      peers:
+        # mba
+        - keys:
+            public: "W7UWzForntjOHcJLzhyfTxFyBIlkOW6hv3Qeu1/4vDY="
+            shared: "<psk mba>"
+          allowed-ips: ["192.168.204.1/32", "fd33:5692:1834:204::1/128"]
+        # iphone-peet
+        - keys:
+            public: "rp/DZg7hdcnVWpsQgR18K1Zg9DiCanwM1CDTw8l2DlE="
+            shared: "<psk iphone-peet>"
+          allowed-ips: ["192.168.204.2/32", "fd33:5692:1834:204::2/128"]
+        # mbp
+        - keys:
+            public: "8mmp6Oocg9szzNW5uGCQRksRfOJ8385FFhedtv96czM="
+            shared: "<psk mbp>"
+          allowed-ips: ["192.168.204.4/32", "fd33:5692:1834:204::4/128"]

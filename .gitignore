@@ -15,3 +15,7 @@
 # Python bytecode from syntax-checking scripts in relay/ trees
 __pycache__/
 *.pyc
+
+# WireGuard keys and PSKs - kept in ~/projects/homelab-private, never here
+*.key
+*.psk

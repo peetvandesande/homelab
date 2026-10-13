@@ -1,0 +1,20 @@
+--- /etc/nftables.conf	2026-10-08 20:44:28.305627422 +0000
++++ nftables.conf	2026-10-09 08:48:04.270284562 +0000
+@@ -9,7 +9,7 @@
+ #   46.105.253.72		WireGuard		additional, ens3
+ #   				WG, proxy outbound
+ #   192.168.204.0/24		WireGuard peers		wg0
+-#   172.31.1.0/24		WireGuard S2S transit	wg1 (home-inet), wg2 (jennie)
++#   172.31.1.0/24		WireGuard S2S transit	wg1 (home), wg2 (jennie)
+ #   fd33:5692:1834::/48		VPN ULA			all wg*
+ #   172.16.0.0/16		Docker			docker0, br-*
+ # ===========================================================================
+@@ -98,7 +98,7 @@
+ 
+         # --- WireGuard site-to-site: IPv6 primary address -------------------
+         # The S2S tunnels terminate on IPv6, and $PUB6 is the only IPv6
+-        # address. wg1's peer (home-inet) dials in from a dynamic ISP address;
++        # address. wg1's peer (home) dials in from a dynamic ISP address;
+         # wg2's peer is always jennie, so that one is pinned to its source.
+         iifname "ens3" ip6 daddr $PUB6 udp dport 51821 accept
+         iifname "ens3" ip6 saddr $JENNIE6 ip6 daddr $PUB6 udp dport 51822 accept

@@ -27,7 +27,9 @@ dependencies rather than a snapshot.
 
 `README.md` has the reference detail: networks, the routing-rule priority map,
 how the VPN policy routing works, and the two pieces of router-side state the
-DNS stack needs.
+DNS stack needs. `ORANGE.md` covers the WAN: the XGS-PON stick, the DHCP options
+Orange requires, and how to diagnose the PON. `tools/` holds one helper for it,
+not config.
 
 ## What depends on the router
 
