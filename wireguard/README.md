@@ -528,6 +528,8 @@ sudo netplan generate
 sudo networkctl reload
 ```
 
+wg3 also gives jennie the lab's internal names. Its `nameservers` block sends `home.` and `8.168.192.in-addr.arpa` to Pythia (`192.168.8.52`) as routing-only domains, so systemd-resolved queries Pythia over wg3 for those names and nothing else. This goes direct, like all of jennie's traffic to home, rather than via ruby's stub zones. Themis and Delphi would refuse jennie's queries. If wg3 is down, `.home` stops resolving, but the lab is unreachable then anyway. Check with `resolvectl query pythia.home`.
+
 **4c. home router.** Configure the new interface from `home/wg3.conf`:
 
 | Setting              | Value |

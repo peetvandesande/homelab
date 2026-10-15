@@ -123,6 +123,16 @@ wg2, wg3 and dummy0 are already up on jennie. What's left is forwarding and the 
 - [x] **3.4 Test wg3** (exit tests need 2.3/2.4 first)
   - *On jennie:* `sudo wg show wg3` (recent handshake from home); `ping -c3 172.31.1.10`; `ping -c3 192.168.8.1`; `traceroute -n 192.168.8.1` (one hop, to 192.168.8.1, since the router is the destination); `ping -M do -c3 -s 1360 172.31.1.10`
   - *From the laptop at home:* `curl -4 https://www.bbc.co.uk` exits via jennie. Check on the router before and after with `cat /sys/class/net/wgclient2/statistics/tx_packets` (the count rises). The IPv6 masquerade is tested under 3.3a. `ifconfig.co` isn't in the UK policy, so it correctly shows the home ISP address (the Orange IPv4 and `2a01:cb1c:…`), not jennie's.
+- [ ] **3.5 `.home` names on jennie** (*on jennie*, README Task 4b). Add the `nameservers` block from `83-wireguard-wg3.yaml` to the live, filled `/etc/netplan/83-wireguard-wg3.yaml`; don't reinstall the template over it.
+  ```bash
+  resolvectl status | head -3                      # jennie must be using systemd-resolved
+  dig @192.168.8.52 pythia.home +short             # Pythia reachable over wg3: 192.168.8.52
+  sudo netplan generate && grep -H Domains /run/systemd/network/*wg3*.network   # Domains=~home ~8.168.192.in-addr.arpa
+  sudo networkctl reload
+  resolvectl domain wg3; resolvectl dns wg3        # ~home ~8.168.192.in-addr.arpa; 192.168.8.52
+  resolvectl query pythia.home                     # 192.168.8.52, via wg3
+  resolvectl query 192.168.8.52                    # pythia.home
+  ```
 
 ***
 

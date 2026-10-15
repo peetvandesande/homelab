@@ -23,3 +23,11 @@ network:
       routes:
         - { to: "192.168.8.0/21", scope: link }
         - { to: "fd33:5692:1834:1000::/56", scope: link }
+      # The lab's internal names, straight from Pythia (its authoritative
+      # server) over wg3. The ~ makes these routing-only domains: resolved
+      # sends just home. and the lab's reverse zone here, everything else
+      # stays on jennie's normal resolver. Not Themis or Delphi - their ACLs
+      # admit only the home LAN and the Proxmox lab networks.
+      nameservers:
+        addresses: ["192.168.8.52"]
+        search: ["~home", "~8.168.192.in-addr.arpa"]
