@@ -192,7 +192,7 @@ Clients drop for a few seconds; home ↔ ruby is down until 4.5. Have 4.1 ready 
 
 ## Phase 6: end to end and reboots
 
-- [ ] **6.1 Service access from every site** (README Task 5e). *On jennie* and *from a home host*: `dig @192.168.204.254 mail.peetvandesande.com +short`, `nc -zv 192.168.204.254 587`, `nc -zv 192.168.204.254 4190`, and the same over `fd33:5692:1834:204::254`
+- [ ] **6.1 Service access from every site** (README Task 5e). *On jennie* and *from a home host*: `dig @192.168.204.254 mail.peetvandesande.com +short`, `dig @192.168.204.254 pythia.home +short` (192.168.8.52), `dig @192.168.204.254 -x 192.168.8.52 +short`, `nc -zv 192.168.204.254 587`, `nc -zv 192.168.204.254 4190`, and the same over `fd33:5692:1834:204::254`
 - [ ] **6.2 Paths** (README Task 7). *On jennie:* `traceroute -n 192.168.8.1` goes direct over wg3. *From home:* `traceroute -n 192.168.204.1` goes via ruby, and `traceroute -n 192.168.254.2` via jennie.
 - [ ] **6.3 Reboot ruby**, then check: `networkctl list`, `sudo wg show`, `ip rule`, `sudo ip6tables -S DOCKER-USER`, `systemctl is-active postfix dovecot named`, and `ss -lnt` for 587/465/4190 on both families
 - [ ] **6.4 Reboot jennie**, then check: `networkctl list`, `sudo wg show`, `sudo nft list ruleset | head`, `cat /proc/sys/net/ipv{4,6}/conf/all/forwarding`

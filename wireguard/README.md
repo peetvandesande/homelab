@@ -218,6 +218,8 @@ DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN
 | `172.31.1.0/24` | tunnel links: jennie's and the home router's own queries leave from their tunnel address |
 | `fd33:5692:1834::/48` | the whole VPN ULA prefix |
 
+The `wireguard` view also resolves the lab's internal names. `home` and `8.168.192.in-addr.arpa` are `static-stub` zones pointing at Pythia (`192.168.8.52`), the lab's authoritative server, reached over wg1. They don't go to Themis or Delphi because those only accept queries from the home LAN and the Proxmox lab networks. `disable-empty-zone "168.192.in-addr.arpa"` stops BIND's built-in RFC 1918 empty zone answering the lab's PTRs first. No DNSSEC exception is needed because ruby doesn't validate (`dnssec-validation no`). Check with `dig @192.168.204.254 pythia.home` from a client.
+
 Home hosts reach ruby over IPv6 from their **ULA** address (the router advertises a ULA `/64`; see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6)). Their ISP address isn't in wg1's allowed IPs, so it never gets through. That's by design.
 
 Start order: Postfix and Dovecot bind specific addresses, which must exist when they start, so Task 5e also makes both wait for systemd-networkd to finish configuring wg0 (and dummy0 for Dovecot):

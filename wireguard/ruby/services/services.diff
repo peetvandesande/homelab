@@ -67,6 +67,30 @@
  
      zone "." { type hint; file "/usr/share/dns/root.hints"; };
      zone "localhost" { type primary; file "/etc/bind/db.local"; };
+@@ -93,4 +107,23 @@
+         type primary;
+         file "/etc/bind/wireguard/204.168.192.in-addr.arpa";
+     };
++
++    // The lab's internal domain, from Pythia over wg1. static-stub rather
++    // than forward: Pythia is authoritative-only, so it is queried as the
++    // zone's server (RD=0) and BIND does any further resolution itself.
++    // Not Themis or Delphi - their ACLs admit only the home LAN and the
++    // Proxmox lab networks, not VPN sources.
++    zone "home" {
++        type static-stub;
++        server-addresses { 192.168.8.52; };
++    };
++
++    // Without this, BIND's automatic RFC 1918 empty zone answers for
++    // 168.192.in-addr.arpa and the lab's PTRs never reach Pythia.
++    disable-empty-zone "168.192.in-addr.arpa";
++
++    zone "8.168.192.in-addr.arpa" {
++        type static-stub;
++        server-addresses { 192.168.8.52; };
++    };
+ };
 --- /etc/postfix/master.cf
 +++ /etc/postfix/master.cf.new
 @@ -100,52 +100,47 @@
