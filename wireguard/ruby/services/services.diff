@@ -20,7 +20,7 @@
      // ------------------------------------------------------------------
 --- /etc/bind/named.conf.local
 +++ /etc/bind/named.conf.local.new
-@@ -11,6 +11,19 @@
+@@ -11,6 +11,20 @@
  // declared inside the internal view below.
  
  // ===========================================================================
@@ -30,6 +30,7 @@
 +// ===========================================================================
 +acl "vpn" {
 +    192.168.204.0/24;       // wg0 clients
++    192.168.205.0/24;       // jennie's wg0 clients
 +    192.168.8.0/21;         // home LANs
 +    192.168.254.0/24;       // site service addresses (dummy interfaces)
 +    172.31.1.0/24;          // site-to-site transit links
@@ -40,7 +41,7 @@
  // INTERNAL - the host itself and Docker containers
  //
  // No local copy of peetvandesande.com. The mail server and its containers
-@@ -40,7 +53,8 @@
+@@ -40,7 +54,8 @@
  };
  
  // ===========================================================================
@@ -50,7 +51,7 @@
  //
  // This zone deliberately contradicts the public copy: mail and imap resolve
  // to 192.168.204.254 so peers reach submission over the tunnel rather than
-@@ -55,12 +69,12 @@
+@@ -55,12 +70,12 @@
  // people's domains.
  // ===========================================================================
  view "wireguard" {
@@ -67,7 +68,7 @@
  
      zone "." { type hint; file "/usr/share/dns/root.hints"; };
      zone "localhost" { type primary; file "/etc/bind/db.local"; };
-@@ -93,4 +107,23 @@
+@@ -93,4 +108,23 @@
          type primary;
          file "/etc/bind/wireguard/204.168.192.in-addr.arpa";
      };

@@ -1,0 +1,46 @@
+; /etc/bind/wireguard/204.168.192.in-addr.arpa
+;
+; Reverse zone for the WireGuard range 192.168.204.0/24, served only to the
+; wireguard view. Private space, so no delegation exists or is needed: this is
+; authoritative purely for peers on the tunnel.
+;
+; Without it, every reverse lookup of a tunnel address escapes to the public
+; root, gets NXDOMAIN from the AS112 servers that absorb RFC 1918 reverse
+; traffic, and takes a timeout doing it. That shows up as sluggish SSH logins
+; and delayed log lines rather than as an obvious DNS fault.
+;
+; Higher TTL than the forward zone: these addresses are statically assigned
+; per peer and do not change when a client roams.
+;
+; Validate after every edit:
+;   named-checkzone 204.168.192.in-addr.arpa \
+;                   /etc/bind/wireguard/204.168.192.in-addr.arpa
+;   rndc reload 204.168.192.in-addr.arpa IN wireguard
+;
+; Bump the serial on every change. yyyymmddnn.
+
+$ORIGIN 204.168.192.in-addr.arpa.
+$TTL 3600
+
+@   IN  SOA vps-5ca50660.vps.ovh.net. hostmaster.peetvandesande.com. (
+            2026100901  ; serial
+            3600        ; refresh   (no secondary; value is inert)
+            900         ; retry     (inert)
+            604800      ; expire    (inert)
+            300 )       ; negative cache TTL
+
+    IN  NS  vps-5ca50660.vps.ovh.net.
+
+; ===========================================================================
+; The server end of the tunnel.
+;
+; Two names share 192.168.204.254. Only one PTR is given, and it is the mail
+; name: PTR is what appears in Postfix and Dovecot logs, so it should read as
+; the service a peer is talking to. Multiple PTRs for one address are legal
+; but make log correlation ambiguous.
+; ===========================================================================
+254   IN  PTR mail.peetvandesande.com.
+
+1	IN	PTR	mba.
+2	IN	PTR	iphone-peet.
+4	IN	PTR	mbp.

@@ -1,0 +1,32 @@
+# jennie: wg0, road-warrior clients - the same devices as on ruby's wg0, so
+# they can still reach home, ruby and the internet if ruby is down.
+#
+# Each client reuses the key pair it has on ruby (one key may have peers on
+# several servers) with a PSK of its own here. Host numbers match ruby's.
+network:
+  version: 2
+  tunnels:
+    wg0:
+      mode: wireguard
+      port: 51820
+      key: "<jennie wg0 private key>"
+      mtu: 1388
+      addresses:
+        - "192.168.205.254/24"
+        - "fd33:5692:1834:205::254/64"
+      peers:
+        # mba
+        - keys:
+            public: "W7UWzForntjOHcJLzhyfTxFyBIlkOW6hv3Qeu1/4vDY="
+            shared: "<psk jennie-mba>"
+          allowed-ips: ["192.168.205.1/32", "fd33:5692:1834:205::1/128"]
+        # iphone-peet
+        - keys:
+            public: "rp/DZg7hdcnVWpsQgR18K1Zg9DiCanwM1CDTw8l2DlE="
+            shared: "<psk jennie-iphone-peet>"
+          allowed-ips: ["192.168.205.2/32", "fd33:5692:1834:205::2/128"]
+        # mbp
+        - keys:
+            public: "8mmp6Oocg9szzNW5uGCQRksRfOJ8385FFhedtv96czM="
+            shared: "<psk jennie-mbp>"
+          allowed-ips: ["192.168.205.4/32", "fd33:5692:1834:205::4/128"]

@@ -1,0 +1,64 @@
+// /etc/bind/named.conf.options - jennie
+//
+// A RESOLVER ONLY, like ruby's: authoritative for nothing the public
+// Internet can see, and not listening on the public addresses. It serves
+// jennie's own clients (wg0) the same answers ruby gives its clients, so
+// they keep working, split-horizon and .home names included, if ruby is
+// down. It recurses for itself and does not depend on ruby for anything.
+//
+// No views: jennie has no Docker or other internal clients to tell apart
+// from the VPN, so Debian's named.conf and its default zones stay as they
+// are, and the rndc commands in the zone files copied from ruby work
+// without their "IN wireguard".
+
+// ===========================================================================
+// VPN sources: ruby's acl "vpn" plus jennie's own clients.
+// ===========================================================================
+acl "vpn" {
+    192.168.204.0/24;       // ruby's wg0 clients
+    192.168.205.0/24;       // jennie's wg0 clients
+    192.168.8.0/21;         // home LANs
+    192.168.254.0/24;       // site service addresses (dummy interfaces)
+    172.31.1.0/24;          // site-to-site transit links
+    fd33:5692:1834::/48;    // VPN ULA: clients, home LANs, sites, transit
+};
+
+options {
+    directory "/var/cache/bind";
+
+    // VPN addresses only: wg0's and dummy0's. The public addresses are
+    // deliberately absent, so nothing on ens3 answers DNS even if the
+    // firewall were flushed. automatic-interface-scan (the default, stated
+    // for the same reason as on ruby) picks up wg0 when it appears instead
+    // of failing to bind at boot.
+    listen-on { 127.0.0.1; 192.168.205.254; 192.168.254.2; };
+    listen-on-v6 { ::1; fd33:5692:1834:205::254; fd33:5692:1834:254::2; };
+    automatic-interface-scan yes;
+
+    // Validating, unlike ruby. ruby turns validation off for Postfix's
+    // sake (DANE, see its named.conf.options); jennie runs no mail. The
+    // split-horizon zones are local primaries and are not validated. home.
+    // and the lab's reverse zone are unsigned and reached by static-stub,
+    // so they are exempt (named.conf.local).
+    dnssec-validation auto;
+    validate-except { "home"; "8.168.192.in-addr.arpa"; };
+
+    // Without this, BIND's automatic RFC 1918 empty zone answers for
+    // 168.192.in-addr.arpa and the lab's PTRs never reach Pythia.
+    disable-empty-zone "168.192.in-addr.arpa";
+
+    // The VPN and jennie itself; anything else gets REFUSED.
+    recursion yes;
+    allow-recursion { vpn; localhost; };
+    allow-query { vpn; localhost; };
+    allow-query-cache { vpn; localhost; };
+    allow-transfer { none; };
+    allow-update { none; };
+
+    qname-minimization relaxed;
+    minimal-responses yes;
+
+    version none;
+    hostname none;
+    server-id none;
+};

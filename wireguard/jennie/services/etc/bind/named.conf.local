@@ -1,0 +1,72 @@
+// /etc/bind/named.conf.local - jennie
+//
+// The zones of ruby's "wireguard" view, so jennie's clients get the same
+// answers as ruby's. The split-horizon and 204 reverse zone files are
+// copies of ruby's /etc/bind/wireguard/ files: keep them identical, and
+// change them on both hosts together. Their answers still point at ruby
+// (192.168.204.254), so mail and the sites follow ruby's availability,
+// but resolution itself does not.
+//
+// Unlike ruby these zones are not in a view; see named.conf.options.
+
+// ===========================================================================
+// Split-horizon overrides, copied from ruby. See ruby's named.conf.local
+// for why these contradict the public zones and why those must stay
+// unsigned.
+// ===========================================================================
+zone "mail.peetvandesande.com" {
+    type primary;
+    file "/etc/bind/wireguard/mail.peetvandesande.com";
+    notify no;
+};
+
+zone "ruby.peetvandesande.com" {
+    type primary;
+    file "/etc/bind/wireguard/ruby.peetvandesande.com";
+    notify no;
+};
+
+zone "sogode.com" {
+    type primary;
+    file "/etc/bind/wireguard/sogode.com";
+    notify no;
+};
+
+zone "www.sogode.com" {
+    type primary;
+    file "/etc/bind/wireguard/www.sogode.com";
+    notify no;
+};
+
+// ===========================================================================
+// Reverse zones for the client ranges: ruby's copied, jennie's own.
+// ===========================================================================
+zone "204.168.192.in-addr.arpa" {
+    type primary;
+    file "/etc/bind/wireguard/204.168.192.in-addr.arpa";
+    notify no;
+};
+
+zone "205.168.192.in-addr.arpa" {
+    type primary;
+    file "/etc/bind/wireguard/205.168.192.in-addr.arpa";
+    notify no;
+};
+
+// ===========================================================================
+// The lab's internal domain, from Pythia over wg3 - direct, not via ruby.
+// static-stub rather than forward: Pythia is authoritative-only, so it is
+// queried as the zone's server (RD=0). Not Themis or Delphi - their ACLs
+// admit only the home LAN and the Proxmox lab networks, not VPN sources.
+// Both need options in named.conf.options: validate-except, because they
+// are unsigned, and disable-empty-zone for the reverse zone.
+// ===========================================================================
+zone "home" {
+    type static-stub;
+    server-addresses { 192.168.8.52; };
+};
+
+zone "8.168.192.in-addr.arpa" {
+    type static-stub;
+    server-addresses { 192.168.8.52; };
+};

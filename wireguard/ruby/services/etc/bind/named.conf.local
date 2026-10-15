@@ -17,6 +17,7 @@
 // ===========================================================================
 acl "vpn" {
     192.168.204.0/24;       // wg0 clients
+    192.168.205.0/24;       // jennie's wg0 clients
     192.168.8.0/21;         // home LANs
     192.168.254.0/24;       // site service addresses (dummy interfaces)
     172.31.1.0/24;          // site-to-site transit links

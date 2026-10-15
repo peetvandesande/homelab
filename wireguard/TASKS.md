@@ -217,6 +217,79 @@ Clients drop for a few seconds; home ↔ ruby is down until 4.5. Have 4.1 ready 
 
 ***
 
+## Phase 8: clients on jennie (README [Clients on jennie](README.md#clients-on-jennie))
+
+No impact on anything running: wg0 on jennie is a new tunnel, and the routes and rules elsewhere only match the new range. Copy the new `jennie/` files into `~/wg-jennie` first: `80-wireguard-wg0.yaml`, `nftables.conf` and `services/`.
+
+- [ ] **8.1 Key and PSKs** (*on jennie*). Keep copies in `~/projects/homelab-private/wireguard/`.
+  ```bash
+  cd ~/wg-jennie
+  (umask 077; wg genkey | sudo tee /etc/wireguard/wg0.key | wg pubkey)     # jennie wg0 public key, for the clients
+  for c in mba iphone-peet mbp; do (umask 077; wg genpsk | sudo tee /etc/wireguard/jennie-$c.psk >/dev/null); done
+  sed -i "s|<jennie wg0 private key>|$(sudo cat /etc/wireguard/wg0.key)|" 80-wireguard-wg0.yaml
+  for c in mba iphone-peet mbp; do sed -i "s|<psk jennie-$c>|$(sudo cat /etc/wireguard/jennie-$c.psk)|" 80-wireguard-wg0.yaml; done
+  grep -n '<' 80-wireguard-wg0.yaml || echo filled
+  ```
+- [ ] **8.2 Firewall** (*on jennie*): opens UDP 51820 on both families and adds wg0 to the VPN. Also open 51820 in OVH's firewall if it's in use (README Task 2f).
+  ```bash
+  sudo cp /etc/nftables.conf /etc/nftables.conf.bak-$(date +%F)
+  sudo install -m 644 nftables.conf /etc/nftables.conf
+  sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables
+  ```
+- [ ] **8.3 Install wg0** (*on jennie*)
+  ```bash
+  sudo install -m 600 80-wireguard-wg0.yaml /etc/netplan/ && sudo netplan generate && sudo networkctl reload
+  sudo wg show wg0; ip -br addr show wg0       # 192.168.205.254/24, fd33:5692:1834:205::254/64
+  ```
+- [ ] **8.4 BIND** (*on jennie*)
+  ```bash
+  sudo apt install bind9
+  sudo install -m 644 -o root -g bind services/etc/bind/named.conf.options services/etc/bind/named.conf.local /etc/bind/
+  sudo install -d -m 755 -o bind -g bind /etc/bind/wireguard
+  sudo install -m 644 -o bind -g bind services/etc/bind/wireguard/* /etc/bind/wireguard/
+  sudo named-checkconf -z && sudo systemctl restart named
+  sudo ss -lnup 'sport = 53'                                   # 205::254, 254::2, loopback; never 57.129.180.73
+  dig @192.168.205.254 mail.peetvandesande.com +short          # 192.168.204.254
+  dig @192.168.205.254 pythia.home +short                      # 192.168.8.52
+  dig @192.168.205.254 -x 192.168.8.52 +short                  # pythia.home.
+  dig @192.168.205.254 -x 192.168.205.1 +short                 # mba.
+  dig @192.168.205.254 www.bbc.co.uk +short                    # recursion works
+  dig @192.168.205.254 dnssec-failed.org | grep status         # SERVFAIL: validating
+  ```
+- [ ] **8.5 ruby: route back to jennie's clients** (*on ruby*). The live `/etc/netplan/82-wireguard-wg2.yaml` holds the real PSK, so add the two `205` routes from `ruby/82-wireguard-wg2.yaml` to it by hand rather than reinstalling. Then apply live without dropping wg2:
+  ```bash
+  sudo netplan generate
+  sudo ip route add 192.168.205.0/24 dev wg2 && sudo ip -6 route add fd33:5692:1834:205::/64 dev wg2
+  ip route get 192.168.205.1; ip -6 route get fd33:5692:1834:205::1     # both dev wg2
+  ```
+  ruby's DNS ACL gains `192.168.205.0/24` with its `acl "vpn"`, which goes live in 4.4.
+- [ ] **8.6 home: policy rules into wgclient2** (*on home*, `router/README.md`, "Site-to-site: the rules at 19000")
+  ```sh
+  cp /etc/config/network /etc/config/network.bak-$(date +%F)-jennie-clients
+  uci set network.s2s_wgclient2_205=rule
+  uci set network.s2s_wgclient2_205.dest='192.168.205.0/24'
+  uci set network.s2s_wgclient2_205.lookup='1002'
+  uci set network.s2s_wgclient2_205.priority='19000'
+  uci set network.s2s_wgclient2_205_6=rule6
+  uci set network.s2s_wgclient2_205_6.dest='fd33:5692:1834:205::/64'
+  uci set network.s2s_wgclient2_205_6.lookup='1002'
+  uci set network.s2s_wgclient2_205_6.priority='19000'
+  uci commit network && /etc/init.d/network reload
+  ip rule | grep 19000; ip -6 rule | grep 19000                   # five each
+  ip route get 192.168.205.1 from 192.168.8.1                      # dev wgclient2
+  ```
+- [ ] **8.7 Clients**: add the second tunnel on mba, mbp and iphone-peet (README [Client config](README.md#client-config)), with jennie's wg0 public key from 8.1 and each device's PSK. Then, with only the jennie tunnel up:
+  ```bash
+  ping 192.168.205.254 && ping6 fd33:5692:1834:205::254   # jennie
+  ping 192.168.8.52                                        # home, via wg3
+  ping 192.168.204.254                                     # ruby, via wg2
+  dig pythia.home +short                                   # 192.168.8.52, from jennie's BIND
+  curl -4 https://ifconfig.co                              # 57.129.180.73
+  curl -6 https://ifconfig.co                              # 2001:41d0:801:2000::180f
+  ```
+
+***
+
 ## Follow-ups (optional, outside the rollout)
 
 - [ ] **BIND reverse zone `204.168.192.in-addr.arpa`:** remove the stale PTRs `3 sylvie` and `5 home-inet`, and bump the serial

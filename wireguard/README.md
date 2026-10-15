@@ -46,7 +46,7 @@ Not yet: forwarding pinned in networkd (2a), the dummy renumbering (2e), the wg0
                         (+ the ISP's own IPv6 ranges)
 ```
 
-Three sites in a triangle, each pair with its own tunnel, plus the clients on ruby:
+Three sites in a triangle, each pair with its own tunnel, plus the clients on ruby. The same clients also have a second tunnel to jennie, so they keep working if ruby is down (see [Clients on jennie](#clients-on-jennie)):
 
 | Traffic                     | Path                     |
 |-----------------------------|--------------------------|
@@ -58,6 +58,9 @@ Three sites in a triangle, each pair with its own tunnel, plus the clients on ru
 | clients → IPv6 internet     | wg0 → ruby → wg2 → jennie → internet (NAT66) |
 | clients → IPv4 internet     | wg0 → ruby → internet (default), or via jennie per client (opt-in) |
 | home → internet via jennie  | wg3 → jennie → internet, for whatever the router chooses (e.g. the laptop, or BBC) |
+| jennie's clients ↔ home LANs | wg0 → jennie → wg3 |
+| jennie's clients ↔ ruby     | wg0 → jennie → wg2 |
+| jennie's clients → internet | wg0 → jennie → internet (NAT44/NAT66) |
 
 All three site-to-site tunnels run over IPv6:
 
@@ -75,12 +78,12 @@ There is no filtering inside the VPN.
 
 ### Interface naming
 
-Each tunnel uses the **same interface name and port on both ends**, so `wg3` means the jennie–home tunnel wherever you see it:
+Each tunnel uses the **same interface name and port on both ends**, so `wg3` means the jennie–home tunnel wherever you see it. `wg0` is the exception: it means *a server's client tunnel*, on 51820, and ruby's and jennie's are separate tunnels with separate ranges:
 
 | Host      | Interfaces          |
 |-----------|---------------------|
 | ruby      | wg0, wg1, wg2       |
-| jennie    | wg2, wg3            |
+| jennie    | wg0, wg2, wg3       |
 | home | wg1, wg3            |
 
 ### Netplan, not wg-quick
@@ -106,6 +109,7 @@ IPv6 inside the VPN uses the ULA prefix **`fd33:5692:1834::/48`** (randomly gene
 | wg1    | 51821 | 1388 | ruby – home     | ruby `172.31.1.1/30`, `fd33:5692:1834:ff01::1/64`   | home `172.31.1.2`, `…:ff01::2`  |
 | wg2    | 51822 | 1420 | ruby – jennie        | ruby `172.31.1.5/30`, `fd33:5692:1834:ff02::1/64`   | jennie `172.31.1.6`, `…:ff02::2`     |
 | wg3    | 51823 | 1388 | jennie – home   | jennie `172.31.1.9/30`, `fd33:5692:1834:ff03::1/64` | home `172.31.1.10`, `…:ff03::2` |
+| wg0    | 51820 | 1388 | jennie clients  | jennie `192.168.205.254/24`, `fd33:5692:1834:205::254/64` | per client, below |
 
 `172.31.1.0/24` is for site-to-site transit links, one `/30` each, paired with `fd33:5692:1834:ffNN::/64`. ruby takes the first address on its links. On links without ruby, the server takes the first address and the router the second. The next free link is `172.31.1.12/30`, `ff04::/64`, port 51824.
 
@@ -113,11 +117,13 @@ The home tunnels use MTU 1388 to allow for the home connection (e.g. PPPoE). wg2
 
 ### Clients (wg0)
 
-| Client      | IPv4             | IPv6                      |
-|-------------|------------------|---------------------------|
-| mba         | `192.168.204.1`  | `fd33:5692:1834:204::1`   |
-| iphone-peet | `192.168.204.2`  | `fd33:5692:1834:204::2`   |
-| mbp         | `192.168.204.4`  | `fd33:5692:1834:204::4`   |
+| Client      | IPv4             | IPv6                      | IPv4 on jennie   | IPv6 on jennie            |
+|-------------|------------------|---------------------------|------------------|---------------------------|
+| mba         | `192.168.204.1`  | `fd33:5692:1834:204::1`   | `192.168.205.1`  | `fd33:5692:1834:205::1`   |
+| iphone-peet | `192.168.204.2`  | `fd33:5692:1834:204::2`   | `192.168.205.2`  | `fd33:5692:1834:205::2`   |
+| mbp         | `192.168.204.4`  | `fd33:5692:1834:204::4`   | `192.168.205.4`  | `fd33:5692:1834:205::4`   |
+
+On jennie each client keeps its host number and reuses its key pair, with a PSK of its own.
 
 `.3` belonged to sylvie (retired) and `.5` to home (moved to wg1). Don't reuse them until the old peers are gone everywhere.
 
@@ -253,12 +259,59 @@ jennie had no firewall. `jennie/nftables.conf` follows ruby's conventions (inet 
 
 | Chain | Policy | Rules |
 |-------|--------|-------|
-| input | drop | loopback; established/related; ICMP and the ICMPv6 essentials; DHCPv4/DHCPv6 replies from OVH; SSH; UDP 51822 from ruby's IPv6 only; UDP 51823 from anywhere (home is dynamic); everything from wg2/wg3; a placeholder for public services |
+| input | drop | loopback; established/related; ICMP and the ICMPv6 essentials; DHCPv4/DHCPv6 replies from OVH; SSH; UDP 51822 from ruby's IPv6 only; UDP 51823 from anywhere (home is dynamic); UDP 51820 (wg0, clients) from anywhere on both families; everything from wg2/wg3; a placeholder for public services |
 | forward | drop | MSS clamping; wg ↔ wg; wg → ens3; ens3 → wg for established/related only |
 | output | accept | none |
 | nat (`inet wgnat`) | n/a | snat VPN IPv4 sources to `57.129.180.73` and VPN IPv6 (`fd33:5692:1834::/48`) to `2001:41d0:801:2000::180f`, on ens3 only |
 
 The forward chain can use a drop policy here, unlike on ruby, because jennie has no Docker bridges.
+
+***
+
+## Clients on jennie
+
+mba, mbp and iphone-peet each have a second tunnel, to jennie's `wg0` on the standard port 51820, so they can still reach home, ruby and the internet when ruby is down. The two tunnels are alternatives: a device runs one or the other, and the WireGuard apps only bring up one at a time anyway.
+
+- **Keys:** each device reuses the key pair it has on ruby. WireGuard allows one key to have peers on several servers. Each peer gets a fresh PSK on jennie.
+- **Addresses:** `192.168.205.0/24` and `fd33:5692:1834:205::/64`, with the same host number as on ruby.
+- **Endpoint:** jennie's public IPv4 *and* IPv6. Unlike the site-to-site tunnels, wg0 listens on both, since mobile networks are often IPv4-only.
+- **Reach:** home over wg3 and ruby over wg2, both direct from jennie. The other ends need routes back to `192.168.205.0/24` and `fd33:5692:1834:205::/64`. On ruby they're main-table routes in `82-wireguard-wg2.yaml`. On the router they're two policy rules at priority 19000 into table 1002, like the existing `s2s_*` rules (`router/README.md`). The router's firewall already accepts wgclient2 → lan.
+- **Internet:** exits via jennie with NAT44 and NAT66, both families, for every client. Nothing needs opting in.
+
+### DNS on jennie
+
+jennie runs its own BIND (`jennie/services/etc/bind/`), so jennie's clients don't depend on ruby for names. It gives the same answers as ruby's `wireguard` view:
+
+- **Split-horizon zones:** byte-for-byte copies of ruby's `/etc/bind/wireguard/` files, plus a reverse zone for `192.168.205.0/24`. Change them on both hosts together. The answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
+- **`home.` and the lab's reverse zone:** `static-stub` to Pythia over wg3, as on ruby.
+- **No views.** jennie has no Docker clients to tell apart from the VPN, so Debian's own `named.conf` and default zones stay. The same `acl "vpn"` as ruby's, plus jennie's clients, gates every query.
+- **Validating**, unlike ruby, which turns validation off for Postfix's DANE. `home.` and `8.168.192.in-addr.arpa` are unsigned, so they're listed in `validate-except`.
+- **Listens on** `192.168.205.254`, `fd33:5692:1834:205::254`, jennie's dummy0 addresses and loopback, never ens3.
+
+### Client config
+
+Add a second tunnel on each device, e.g. `jennie`, next to the existing one:
+
+```ini
+[Interface]
+PrivateKey = <the device's existing private key, from its ruby tunnel>
+Address    = 192.168.205.1/32, fd33:5692:1834:205::1/128     # mba; iphone-peet .2 / ::2, mbp .4 / ::4
+DNS        = 192.168.205.254, fd33:5692:1834:205::254
+
+[Peer]
+PublicKey    = <jennie wg0 public key>
+PresharedKey = <psk jennie-mba>
+Endpoint     = 57.129.180.73:51820
+AllowedIPs   = 0.0.0.0/0, ::/0
+```
+
+The IPv4 endpoint works on IPv6-only networks too, through the NAT64 that iOS and macOS synthesise. For a split tunnel, use the networks jennie routes in place of `0.0.0.0/0, ::/0`:
+
+```ini
+AllowedIPs = 192.168.205.0/24, 192.168.204.0/24, 192.168.8.0/21, 192.168.254.2/32, 192.168.254.253/32, 192.168.254.254/32, fd33:5692:1834:205::/64, fd33:5692:1834:204::/64, fd33:5692:1834:1000::/56, fd33:5692:1834:254::2/128, fd33:5692:1834:254::254/128, fd33:5692:1834:254::253/128
+```
+
+The steps are TASKS.md phase 8.
 
 ***
 
@@ -280,10 +333,12 @@ The forward chain can use a drop policy here, unlike on ruby, because jennie has
 | `ruby/services/services.diff` | none | none | All service changes as one diff |
 | `ruby/current-nft-ruleset` | none | none | Dump of ruby's live ruleset (2026-10-08), for reference |
 | `jennie/70-dummy0.yaml` | jennie | `/etc/netplan/` | dummy0 with `192.168.254.2`, `fd33:5692:1834:254::2` |
+| `jennie/80-wireguard-wg0.yaml` | jennie | `/etc/netplan/` | wg0, clients |
 | `jennie/82-wireguard-wg2.yaml` | jennie | `/etc/netplan/` | wg2, to ruby |
 | `jennie/83-wireguard-wg3.yaml` | jennie | `/etc/netplan/` | wg3, to home |
 | `jennie/networkd-forwarding.conf` | jennie | `/etc/systemd/networkd.conf.d/forwarding.conf` | IPv4/IPv6 forwarding (internet exit), owned by networkd |
 | `jennie/nftables.conf` | jennie | `/etc/nftables.conf` | jennie's whole firewall, including the exit's forwarding rules and NAT44/NAT66 |
+| `jennie/services/etc/bind/…` | jennie | same path under `/etc` | BIND for jennie's clients, with copies of ruby's split-horizon zones |
 | `home/wg1.conf` | home | router UI | wg1 settings in wg-quick format, as a reference |
 | `home/wg3.conf` | home | router UI | wg3 settings in wg-quick format, as a reference |
 | `fill-secrets.py` | none | none | Fills key/PSK placeholders (see Task 1) |
@@ -436,7 +491,7 @@ jennie's `82-wireguard-wg2.yaml` has the new addresses in its allowed IPs and ro
 | Host   | UDP, IPv6        | UDP, IPv4 |
 |--------|------------------|-----------|
 | ruby   | 51821, 51822     | 51820 (unchanged) |
-| jennie | 51822, 51823     | none |
+| jennie | 51820, 51822, 51823 | 51820 |
 
 ### Task 3: ruby ↔ jennie (wg2)
 

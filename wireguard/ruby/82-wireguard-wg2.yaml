@@ -24,6 +24,9 @@ network:
       routes:
         - { to: "192.168.254.2/32", scope: link }
         - { to: "fd33:5692:1834:254::2/128", scope: link }
+        # jennie's own clients (its wg0).
+        - { to: "192.168.205.0/24", scope: link }
+        - { to: "fd33:5692:1834:205::/64", scope: link }
         # Table 200 "via-jennie": Internet exit through jennie.
         - { to: "0.0.0.0/0", scope: link, table: 200 }
         - { to: "::/0", scope: link, table: 200 }
