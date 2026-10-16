@@ -253,6 +253,38 @@ ip route get 192.168.33.1 from 192.168.8.150 iif br-lan mark 0x1000  # via 192.1
 
 IPv4 only. There is no IPv6 equivalent.
 
+## Wi-Fi: clients that stop hearing multicast
+
+The LAN SSID is an MLO set (`mld0`): `rai2` (5 GHz) and `rax2` (6 GHz), plus
+the legacy `ra0`. A client on it can get into a state where it **receives no
+group-addressed frames from the AP** – no ARP requests, no solicited-node or
+all-nodes multicast – while unicast keeps working both ways. Found 2026-10-16
+on mbp, on `rax2`.
+
+It looks like a routing problem and is not one. Anything the client starts
+works, because its own ARP request or NS carries its link-layer address and the
+router learns it from that. What fails is the router having to *ask*: the
+neighbour entry goes `INCOMPLETE`/`FAILED` and the packet is dropped. The first
+sign was IPv6 from ruby to the laptop's ULA dying with `Address unreachable`
+from the router, because return traffic over a tunnel is the case where the
+router asks first.
+
+Ruled out on 2026-10-16: routing (`ip -6 route get` is `dev br-lan`), odhcpd's
+NDP proxy (`ndp=disabled`), the bridge's MLD snooping, and the MediaTek
+driver's own snooping (`igmpsn_enable`; the laptop *was* listed as a member of
+its groups, and `mwctl dev rax2 set multicast_snooping enable=0` made no
+difference). Group rekey is off (`rekey_meth=DISABLE`), so it is not a rekey.
+**Reconnecting the client's Wi-Fi fixes it**, which points at the client's group
+key state for the MLO link. The root cause is not known.
+
+To check a client, from the router – the neighbour state is the signal, so a
+client that ignores ping still answers:
+
+```sh
+ip neigh del <ipv4> dev br-lan; ping -c2 -W1 <ipv4> >/dev/null; ip neigh show <ipv4> dev br-lan
+# REACHABLE is fine; INCOMPLETE/FAILED on an awake client is this
+```
+
 ## Installed but deliberately off
 
 | Feature | State | Why |
