@@ -99,7 +99,9 @@ rules, provisioned from
 folder and read-only in the UI. Eighteen rules in two groups, `dns` and
 `fleet`, plus the heartbeat in `heartbeat.yaml` (see "Heartbeat" below) and
 the `outside` group in `outside.yaml`, which alerts on ruby and jennie probing
-each other's public side (`outside/CLAUDE.md`).
+each other's public side (`outside/CLAUDE.md`), and the `probes` group in
+`probes.yaml`, on the blackbox exporter at home: internet, tunnels, DNS end to
+end, and lab certificates.
 
 7. **Alert rules carry the Prometheus datasource uid, substituted at deploy
    time.** A rule needs `datasourceUid`, and the provisioned datasource has no

@@ -200,6 +200,65 @@ scrape_configs:
       - targets: ['192.168.8.52:8081']
         labels: {role: pythia, component: auth }
 
+  # Probes from inside the lab, by the blackbox exporter on this host
+  # (blackbox.yml, 127.0.0.1:9115 - plain HTTP on loopback, so no TLS). `kind`
+  # is what the rules in grafana/.../alerting/probes.yaml select on.
+  - job_name: blackbox
+    metrics_path: /probe
+    static_configs:
+      # The internet, two unrelated providers per family: one failing is theirs,
+      # both failing is ours.
+      - targets: ['1.1.1.1', '8.8.8.8']
+        labels: {kind: internet, family: v4, __param_module: icmp }
+      - targets: ['2606:4700:4700::1111', '2001:4860:4860::8888']
+        labels: {kind: internet, family: v6, __param_module: icmp }
+      # The tunnels, by the far end's dummy0 - the addresses services use.
+      - targets: ['192.168.254.254']
+        labels: {kind: tunnel, peer: ruby, family: v4, __param_module: icmp }
+      - targets: ['fd33:5692:1834:254::254']
+        labels: {kind: tunnel, peer: ruby, family: v6, __param_module: icmp }
+      - targets: ['192.168.254.2']
+        labels: {kind: tunnel, peer: jennie, family: v4, __param_module: icmp }
+      - targets: ['fd33:5692:1834:254::2']
+        labels: {kind: tunnel, peer: jennie, family: v6, __param_module: icmp }
+      # Resolution through Themis, end to end.
+      - targets: ['192.168.8.50']
+        labels: {kind: dns, check: public, __param_module: dns_public }
+      - targets: ['192.168.8.50']
+        labels: {kind: dns, check: internal, __param_module: dns_internal }
+      - targets: ['192.168.8.50:853']
+        labels: {kind: dns, check: dot, __param_module: dns_dot }
+      # Lab certificates: every enrolled host's own (via node-exporter, keep in
+      # step with the `node` job), plus the ones that are not the host
+      # certificate - the Proxmox GUI, step-ca itself, mailcow and HA.
+      - targets:
+          - '192.168.8.21:9100'
+          - '192.168.8.27:9100'
+          - '192.168.8.50:9100'
+          - '192.168.8.51:9100'
+          - '192.168.8.52:9100'
+          - '192.168.8.53:9100'
+          - '192.168.8.54:9100'
+          - '192.168.8.55:9100'
+          - '192.168.8.56:9100'
+          - '192.168.8.57:9100'
+          - '192.168.8.60:9100'
+          - '192.168.8.61:9100'
+          - '192.168.8.21:8006'
+          - '192.168.8.55:8443'
+          - '192.168.8.57:443'
+          - '192.168.8.90:443'
+        labels: {kind: tls, __param_module: tls_lab }
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+      - target_label: role
+        replacement: prometheus
+
   # ruby and jennie seen from outside (homelab/outside): each runs a blackbox
   # exporter that probes the OTHER's public side, and this host scrapes each
   # exporter over that server's own tunnel - jennie over wg3, ruby over wg1 -

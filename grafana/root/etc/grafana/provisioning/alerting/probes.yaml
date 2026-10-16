@@ -1,0 +1,267 @@
+# Probes from inside the lab: the blackbox exporter on Prometheus (.53), the
+# `blackbox` job in prometheus.yml. Managed from homelab/grafana.
+#
+# These alert on what a client experiences - can it reach the internet, the
+# tunnels, a resolved name, a trusted certificate - where homelab.yaml alerts
+# on components. A dead dnsdist shows in both, and that is fine.
+#
+# If the exporter itself is down every probe series disappears, which these
+# rules would read as fine; service-target-down in homelab.yaml covers it.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: probes
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: internet-unreachable
+        title: "Internet unreachable"
+        condition: B
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No {{ $labels.family }} internet: neither provider answers ping"
+          description: >-
+            Both providers failing at once is the home connection, not theirs. A total IPv4 outage cannot be delivered from here - the push goes over that connection - so in that case the Healthchecks.io heartbeat reports it instead.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max by (family) (max_over_time(probe_success{job="blackbox",kind="internet"}[5m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: tunnel-down
+        title: "VPN tunnel down"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.peer }} unreachable over its tunnel ({{ $labels.family }})"
+          description: >-
+            ruby is reached over wg1 and jennie over wg3. Mail, the split-horizon names and the VPN-routed sites depend on them. The outside group says whether the server itself is up.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max by (peer, family) (max_over_time(probe_success{job="blackbox",kind="tunnel"}[5m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: dns-resolution-failing
+        title: "DNS resolution failing"
+        condition: B
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Themis is not answering {{ $labels.check }} queries correctly"
+          description: >-
+            End to end: public is recursion through Delphi, internal is a .home name from Pythia, dot is DNS over TLS on :853. Every LAN client is affected.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max by (check) (max_over_time(probe_success{job="blackbox",kind="dns"}[5m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: lab-tls-failing
+        title: "Lab TLS handshake failing"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS to {{ $labels.instance }} fails or does not verify against the lab root"
+          description: >-
+            Unreachable, an untrusted chain, or an expired certificate. For a :9100 target host-down fires as well.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max by (instance) (max_over_time(probe_success{job="blackbox",kind="tls"}[15m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: lab-cert-expiring
+        title: "Lab certificate expiring"
+        condition: B
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }}'s certificate expires within 7 days"
+          description: >-
+            Lab certificates last 30 days and renew from 10 days left, daily, so under 7 means renewal has failed for three days. homelab-tls-renew on the host, or homelab-ha-tls-renew on lenora for Home Assistant. step-ca's own listener (pistis :8443) is excluded: step-ca issues itself a one-day certificate and renews it alone, so lab-tls-failing is the check that matters there.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '(min by (instance) (probe_ssl_earliest_cert_expiry{job="blackbox",kind="tls",instance!="192.168.8.55:8443"}) - time()) / 86400'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [7]

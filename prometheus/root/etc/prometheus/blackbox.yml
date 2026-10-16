@@ -1,0 +1,67 @@
+# blackbox_exporter on Prometheus (192.168.8.53), probing from inside the lab.
+# Managed from homelab/prometheus. Listens on 127.0.0.1:9115 only
+# (/etc/default/prometheus-blackbox-exporter); the probe list is the
+# `blackbox` job in prometheus.yml.
+#
+# ruby and jennie probe each other's public side as well - that is
+# homelab/outside, a separate exporter on each server.
+modules:
+  icmp:
+    prober: icmp
+    timeout: 5s
+
+  # A public name through Themis, so the whole chain answers: dnsdist, Delphi's
+  # recursion and DNSSEC validation, and the internet beyond. Plain DNS on :53,
+  # which is what every LAN client uses.
+  dns_public:
+    prober: dns
+    timeout: 5s
+    dns:
+      transport_protocol: udp
+      preferred_ip_protocol: ip4
+      query_name: peetvandesande.com
+      query_type: A
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp: ['.*\tIN\tA\t.*']
+
+  # An internal name: Themis -> Delphi -> Pythia, none of it touching the
+  # internet.
+  dns_internal:
+    prober: dns
+    timeout: 5s
+    dns:
+      transport_protocol: udp
+      preferred_ip_protocol: ip4
+      query_name: pythia.home
+      query_type: A
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp: ['.*\tIN\tA\t192\.168\.8\.52$']
+
+  # DoT on :853, verified against the lab root. Same rule chain as :53, so
+  # this tests the TLS frontend and its certificate.
+  dns_dot:
+    prober: dns
+    timeout: 5s
+    dns:
+      transport_protocol: tcp
+      dns_over_tls: true
+      preferred_ip_protocol: ip4
+      tls_config:
+        ca_file: /etc/homelab-tls/root_ca.crt
+      query_name: peetvandesande.com
+      query_type: A
+      valid_rcodes: [NOERROR]
+
+  # A TLS handshake verified against the lab root. Fails on an untrusted or
+  # expired certificate, and reports probe_ssl_earliest_cert_expiry, which is
+  # what the expiry rule reads.
+  tls_lab:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      tls: true
+      tls_config:
+        ca_file: /etc/homelab-tls/root_ca.crt

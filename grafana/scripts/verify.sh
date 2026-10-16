@@ -83,7 +83,8 @@ print(*[r[0] for r in c.execute(\"select uid from alert_rule\")], sep=\" \")"' 2
 fi
 for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-empty \
            rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat \
-           outside-probe-failing outside-vantage-down outside-cert-expiring; do
+           outside-probe-failing outside-vantage-down outside-cert-expiring \
+           internet-unreachable tunnel-down dns-resolution-failing lab-tls-failing lab-cert-expiring; do
   if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done

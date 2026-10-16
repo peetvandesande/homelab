@@ -1,0 +1,3 @@
+# Managed from homelab/prometheus. Loopback only: Prometheus on this host is
+# the only client, so the exporter needs neither TLS nor a firewall rule.
+ARGS="--config.file=/etc/prometheus/blackbox.yml --web.listen-address=127.0.0.1:9115"

@@ -36,8 +36,9 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    enrolled but not listed here is unmonitored; a host listed here but not
    enrolled fails its scrape the moment node-exporter goes TLS.
 
-5. **Every scrape job is TLS except `navidrome`, `traefik`, `outside-*` and
-   the broken `pve`.** The `outside-*` blackbox exporters on ruby and jennie
+5. **Every scrape job is TLS except `navidrome`, `traefik`, `blackbox`,
+   `outside-*` and the broken `pve`.** `blackbox` is this host's own exporter
+   on 127.0.0.1:9115 (invariant 7). The `outside-*` blackbox exporters on ruby and jennie
    listen only on their dummy0 address, reachable only through WireGuard, and
    neither server holds a lab certificate - `outside/CLAUDE.md`. Navidrome has one listener for both UI and `/metrics`, and the UI is
    deliberately plain HTTP because media streaming is LAN-only — see
@@ -55,6 +56,22 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    thing that can report that the alerting itself has stopped - a rule naming a
    datasource uid that no longer exists never evaluates and never errors. Without
    this job, every alert in `grafana/` is unmonitored.
+
+7. **The blackbox exporter here probes what a LAN client experiences**:
+   internet by ping (two providers per family), ruby and jennie over their
+   tunnels, DNS through Themis end to end (public, `.home`, DoT), and a
+   verified TLS handshake to every lab certificate. Config is
+   `root/etc/prometheus/blackbox.yml`, targets the `blackbox` job, rules
+   `grafana/.../alerting/probes.yaml`. Its TLS target list repeats the `node`
+   job's hosts - keep them in step.
+
+8. **ICMP works through `net.ipv4.ping_group_range`, not `CAP_NET_RAW`.** The
+   package's `setcap` leaves an empty file-capability xattr on the binary in
+   this unprivileged container, and a binary with file capabilities drops the
+   unit's ambient ones on exec, so a capability drop-in is silently useless.
+   `root/etc/sysctl.d/60-ping-group-range.conf` enables unprivileged echo
+   sockets instead, for gids 0-65535: in a user namespace the range may only
+   hold mapped gids, so systemd's usual `0 2147483647` is refused.
 
 ## Known broken, pre-existing
 
