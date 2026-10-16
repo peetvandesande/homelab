@@ -250,8 +250,10 @@ must go out is routed via ruby with a mailcow transport map. See
 Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
 (192.168.8.54) for dashboards and alerting. Two dashboards and eighteen alert
 rules are provisioned from `grafana/` — `homelab-dns` and `homelab-fleet`, with
-rule groups `dns` and `fleet`. The rules evaluate but **notify nowhere**: no
-contact point is configured, so they are UI-only until one is. Loki (192.168.8.56) is the log
+rule groups `dns` and `fleet`. They are delivered to
+**Home Assistant**, which pushes them to the phone (critical alerts break
+through Do Not Disturb) — `grafana/CLAUDE.md`, "Delivery". That path runs over
+the home connection, so it cannot report a home outage. Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
 twelve hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.

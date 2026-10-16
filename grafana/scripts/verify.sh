@@ -106,4 +106,26 @@ else
       "rules say '${inrules:-none}', Grafana has '${live:-none}' - re-run deploy.sh"
 fi
 
+echo "== alert delivery"
+# What Grafana loaded, from its own database: the policy's default receiver is
+# the home-assistant webhook. The deployed file must have its webhook id filled
+# in and be readable by grafana only. Whether HA then pushes to the phone is
+# not checkable from here - see CLAUDE.md, "Delivery", for the test payload.
+recv=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
+import sqlite3, json
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+r=c.execute(\"select alertmanager_configuration from alert_configuration order by id desc limit 1\").fetchone()
+am=json.loads(r[0])[\"alertmanager_config\"] if r else {}
+types={x[\"name\"]: [g[\"type\"] for g in x.get(\"grafana_managed_receiver_configs\", [])] for x in am.get(\"receivers\", [])}
+root=am.get(\"route\", {}).get(\"receiver\", \"\")
+print(root, *types.get(root, []))"' 2>/dev/null)
+if [[ "$recv" == "home-assistant webhook" ]]; then
+  pass "notification policy delivers to the home-assistant webhook"
+else bad "notification policy delivers to the home-assistant webhook" "got: ${recv:-none} - re-run deploy.sh"; fi
+perm=$(ssh -o BatchMode=yes root@$HOST \
+  'f=/etc/grafana/provisioning/alerting/notifications.yaml; grep -q "@@" $f && echo placeholder || stat -c "%a %U:%G" $f' 2>/dev/null)
+if [[ "$perm" == "640 root:grafana" ]]; then
+  pass "contact point has its webhook id and is 0640 root:grafana"
+else bad "contact point has its webhook id and is 0640 root:grafana" "got: ${perm:-none}"; fi
+
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

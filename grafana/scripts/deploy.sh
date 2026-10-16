@@ -8,9 +8,23 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
 HOST=192.168.8.54
+[[ -f secrets.env ]] || { echo "secrets.env missing - see CLAUDE.md, Alerting"; exit 1; }
+# shellcheck disable=SC1091
+source secrets.env
+[[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in secrets.env"; exit 1; }
 
 require_enrolled "$HOST"
 push "$HOST" root
+
+# The contact point carries a secret, so push() has just installed it with its
+# placeholder; overwrite it with the substituted copy, readable by grafana only.
+# Substituted here and sent over stdin, so the id never appears in a remote
+# command line.
+NOTIFY=etc/grafana/provisioning/alerting/notifications.yaml
+sed "s|@@HA_WEBHOOK_ID@@|${HA_WEBHOOK_ID}|g" "root/$NOTIFY" | $SSH "root@$HOST" "
+  cat > '/$NOTIFY.deploytmp' && chown root:grafana '/$NOTIFY.deploytmp' \
+  && chmod 0640 '/$NOTIFY.deploytmp' && mv -f '/$NOTIFY.deploytmp' '/$NOTIFY'"
+echo "   $NOTIFY (0640 root:grafana, HA webhook id substituted)"
 
 # Alert rules need the datasource's uid, and the provisioned Prometheus
 # datasource has none pinned - invariant 4 says why one must never be added to a

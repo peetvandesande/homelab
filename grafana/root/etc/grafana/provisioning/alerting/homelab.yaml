@@ -18,9 +18,8 @@
 # prometheus-pve-exporter on 127.0.0.1:9221 is not running, and a permanently
 # firing alert teaches you to ignore the lot.
 #
-# NOTE: there is no contact point here, so these surface in the Grafana UI
-# (Alerting -> Alert rules) and notify nowhere. Add a contact point and a
-# notification policy to get them delivered.
+# Delivery is provisioned separately, in notifications.yaml: every rule here
+# goes to Home Assistant and on to the phone, routed by its severity label.
 apiVersion: 1
 
 groups:

@@ -131,13 +131,45 @@ folder and read-only in the UI. Eighteen rules in two groups, `dns` and
    ignore all of them. Fix the exporter or delete the job; do not "fix" it by
    widening the rule.
 
-### There is no contact point yet
+### Delivery: Home Assistant, then the phone
 
-The rules evaluate and show up under **Alerting → Alert rules** in the UI, but
-no contact point or notification policy is provisioned, so nothing is
-*delivered*. That needs a destination this repo does not have — SMTP
-credentials, a webhook, a push service. Add
-`root/etc/grafana/provisioning/alerting/contactpoints.yaml` and a policy when
-you pick one; the rules already carry a `severity` label (`critical` or
-`warning`) to route on.
+`root/etc/grafana/provisioning/alerting/notifications.yaml` provisions one
+contact point, `home-assistant`, and the notification policy. The contact
+point is a webhook to `https://192.168.8.90/api/webhook/<id>`; a Home Assistant
+automation (`homeassistant/automations/grafana-alerts.yaml`) turns it into a
+push to the companion app on `peets_iphone`. Critical alerts arrive as iOS
+critical notifications, which sound through Do Not Disturb; warnings as
+ordinary ones; resolved-only notifications silently.
+
+The policy groups by folder and alert name, sends after 30 s (criticals 10 s)
+and repeats every 12 h (criticals 4 h). Provisioning it replaces the policy
+tree set in the UI.
+
+11. **The webhook id is a secret, substituted at deploy time.** It is the only
+    credential an HA webhook has, so the file carries `@@HA_WEBHOOK_ID@@` and
+    `deploy.sh` fills it from `secrets.env` (git-ignored, mode 600, one line:
+    `HA_WEBHOOK_ID=...`), sending the substituted copy over stdin and leaving
+    it `0640 root:grafana`. The same id goes into the HA automation, which is
+    pasted into HA's UI by hand; the automation also sets `local_only`.
+    `deploy.sh` refuses to run without `secrets.env`.
+
+12. **This path cannot report a home outage.** HA reaches the phone through the
+    companion app's push relay, over the home internet connection, and Grafana,
+    Prometheus and HA all run at home. An outage of the line, lenora or
+    Grafana itself is silent here by construction; detecting it needs
+    something outside the house.
+
+To test the HA side without waiting for a real alert, post a minimal payload
+from grafana's container (it is on the LAN, which `local_only` requires):
+
+```sh
+. grafana/secrets.env
+ssh root@192.168.8.54 "curl -sS -X POST -H 'Content-Type: application/json' \
+  https://192.168.8.90/api/webhook/$HA_WEBHOOK_ID -d '{\"commonLabels\":{\"alertname\":\"Test\"},
+  \"alerts\":[{\"status\":\"firing\",\"labels\":{\"alertname\":\"Test\",\"severity\":\"warning\"},
+  \"annotations\":{\"summary\":\"Test from Grafana\"}}]}'"
+```
+
+Change `warning` to `critical` to check the critical sound. Grafana's own
+"Test" button on the contact point works too, but needs a login.
 

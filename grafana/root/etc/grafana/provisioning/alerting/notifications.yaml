@@ -1,0 +1,54 @@
+# Where alerts go: Home Assistant, which pushes them to the phone.
+# Managed from homelab/grafana.
+#
+# The contact point is a plain webhook into a Home Assistant automation
+# (homelab/homeassistant/automations/grafana-alerts.yaml), which turns each
+# notification into a push via the companion app: critical alerts as iOS
+# critical notifications, which break through Do Not Disturb and silent mode,
+# warnings as ordinary ones. HA does the formatting, so Grafana sends its
+# standard webhook payload untemplated.
+#
+# @@HA_WEBHOOK_ID@@ is substituted by scripts/deploy.sh from secrets.env. The
+# webhook id is the only credential an HA webhook has, so it stays out of the
+# repo and the deployed file is 0640 root:grafana. The automation also sets
+# local_only, so the URL is useless from outside the LAN.
+#
+# The URL is an IP on purpose, not merely by the lab's habit: delivery must not
+# depend on DNS, or a "DNS component down" alert - the outage that most needs
+# reporting - could not be delivered. Same reasoning as homelab-tls-renew. HA's
+# certificate carries the IP SAN and Grafana's host trusts the lab CA, so this
+# is still verified TLS.
+#
+# Everything here goes through the home internet connection: HA reaches the
+# phone via the companion app's push relay. A home outage therefore cannot be
+# reported from here - that is what the Grafana Cloud heartbeat is for.
+#
+# Provisioning the policy tree replaces whatever was set in the UI.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: home-assistant
+    receivers:
+      - uid: home-assistant-webhook
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: "https://192.168.8.90/api/webhook/@@HA_WEBHOOK_ID@@"
+          httpMethod: POST
+
+policies:
+  - orgId: 1
+    receiver: home-assistant
+    group_by: [grafana_folder, alertname]
+    group_wait: 30s
+    group_interval: 5m
+    # Warnings repeat twice a day while they last; criticals more often, and
+    # are sent sooner.
+    repeat_interval: 12h
+    routes:
+      - receiver: home-assistant
+        object_matchers:
+          - [severity, "=", critical]
+        group_wait: 10s
+        repeat_interval: 4h

@@ -1,0 +1,95 @@
+# Grafana alerts -> iPhone. A reference copy: Home Assistant is configured in
+# its own UI, so this is pasted into a new automation there
+# (Settings -> Automations -> Create -> Edit in YAML), with the placeholder
+# replaced by HA_WEBHOOK_ID from homelab/grafana/secrets.env. Keep the two in
+# step: change it here, paste it there. HA drops these comments and reformats
+# the rest on save; copying its version back is fine, as long as the comments
+# stay. Change the actions in YAML mode: picking an action in the visual
+# editor resets its data to {}, and a notify call without a message fails.
+#
+# Grafana's contact point (grafana/.../alerting/notifications.yaml) POSTs its
+# standard webhook payload: `alerts`, each with `status`, `labels` and
+# `annotations`, plus `commonLabels`. One notification can carry several
+# alerts of one rule, firing and resolved together.
+#
+# - Any firing alert with severity=critical: an iOS critical notification,
+#   which sounds through Do Not Disturb and silent mode. iOS asks once for
+#   permission to allow critical alerts from the companion app.
+# - Firing warnings: an ordinary notification.
+# - Only resolved: a passive one, delivered without sound.
+#
+# The webhook id is the only credential, so local_only stays true: Grafana is
+# on the LAN, and nothing outside it can trigger this.
+#
+# The tap-through link uses grafana.home: it is for a person on the phone,
+# which resolves .home at home (Themis) and on either VPN tunnel (ruby's and
+# jennie's BIND stub home. to Pythia), and the certificate carries the name.
+# The webhook in the other direction stays an IP - see notifications.yaml.
+alias: Grafana alerts to iPhone
+description: >-
+  Grafana webhook to the companion app. Managed in
+  homelab/homeassistant/automations/grafana-alerts.yaml.
+triggers:
+  - trigger: webhook
+    webhook_id: <HA_WEBHOOK_ID from grafana/secrets.env>
+    allowed_methods:
+      - POST
+    local_only: true
+actions:
+  - if:
+      - condition: template
+        value_template: '{{ critical }}'
+    then:
+      - action: notify.mobile_app_peets_iphone
+        data:
+          title: '{{ title }}'
+          message: '{{ message }}'
+          data:
+            url: https://grafana.home:3000/alerting/list
+            group: grafana
+            push:
+              interruption-level: critical
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+    else:
+      - action: notify.mobile_app_peets_iphone
+        data:
+          title: '{{ title }}'
+          message: '{{ message }}'
+          data:
+            url: https://grafana.home:3000/alerting/list
+            group: grafana
+            push:
+              interruption-level: '{{ level }}'
+mode: queued
+max: 20
+variables:
+  alerts: '{{ trigger.json.alerts | default([], true) }}'
+  firing: '{{ alerts | selectattr(''status'', ''eq'', ''firing'') | list }}'
+  resolved: '{{ alerts | selectattr(''status'', ''eq'', ''resolved'') | list }}'
+  critical: |-
+    {{ firing | selectattr('labels.severity', 'defined')
+              | selectattr('labels.severity', 'eq', 'critical') | list | count > 0 }}
+  name: '{{ trigger.json.commonLabels.alertname | default(''Several alerts'', true) }}'
+  title: >-
+    {% if firing | count > 0 %}{{ '🔴' if critical else '🟠' }} {{ name }}{% if
+    firing | count > 1 %} ({{ firing | count }}){% endif %}{% else %}✅ {{ name
+    }} resolved{% endif %}
+  message: >-
+    {%- for a in (firing + resolved)[:5] %}
+
+    {{ '✓ ' if a.status == 'resolved' else '' }}{{ a.annotations.summary |
+    default(a.labels.alertname, true) }}
+
+    {%- endfor %}
+
+    {%- if (firing + resolved) | count > 5 %}
+
+    …and {{ (firing + resolved) | count - 5 }} more
+
+    {%- endif %}
+  level: >-
+    {{ 'critical' if critical else ('active' if firing | count > 0 else
+    'passive') }}

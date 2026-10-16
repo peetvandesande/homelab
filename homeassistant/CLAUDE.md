@@ -10,7 +10,14 @@ scripts/deploy.sh   install the renewal driver + timer on lenora
 scripts/verify.sh   smoke test TLS and the renewal path
 haos/ha-tls.py      runs inside the core container - CSR, renew, info
 lenora/             the driver and its systemd timer
+automations/        reference copies of automations other directories rely on
 ```
+
+`automations/grafana-alerts.yaml` is the one exception to "HA's own config is
+not managed here": Grafana's alert delivery depends on it, so a reference
+copy lives in the repo. HA still holds the live one, pasted in through the UI
+with the webhook id from `grafana/secrets.env`. Change it here first, then
+paste it there.
 
 ## Why the renewal lives on lenora
 
