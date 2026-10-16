@@ -5,10 +5,12 @@
 // combined with the listen-on list in named.conf.options means the public
 // addresses have no DNS service at all.
 //
-// Debian's /etc/bind/named.conf includes named.conf.default-zones, which
-// declares zones OUTSIDE any view. That is a configuration error once views
-// exist. The supplied named.conf drops that include; the default zones are
-// declared inside the internal view below.
+// No localhost, 0, 127 or 255 zones in either view. Debian's bind9 dropped
+// db.local, db.0, db.127, db.255 and named.conf.default-zones in 9.20.5,
+// relying on BIND's automatic empty zones (0.in-addr.arpa, 127.in-addr.arpa,
+// 255.255.255.255.in-addr.arpa) instead; named-checkconf -z fails while a
+// zone still names one of those files. localhost itself gets NXDOMAIN, as
+// on jennie: hosts resolve it from /etc/hosts.
 
 // ===========================================================================
 // VPN sources: everything reachable over WireGuard. A site's own traffic to
@@ -41,10 +43,6 @@ view "internal" {
     allow-query-cache { 127.0.0.0/8; ::1; 172.16.0.0/16; };
 
     zone "." { type hint; file "/usr/share/dns/root.hints"; };
-    zone "localhost" { type primary; file "/etc/bind/db.local"; };
-    zone "127.in-addr.arpa" { type primary; file "/etc/bind/db.127"; };
-    zone "0.in-addr.arpa" { type primary; file "/etc/bind/db.0"; };
-    zone "255.in-addr.arpa" { type primary; file "/etc/bind/db.255"; };
 
     zone "docker.local" {
         type master;
@@ -78,7 +76,6 @@ view "wireguard" {
     allow-query-cache { vpn; };
 
     zone "." { type hint; file "/usr/share/dns/root.hints"; };
-    zone "localhost" { type primary; file "/etc/bind/db.local"; };
 
     zone "mail.peetvandesande.com" {
         type primary;
