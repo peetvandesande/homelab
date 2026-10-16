@@ -267,7 +267,7 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
   ip route get 192.168.205.1; ip -6 route get fd33:5692:1834:205::1     # both dev wg2
   ```
   ruby's DNS ACL needs `192.168.205.0/24` in its `acl "vpn"` too. The repo's `named.conf.local` has had it since 2026-10-15; check the live one with `grep 205 /etc/bind/named.conf.local`, and if it's missing add the line and `sudo named-checkconf && sudo rndc reconfig`.
-- [ ] **8.6 home: policy rules into wgclient2** (*on home*, `router/README.md`, "Site-to-site: the rules at 19000")
+- [x] **8.6 home: policy rules into wgclient2** (*on home*, `router/README.md`, "Site-to-site: the rules at 19000")
   ```sh
   cp /etc/config/network /etc/config/network.bak-$(date +%F)-jennie-clients
   uci set network.s2s_wgclient2_205=rule

@@ -187,7 +187,9 @@ hit `32766 lookup main` before `90054 iif lo lookup 1001`, and main carries
 unreachable route, so replies went **out of the WAN**, handing RFC1918
 destinations to Orange.
 
-Fixed 2026-10-11 with four policy rules per family, named `s2s_*` in `uci`:
+Fixed 2026-10-11 with four policy rules per family, named `s2s_*` in `uci`; a
+fifth, for jennie's VPN clients, followed on 2026-10-16
+(`network.bak-2026-10-16-jennie-clients`):
 
 | Destination | Table | Tunnel |
 |---|---|---|
@@ -195,6 +197,7 @@ Fixed 2026-10-11 with four policy rules per family, named `s2s_*` in `uci`:
 | `192.168.254.254`, `fd33:5692:1834:254::254` | 1001 | wgclient1 |
 | `192.168.254.253`, `fd33:5692:1834:254::253` | 1001 | wgclient1 |
 | `192.168.254.2`, `fd33:5692:1834:254::2` | 1002 | wgclient2 |
+| `192.168.205.0/24`, `fd33:5692:1834:205::/64` | 1002 | wgclient2 |
 
 Four things worth knowing about them:
 
@@ -221,8 +224,8 @@ Four things worth knowing about them:
 Verify, from the router:
 
 ```sh
-ip  rule | grep 19000        # four
-ip -6 rule | grep 19000      # four
+ip  rule | grep 19000        # five
+ip -6 rule | grep 19000      # five
 ip    route get 192.168.204.254          from 192.168.8.1
 ip -6 route get fd33:5692:1834:204::254  from fd33:5692:1834:1000::1
 ping -c2 -I 192.168.8.1 192.168.204.254
