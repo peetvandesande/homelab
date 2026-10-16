@@ -6,7 +6,7 @@ ruby and jennie each have a clone of this repo at `~/homelab`. Unless a task say
 
 **Never fill secrets into the clone:** the repo is public, and a filled file there is one `git add` from being pushed. Install the template to its destination and fill it there. Phases 0–7 predate the clones and ran from copies in `~/wg` and `~/wg-jennie`, so their commands say so.
 
-`[x]` = done (phase 0 verified on ruby 2026-10-09; phases 1–7 reported done 2026-10-16), `[ ]` = to do. Phases 1–3 don't disturb anything running; phase 4 is the only one with downtime.
+`[x]` = done (phase 0 verified on ruby 2026-10-09; phases 1–7 reported done 2026-10-16; 8.1–8.5 done 2026-10-16, 8.4 checked on jennie), `[ ]` = to do. Phases 1–3 don't disturb anything running; phase 4 is the only one with downtime.
 
 ***
 
@@ -222,7 +222,7 @@ Clients drop for a few seconds; home ↔ ruby is down until 4.5. Have 4.1 ready 
 
 No impact on anything running: wg0 on jennie is a new tunnel, and the routes and rules elsewhere only match the new range. `git -C ~/homelab pull` on jennie and ruby first.
 
-- [ ] **8.1 Key and PSKs** (*on jennie*). The template is installed first and filled in `/etc/netplan`, never in the clone. Keep copies of the key and PSKs in `~/projects/homelab-private/wireguard/`.
+- [x] **8.1 Key and PSKs** (*on jennie*). The template is installed first and filled in `/etc/netplan`, never in the clone. Keep copies of the key and PSKs in `~/projects/homelab-private/wireguard/`.
   ```bash
   cd ~/homelab/wireguard
   (umask 077; wg genkey | sudo tee /etc/wireguard/wg0.key | wg pubkey)     # jennie wg0 public key, for the clients
@@ -234,18 +234,18 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
   sudo grep -n '<' $F || echo filled
   git status --short                                                        # clean: nothing filled in the clone
   ```
-- [ ] **8.2 Firewall** (*on jennie*): opens UDP 51820 on both families and adds wg0 to the VPN.
+- [x] **8.2 Firewall** (*on jennie*): opens UDP 51820 on both families and adds wg0 to the VPN.
   ```bash
   sudo cp /etc/nftables.conf /etc/nftables.conf.bak-$(date +%F)
   sudo install -m 644 jennie/nftables.conf /etc/nftables.conf
   sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables
   ```
-- [ ] **8.3 Install wg0** (*on jennie*)
+- [x] **8.3 Install wg0** (*on jennie*)
   ```bash
   sudo netplan generate && sudo networkctl reload                # the file was installed and filled in 8.1
   sudo wg show wg0; ip -br addr show wg0       # 192.168.205.254/24, fd33:5692:1834:205::254/64
   ```
-- [ ] **8.4 BIND** (*on jennie*)
+- [x] **8.4 BIND** (*on jennie*)
   ```bash
   sudo apt install bind9
   sudo install -m 644 -o root -g bind jennie/services/etc/bind/named.conf.options jennie/services/etc/bind/named.conf.local /etc/bind/
@@ -260,7 +260,7 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
   dig @192.168.205.254 www.bbc.co.uk +short                    # recursion works
   dig @192.168.205.254 dnssec-failed.org | grep status         # SERVFAIL: validating
   ```
-- [ ] **8.5 ruby: route back to jennie's clients** (*on ruby*). The live `/etc/netplan/82-wireguard-wg2.yaml` holds the real PSK, so add the two `205` routes from `ruby/82-wireguard-wg2.yaml` to it by hand rather than reinstalling. Then apply live without dropping wg2:
+- [x] **8.5 ruby: route back to jennie's clients** (*on ruby*). The live `/etc/netplan/82-wireguard-wg2.yaml` holds the real PSK, so add the two `205` routes from `ruby/82-wireguard-wg2.yaml` to it by hand rather than reinstalling. Then apply live without dropping wg2:
   ```bash
   sudo netplan generate
   sudo ip route add 192.168.205.0/24 dev wg2 && sudo ip -6 route add fd33:5692:1834:205::/64 dev wg2
