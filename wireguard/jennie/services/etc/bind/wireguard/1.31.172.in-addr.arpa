@@ -1,9 +1,10 @@
 ; /etc/bind/wireguard/1.31.172.in-addr.arpa
 ;
 ; Reverse zone for the site-to-site transit links, 172.31.1.0/24. Private
-; space, so no delegation exists or is needed. Without it, reverse lookups
-; of tunnel addresses (traceroute, sshd, log lines) escape to the AS112
-; servers and time out.
+; space, so no delegation exists or is needed. BIND's automatic
+; 31.172.in-addr.arpa empty zone already answers NXDOMAIN at once; this
+; zone, beneath it, gives the tunnel addresses names (traceroute, sshd,
+; log lines).
 ;
 ; Identical on ruby and jennie: change both together.
 ;

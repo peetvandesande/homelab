@@ -1,13 +1,13 @@
 ; /etc/bind/wireguard/4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa
 ;
 ; Reverse zone for the VPN's ULA prefix, fd33:5692:1834::/48. ULA space, so
-; no delegation exists or is needed. Without it, reverse lookups of VPN
-; IPv6 addresses escape to the public root and time out. It covers the
-; whole /48, so the home LANs' SLAAC addresses (1000::/56), which have no
-; PTRs, get a fast NXDOMAIN instead.
+; no delegation exists or is needed. BIND's automatic d.f.ip6.arpa empty
+; zone already answers NXDOMAIN at once; this zone, beneath it, adds names.
+; It covers the whole /48, so the home LANs' SLAAC addresses (1000::/56),
+; which have no PTRs, still get a fast NXDOMAIN.
 ;
 ; Identical on ruby and jennie: change both together. The PTRs match the
-; IPv4 reverse zones (204, 205 and 1.31.172).
+; IPv4 reverse zones (204, 205, 254 and 1.31.172).
 ;
 ; Each block sets $ORIGIN to its /64, so a record's name is the 16 nibbles
 ; of the interface ID, last nibble first. To get one:
@@ -25,7 +25,7 @@ $ORIGIN 4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa.
 $TTL 3600
 
 @   IN  SOA vps-5ca50660.vps.ovh.net. hostmaster.peetvandesande.com. (
-            2026101601  ; serial
+            2026101602  ; serial
             3600        ; refresh   (no secondary; value is inert)
             900         ; retry     (inert)
             604800      ; expire    (inert)
@@ -55,6 +55,8 @@ $ORIGIN 5.0.2.0.4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa.
 ; fd33:5692:1834:254::/64 - site service addresses (dummies)
 ; ===========================================================================
 $ORIGIN 4.5.2.0.4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa.
+4.5.2.0.0.0.0.0.0.0.0.0.0.0.0.0	IN	PTR	mail.peetvandesande.com.
+3.5.2.0.0.0.0.0.0.0.0.0.0.0.0.0	IN	PTR	ruby.
 2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0	IN	PTR	jennie.
 
 ; ===========================================================================

@@ -297,7 +297,7 @@ mba, mbp and iphone-peet each have a second tunnel, to jennie's `wg0` on the sta
 
 jennie runs its own BIND (`jennie/services/etc/bind/`), so jennie's clients don't depend on ruby for names. It gives the same answers as ruby's `wireguard` view:
 
-- **Split-horizon zones:** byte-for-byte copies of ruby's `/etc/bind/wireguard/` files, plus a reverse zone for `192.168.205.0/24`. The transit (`1.31.172.in-addr.arpa`) and ULA (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`) reverse zones are shared the same way, and the repo's copies in `jennie/services/etc/bind/wireguard/` are the ones installed on ruby too. Change them on both hosts together. The answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
+- **Split-horizon zones:** byte-for-byte copies of ruby's `/etc/bind/wireguard/` files, plus a reverse zone for `192.168.205.0/24`. That one, and the service-address (`254.168.192.in-addr.arpa`), transit (`1.31.172.in-addr.arpa`) and ULA (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`) reverse zones, are shared the same way, and the repo's copies in `jennie/services/etc/bind/wireguard/` are the ones installed on ruby too. Change them on both hosts together. The answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
 - **`home.` and the lab's reverse zone:** `static-stub` to Pythia over wg3, as on ruby.
 - **No views.** jennie has no Docker clients to tell apart from the VPN, so Debian's own `named.conf` and default zones stay. The same `acl "vpn"` as ruby's, plus jennie's clients, gates every query.
 - **Validating**, unlike ruby, which turns validation off for Postfix's DANE. `home.` and `8.168.192.in-addr.arpa` are unsigned, so they're listed in `validate-except`.
@@ -353,7 +353,7 @@ The steps are TASKS.md phase 8.
 | `jennie/83-wireguard-wg3.yaml` | jennie | `/etc/netplan/` | wg3, to home |
 | `jennie/networkd-forwarding.conf` | jennie | `/etc/systemd/networkd.conf.d/forwarding.conf` | IPv4/IPv6 forwarding (internet exit), owned by networkd |
 | `jennie/nftables.conf` | jennie | `/etc/nftables.conf` | jennie's whole firewall, including the exit's forwarding rules and NAT44/NAT66 |
-| `jennie/services/etc/bind/…` | jennie (zone files: ruby too) | same path under `/etc` | BIND for jennie's clients, with copies of ruby's split-horizon zones; the transit and ULA reverse zones and `mail.peetvandesande.com` are installed on both |
+| `jennie/services/etc/bind/…` | jennie (zone files: ruby too) | same path under `/etc` | BIND for jennie's clients, with copies of ruby's split-horizon zones; the 205, 254, transit and ULA reverse zones and `mail.peetvandesande.com` are installed on both |
 | `home/wg1.conf` | home | router UI | wg1 settings in wg-quick format, as a reference |
 | `home/wg3.conf` | home | router UI | wg3 settings in wg-quick format, as a reference |
 | `fill-secrets.py` | none | none | Fills key/PSK placeholders (see Task 1) |

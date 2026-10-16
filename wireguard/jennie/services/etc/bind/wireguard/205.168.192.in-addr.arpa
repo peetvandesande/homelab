@@ -1,14 +1,17 @@
-; /etc/bind/wireguard/205.168.192.in-addr.arpa - jennie
+; /etc/bind/wireguard/205.168.192.in-addr.arpa
 ;
 ; Reverse zone for jennie's client range 192.168.205.0/24 (wg0), the
 ; counterpart of ruby's 204.168.192.in-addr.arpa. Private space, so no
 ; delegation exists or is needed. Without it, reverse lookups of client
 ; addresses escape to the AS112 servers and time out.
 ;
+; Identical on ruby and jennie: change both together.
+;
 ; Validate after every edit:
 ;   named-checkzone 205.168.192.in-addr.arpa \
 ;                   /etc/bind/wireguard/205.168.192.in-addr.arpa
-;   rndc reload 205.168.192.in-addr.arpa
+;   rndc reload 205.168.192.in-addr.arpa IN wireguard     # ruby
+;   rndc reload 205.168.192.in-addr.arpa                  # jennie
 ;
 ; Bump the serial on every change. yyyymmddnn.
 

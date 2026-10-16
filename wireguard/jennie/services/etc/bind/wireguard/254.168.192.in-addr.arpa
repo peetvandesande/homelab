@@ -1,0 +1,38 @@
+; /etc/bind/wireguard/254.168.192.in-addr.arpa
+;
+; Reverse zone for the sites' service addresses, 192.168.254.0/24 (the
+; dummy interfaces). Private space, so no delegation exists or is needed.
+; Both hosts disable BIND's automatic 168.192.in-addr.arpa empty zone so
+; that the lab's PTRs reach Pythia; without this zone, lookups of these
+; addresses escape to the AS112 servers and time out.
+;
+; Identical on ruby and jennie: change both together. The PTRs match the
+; 254::/64 block of the ULA zone.
+;
+; Validate after every edit:
+;   named-checkzone 254.168.192.in-addr.arpa \
+;                   /etc/bind/wireguard/254.168.192.in-addr.arpa
+;   rndc reload 254.168.192.in-addr.arpa IN wireguard     # ruby
+;   rndc reload 254.168.192.in-addr.arpa                  # jennie
+;
+; Bump the serial on every change. yyyymmddnn.
+
+$ORIGIN 254.168.192.in-addr.arpa.
+$TTL 3600
+
+@   IN  SOA vps-5ca50660.vps.ovh.net. hostmaster.peetvandesande.com. (
+            2026101601  ; serial
+            3600        ; refresh   (no secondary; value is inert)
+            900         ; retry     (inert)
+            604800      ; expire    (inert)
+            300 )       ; negative cache TTL
+
+    IN  NS  vps-5ca50660.vps.ovh.net.
+
+; ruby: dummy0 carries the mail services (IMAP, ManageSieve), so it reads
+; as mail, like 192.168.204.254. dummy1 is ruby itself.
+254	IN	PTR	mail.peetvandesande.com.
+253	IN	PTR	ruby.
+
+; jennie: dummy0
+2	IN	PTR	jennie.
