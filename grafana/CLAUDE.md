@@ -97,7 +97,7 @@ out and no Alertmanager running — so the rules are Grafana unified-alerting
 rules, provisioned from
 `root/etc/grafana/provisioning/alerting/homelab.yaml` into the same `Homelab`
 folder and read-only in the UI. Eighteen rules in two groups, `dns` and
-`fleet`.
+`fleet`, plus the heartbeat in `heartbeat.yaml` (see "Heartbeat" below).
 
 7. **Alert rules carry the Prometheus datasource uid, substituted at deploy
    time.** A rule needs `datasourceUid`, and the provisioned datasource has no
@@ -147,9 +147,9 @@ tree set in the UI.
 
 11. **The webhook id is a secret, substituted at deploy time.** It is the only
     credential an HA webhook has, so the file carries `@@HA_WEBHOOK_ID@@` and
-    `deploy.sh` fills it from `secrets.env` (git-ignored, mode 600, one line:
-    `HA_WEBHOOK_ID=...`), sending the substituted copy over stdin and leaving
-    it `0640 root:grafana`. The same id goes into the HA automation, which is
+    `deploy.sh` fills it from `secrets.env` (git-ignored, mode 600:
+    `HA_WEBHOOK_ID=...`, plus `HEALTHCHECKS_PING_URL` below), sending the
+    substituted copy over stdin and leaving it `0640 root:grafana`. The same id goes into the HA automation, which is
     pasted into HA's UI by hand; the automation also sets `local_only`.
     `deploy.sh` refuses to run without `secrets.env`.
 
@@ -157,7 +157,7 @@ tree set in the UI.
     companion app's push relay, over the home internet connection, and Grafana,
     Prometheus and HA all run at home. An outage of the line, lenora or
     Grafana itself is silent here by construction; detecting it needs
-    something outside the house.
+    something outside the house - the heartbeat below.
 
 To test the HA side without waiting for a real alert, post a minimal payload
 from grafana's container (it is on the LAN, which `local_only` requires):
@@ -173,3 +173,21 @@ ssh root@192.168.8.54 "curl -sS -X POST -H 'Content-Type: application/json' \
 Change `warning` to `critical` to check the critical sound. Grafana's own
 "Test" button on the contact point works too, but needs a login.
 
+### Heartbeat: Healthchecks.io
+
+`heartbeat.yaml` holds one rule, `heartbeat`, that fires whenever
+`sum(up{job="node"}) > 0`, i.e. always while home is healthy. Its label
+`heartbeat=true` routes it, ahead of every other route, to the `healthchecks`
+contact point: a webhook to the check's ping URL, re-sent every 5 minutes. The
+check on Healthchecks.io (period 5 min, grace 10 min) alerts from outside when
+the pings stop - the line, lenora, Prometheus, rule evaluation or Grafana's
+notifier, whichever broke. Healthchecks.io's own notifications are configured
+there, not here.
+
+13. **Everything other than a healthy answer must stop the pings.** So the
+    query asks Prometheus rather than using `vector(1)`, `noDataState` and
+    `execErrState` are `OK`, and the contact point has `disableResolveMessage:
+    true` - a resolve is a POST as well, and Healthchecks.io would take it as
+    a ping. The ping URL is the check's only credential (anyone holding it can
+    fake the heartbeat), so it is substituted from `secrets.env` like the
+    webhook id.

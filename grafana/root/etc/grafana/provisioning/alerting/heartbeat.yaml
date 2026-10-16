@@ -1,0 +1,69 @@
+# Dead man's switch: an alert that fires all the time while home is healthy, and
+# goes out to Healthchecks.io instead of the phone. Managed from homelab/grafana.
+#
+# Delivery here runs over the home connection (notifications.yaml), so it cannot
+# report a home outage. Healthchecks.io can: notifications.yaml routes this rule
+# to a webhook on the check's ping URL, re-sent every ~5 minutes, and when the
+# pings stop Healthchecks.io alerts from outside. One ping proves the line, the
+# Prometheus datasource, rule evaluation and Grafana's notifier all work.
+#
+# The query asks Prometheus whether it is scraping anything, rather than
+# vector(1), so a dead Prometheus stops the pings too. noDataState and
+# execErrState are OK for the same reason: anything other than a healthy answer
+# must silence the heartbeat, not keep it alive.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: heartbeat
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: heartbeat
+        title: "Heartbeat"
+        condition: B
+        for: 0s
+        labels:
+          heartbeat: "true"
+        annotations:
+          summary: "Home is up - pings Healthchecks.io, never reaches the phone"
+        noDataState: OK
+        execErrState: OK
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'sum(up{job="node"})'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]

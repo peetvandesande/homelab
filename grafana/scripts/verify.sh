@@ -82,7 +82,7 @@ c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
 print(*[r[0] for r in c.execute(\"select uid from alert_rule\")], sep=\" \")"' 2>/dev/null)
 fi
 for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-empty \
-           rpz-feed-stale host-down disk-low systemd-unit-failed; do
+           rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat; do
   if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done
@@ -118,14 +118,19 @@ r=c.execute(\"select alertmanager_configuration from alert_configuration order b
 am=json.loads(r[0])[\"alertmanager_config\"] if r else {}
 types={x[\"name\"]: [g[\"type\"] for g in x.get(\"grafana_managed_receiver_configs\", [])] for x in am.get(\"receivers\", [])}
 root=am.get(\"route\", {}).get(\"receiver\", \"\")
-print(root, *types.get(root, []))"' 2>/dev/null)
-if [[ "$recv" == "home-assistant webhook" ]]; then
+hb=[r[\"receiver\"] for r in am.get(\"route\", {}).get(\"routes\", [])[:1]
+    if [\"heartbeat\", \"=\", \"true\"] in r.get(\"object_matchers\", [])]
+print(root, *types.get(root, []), \"|\", *hb, *types.get(hb[0] if hb else \"\", []))"' 2>/dev/null)
+if [[ "${recv%% |*}" == "home-assistant webhook" ]]; then
   pass "notification policy delivers to the home-assistant webhook"
 else bad "notification policy delivers to the home-assistant webhook" "got: ${recv:-none} - re-run deploy.sh"; fi
+if [[ "${recv##*| }" == "healthchecks webhook" ]]; then
+  pass "first route sends the heartbeat to the healthchecks webhook"
+else bad "first route sends the heartbeat to the healthchecks webhook" "got: ${recv:-none} - re-run deploy.sh"; fi
 perm=$(ssh -o BatchMode=yes root@$HOST \
   'f=/etc/grafana/provisioning/alerting/notifications.yaml; grep -q "@@" $f && echo placeholder || stat -c "%a %U:%G" $f' 2>/dev/null)
 if [[ "$perm" == "640 root:grafana" ]]; then
-  pass "contact point has its webhook id and is 0640 root:grafana"
-else bad "contact point has its webhook id and is 0640 root:grafana" "got: ${perm:-none}"; fi
+  pass "contact points have their secrets and are 0640 root:grafana"
+else bad "contact points have their secrets and are 0640 root:grafana" "got: ${perm:-none}"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

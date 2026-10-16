@@ -21,7 +21,10 @@
 #
 # Everything here goes through the home internet connection: HA reaches the
 # phone via the companion app's push relay. A home outage therefore cannot be
-# reported from here - that is what the Grafana Cloud heartbeat is for.
+# reported from here - that is what the heartbeat is for (heartbeat.yaml): a
+# rule that always fires, routed to Healthchecks.io, which alerts from outside
+# when it stops. @@HEALTHCHECKS_PING_URL@@ is substituted the same way as the
+# webhook id; anyone holding it can fake the heartbeat.
 #
 # Provisioning the policy tree replaces whatever was set in the UI.
 apiVersion: 1
@@ -36,6 +39,17 @@ contactPoints:
         settings:
           url: "https://192.168.8.90/api/webhook/@@HA_WEBHOOK_ID@@"
           httpMethod: POST
+  - orgId: 1
+    name: healthchecks
+    receivers:
+      - uid: healthchecks-ping
+        type: webhook
+        # A resolve is a POST too, and Healthchecks.io would count it as a
+        # ping - so the heartbeat stopping would look like it carrying on.
+        disableResolveMessage: true
+        settings:
+          url: "@@HEALTHCHECKS_PING_URL@@"
+          httpMethod: POST
 
 policies:
   - orgId: 1
@@ -47,6 +61,15 @@ policies:
     # are sent sooner.
     repeat_interval: 12h
     routes:
+      # The heartbeat, first so nothing else claims it. Sent at once and
+      # re-sent every 5 minutes for as long as it fires; the check on
+      # Healthchecks.io expects one every 5 with 10 minutes' grace.
+      - receiver: healthchecks
+        object_matchers:
+          - [heartbeat, "=", "true"]
+        group_wait: 0s
+        group_interval: 1m
+        repeat_interval: 5m
       - receiver: home-assistant
         object_matchers:
           - [severity, "=", critical]

@@ -12,19 +12,22 @@ HOST=192.168.8.54
 # shellcheck disable=SC1091
 source secrets.env
 [[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in secrets.env"; exit 1; }
+[[ "${HEALTHCHECKS_PING_URL:-}" == https://hc-ping.com/* ]] \
+  || { echo "HEALTHCHECKS_PING_URL unset or not an hc-ping.com URL in secrets.env"; exit 1; }
 
 require_enrolled "$HOST"
 push "$HOST" root
 
-# The contact point carries a secret, so push() has just installed it with its
+# The contact points carry secrets, so push() has just installed it with its
 # placeholder; overwrite it with the substituted copy, readable by grafana only.
-# Substituted here and sent over stdin, so the id never appears in a remote
-# command line.
+# Substituted here and sent over stdin, so neither appears in a remote command
+# line.
 NOTIFY=etc/grafana/provisioning/alerting/notifications.yaml
-sed "s|@@HA_WEBHOOK_ID@@|${HA_WEBHOOK_ID}|g" "root/$NOTIFY" | $SSH "root@$HOST" "
+sed -e "s|@@HA_WEBHOOK_ID@@|${HA_WEBHOOK_ID}|g" \
+    -e "s|@@HEALTHCHECKS_PING_URL@@|${HEALTHCHECKS_PING_URL}|g" "root/$NOTIFY" | $SSH "root@$HOST" "
   cat > '/$NOTIFY.deploytmp' && chown root:grafana '/$NOTIFY.deploytmp' \
   && chmod 0640 '/$NOTIFY.deploytmp' && mv -f '/$NOTIFY.deploytmp' '/$NOTIFY'"
-echo "   $NOTIFY (0640 root:grafana, HA webhook id substituted)"
+echo "   $NOTIFY (0640 root:grafana, HA webhook id and ping URL substituted)"
 
 # Alert rules need the datasource's uid, and the provisioned Prometheus
 # datasource has none pinned - invariant 4 says why one must never be added to a
