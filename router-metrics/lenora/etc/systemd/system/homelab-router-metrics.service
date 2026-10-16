@@ -1,0 +1,9 @@
+[Unit]
+Description=Write router and ONT metrics for node-exporter's textfile collector
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/homelab-router-metrics
+# One SSH call, bounded at 45 s inside the script; the ONT hop at 15 s.
+TimeoutStartSec=60s

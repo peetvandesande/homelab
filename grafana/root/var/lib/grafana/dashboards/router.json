@@ -1,0 +1,1716 @@
+{
+  "uid": "homelab-router",
+  "title": "Router and ONT",
+  "tags": [
+    "homelab",
+    "router"
+  ],
+  "description": "The GL-BE14000 and the XGS-PON stick in it: optics, line errors, WAN, tunnels, Wi-Fi and the router itself. Metrics from homelab/router-metrics, logs from Loki. Managed from homelab/grafana.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "prom",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 2,
+        "current": {},
+        "refresh": 1
+      },
+      {
+        "name": "loki",
+        "label": "Loki",
+        "type": "datasource",
+        "query": "loki",
+        "hide": 2,
+        "current": {},
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "ONT (XGS-PON)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "PLOAM state",
+      "description": "51 is O5.1, operational. Anything else means no data path at all - see router/ORANGE.md 'Diagnosing the PON'. 23 (O2.3) looping with deact_onu climbing is the marginal-upstream signature.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_ploam_state",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 51
+              },
+              {
+                "color": "red",
+                "value": 52
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "51": {
+                  "text": "O5.1 up",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 50,
+                "result": {
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "In this state for",
+      "description": "Time since the PLOAM state last changed - effectively time since the link last came up. A short value you did not cause is a drop.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_ploam_state_seconds",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "FEC locked",
+      "description": "Forward error correction lock, downstream and upstream. Both must be locked.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_fec_locked",
+          "refId": "A",
+          "legendFormat": "{{direction}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "yes",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "NO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Rx power",
+      "description": "Light arriving from the OLT. Healthy is about -19 dBm. Ranging broke at -23 dBm on 7 October (a half-seated fibre) while the stick raised no alarm - its own window is -29 to -7. Orange from -21, red from -23: clean or reseat the connector.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_rx_power_dbm",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBm",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": -23
+              },
+              {
+                "color": "green",
+                "value": -21
+              },
+              {
+                "color": "red",
+                "value": -8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tx power",
+      "description": "Light the stick sends. About 7.3 dBm; the Livebox ran 5.9.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_tx_power_dbm",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBm",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stick temperature",
+      "description": "About 45 \u00b0C idle, 60 \u00b0C loaded. The router's fan only starts at 70 \u00b0C (ORANGE.md open item 3).",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_temperature_celsius",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Optical power",
+      "description": "Rx and Tx over time. A step change in Rx is the fibre or connector; a slow drift is dirt or a bend.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_rx_power_dbm",
+          "refId": "A",
+          "legendFormat": "Rx",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_tx_power_dbm",
+          "refId": "B",
+          "legendFormat": "Tx",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBm",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Stick temperature and supply",
+      "description": "Temperature follows load; voltage should sit flat at about 3.23 V.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_temperature_celsius",
+          "refId": "A",
+          "legendFormat": "temperature",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_voltage_volts",
+          "refId": "B",
+          "legendFormat": "voltage",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "voltage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "volt"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Line errors",
+      "description": "Per 5 minutes. Corrected FEC codewords are the line working as designed; uncorrected ones, BIP errors and lost words are data damaged on the fibre. LODS is a loss of downstream sync - a momentary outage. A few on link-up are normal.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "increase(homelab_ont_fec_codewords_corrected_total[5m])",
+          "refId": "A",
+          "legendFormat": "FEC corrected",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "increase(homelab_ont_fec_codewords_uncorrected_total[5m])",
+          "refId": "B",
+          "legendFormat": "FEC uncorrected",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "increase(homelab_ont_bip_errors_total[5m])",
+          "refId": "C",
+          "legendFormat": "BIP errors",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "increase(homelab_ont_lost_words_total[5m])",
+          "refId": "D",
+          "legendFormat": "lost words",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "increase(homelab_ont_lods_events_total[5m])",
+          "refId": "E",
+          "legendFormat": "LODS",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "PLOAM messages",
+      "description": "Per 5 minutes. Silent while the link is up. assign_onu_id, ser_no and deact_onu climbing together with no ranging_time is the marginal-upstream loop from ORANGE.md: check Rx power.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "increase(homelab_ont_ploam_messages_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{direction}} {{type}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "WAN and tunnels",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Orange throughput",
+      "description": "The Orange VLAN (eth1.832), both directions, everything the house sends and receives.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(homelab_router_wan_bytes_total{direction=\"rx\"}[5m]) * 8",
+          "refId": "A",
+          "legendFormat": "down",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "-rate(homelab_router_wan_bytes_total{direction=\"tx\"}[5m]) * 8",
+          "refId": "B",
+          "legendFormat": "up",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "IPv6 prefix",
+      "description": "Whether Orange has delegated the /56. NO with wan6 up is the IAID trap in router/ORANGE.md, and takes both WireGuard tunnels down with it - their endpoints are IPv6.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_ipv6_prefix_delegated",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "yes",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "NO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "wan6 up",
+      "description": "netifd's view of the DHCPv6 interface.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 22,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_wan6_up",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "yes",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "NO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Collection",
+      "description": "Whether lenora reached the router and the router reached the ONT on the last run (homelab/router-metrics).",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 22,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_metrics_up",
+          "refId": "A",
+          "legendFormat": "router",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_ont_up",
+          "refId": "B",
+          "legendFormat": "ONT",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "yes",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "NO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tunnel handshake age",
+      "description": "Seconds since each WireGuard tunnel last handshook. Keepalive is 25 s, so anything past about 3 minutes means the tunnel is down.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "time() - homelab_router_wireguard_latest_handshake_seconds",
+          "refId": "A",
+          "legendFormat": "{{tunnel}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 180
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tunnel throughput",
+      "description": "Through each tunnel: ruby (wgclient1) and jennie (wgclient2).",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "rate(homelab_router_wireguard_bytes_total{direction=\"rx\"}[5m]) * 8",
+          "refId": "A",
+          "legendFormat": "{{tunnel}} in",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "-rate(homelab_router_wireguard_bytes_total{direction=\"tx\"}[5m]) * 8",
+          "refId": "B",
+          "legendFormat": "{{tunnel}} out",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Wi-Fi",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Disconnects",
+      "description": "Every client disconnect, by band and by what ended it, from the driver's log in Loki. ap_peer_disassoc_action / ap_peer_deauth_action: the client left. MacTableMaintenance: the router timed a quiet client out (reason 3) - the iPhone drops of October 2026 were mostly these. txcmdsu_dbg_init: the client left (reason 8). Rejected joins are in their own panel.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${loki}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${loki}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (band, cause) (count_over_time({host=\"router\", identifier=\"kernel\"} |= \"WLAN station disconnected\" | regexp \"caller:(?P<cause>[A-Za-z_]+)\\\\+.*from (?P<band>[0-9.]+)Ghz Wifi radio, MAC-address: (?P<mac>[0-9a-f:]+), reason=(?P<reason>[0-9]+)\" | cause != \"ap_mlme_deauth_req_action\" [$__auto]))",
+          "refId": "A",
+          "legendFormat": "{{band}} GHz {{cause}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Clients per band",
+      "description": "Associated clients on each radio. An MLO client counts once on each band it has a link on.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_wifi_clients",
+          "refId": "A",
+          "legendFormat": "{{band}} GHz",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Clients",
+      "description": "Every associated link now. An MLO client has one row per band, each with its own link MAC; mac is the client's own address, recovered from the router's log, and client is its DHCP name. 'unknown' means no name in the leases, or an MLO link not seen associating since the router's log last rolled. Signal: above -65 is good, below -80 is marginal.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_wifi_client_signal_dbm",
+          "refId": "A",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_wifi_client_rate_mbps{direction=\"rx\"}",
+          "refId": "B",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_wifi_client_rate_mbps{direction=\"tx\"}",
+          "refId": "C",
+          "legendFormat": "",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "signal"
+              },
+              {
+                "id": "unit",
+                "value": "dBm"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": -80
+                    },
+                    {
+                      "color": "green",
+                      "value": -65
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "rx Mb/s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "tx Mb/s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "client",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "role": true,
+              "direction": true
+            },
+            "indexByName": {
+              "client": 0,
+              "band": 1,
+              "iface": 2,
+              "mac": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Client signal",
+      "description": "Signal per client link over time. A drop to nothing is a disconnect; a slow slide is the client moving away or a band change.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 39,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_wifi_client_signal_dbm",
+          "refId": "A",
+          "legendFormat": "{{client}} {{band}} GHz",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBm",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Rejected joins",
+      "description": "Devices the router refuses (deauth reason 2: authentication no longer valid), by MAC. One device retrying every few seconds is something holding a stale password - since at least 15 October, 7c:61:66:13:df:63 on 2.4 GHz.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${loki}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${loki}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (mac) (count_over_time({host=\"router\", identifier=\"kernel\"} |= \"WLAN station disconnected\" | regexp \"caller:(?P<cause>[A-Za-z_]+)\\\\+.*from (?P<band>[0-9.]+)Ghz Wifi radio, MAC-address: (?P<mac>[0-9a-f:]+), reason=(?P<reason>[0-9]+)\" | cause = \"ap_mlme_deauth_req_action\" [$__auto]))",
+          "refId": "A",
+          "legendFormat": "{{mac}}",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Disconnect log",
+      "description": "The raw lines behind the panels above, newest first.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${loki}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${loki}"
+          },
+          "editorMode": "code",
+          "expr": "{host=\"router\"} |~ \"WLAN station disconnected|IEEE 802.11: disassociated\"",
+          "refId": "A",
+          "legendFormat": "",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Router",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 55,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Temperatures",
+      "description": "SoC sensors, the hotter of each pair. The fan (glfan) starts at 70 \u00b0C.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_temperature_celsius",
+          "refId": "A",
+          "legendFormat": "{{sensor}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory available",
+      "description": "2 GB in total, about 1.4 GB free with routing, Wi-Fi and both tunnels up.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 56,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_memory_available_bytes",
+          "refId": "A",
+          "legendFormat": "available",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_memory_total_bytes",
+          "refId": "B",
+          "legendFormat": "total",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Load and connections",
+      "description": "1-minute load (four Cortex-A73 cores) and tracked connections (table size 65536).",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${prom}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 56,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_load1",
+          "refId": "A",
+          "legendFormat": "load1",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${prom}"
+          },
+          "editorMode": "code",
+          "expr": "homelab_router_conntrack_entries",
+          "refId": "B",
+          "legendFormat": "conntrack",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "conntrack"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

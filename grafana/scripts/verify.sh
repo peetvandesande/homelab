@@ -56,7 +56,7 @@ echo "== provisioned dashboards"
 # nothing. Grafana 13 keeps dashboards in unified storage - the `resource`
 # table, one JSON document per object - not the legacy `dashboard` table,
 # which stays empty.
-DASHBOARD_UIDS=(homelab-dns homelab-fleet)
+DASHBOARD_UIDS=(homelab-dns homelab-fleet homelab-router)
 for uid in ${DASHBOARD_UIDS[@]+"${DASHBOARD_UIDS[@]}"}; do
   title=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
 import sqlite3, json
@@ -85,7 +85,9 @@ for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-emp
            rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat \
            outside-probe-failing outside-vantage-down outside-cert-expiring \
            internet-unreachable tunnel-down dns-resolution-failing lab-tls-failing lab-cert-expiring \
-           ha-vm-down ha-vm-agent-down ha-vm-disk-low ha-vm-memory-low ha-vm-metrics-stale; do
+           ha-vm-down ha-vm-agent-down ha-vm-disk-low ha-vm-memory-low ha-vm-metrics-stale \
+           ont-not-operational ont-rx-power-low ont-hot ont-unreachable router-metrics-stale \
+           ipv6-prefix-missing; do
   if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done

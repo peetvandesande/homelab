@@ -1,0 +1,54 @@
+#!/bin/sh
+# Read-only: the router's state, raw, for homelab-router-metrics on lenora,
+# which parses it. Managed from homelab/router-metrics - edit there, deploy
+# with its scripts/deploy.sh. Run as the forced command of lenora's key in
+# /etc/dropbear/authorized_keys; it takes no input and changes nothing.
+#
+# Kept in /usr/local/bin/, which /etc/sysupgrade.conf preserves.
+
+section() { echo "== $1"; }
+
+# The ONT's own forced command (in its /etc/dropbear/authorized_keys) prints
+# the pon readings. -y accepts its host key the first time; a changed key
+# still fails. -T, or dbclient tries for a terminal and gives up without one.
+# Bounded, so a hung stick cannot hold the whole collection.
+section ont
+timeout 15 dbclient -T -y -i /etc/dropbear/ont_metrics_key root@192.168.11.1 2>/dev/null
+
+for i in ra0 rai2 rax2; do
+	section "hostapd $i"
+	ubus call "hostapd.$i" get_clients 2>/dev/null
+done
+
+# An MLO client associates once per band with a per-link MAC; only the
+# log ties those back to the client's own (MLD) address, which is the one in
+# the DHCP leases. 4.11 logs it from wappd; 4.9 logged it from the driver.
+# Printed as "<link> <mld>", oldest first, so a later association wins.
+section mld
+logread | sed -nE \
+	-e 's/.*linkaddr:([0-9a-f:]+), mldaddr:([0-9a-f:]+).*/\1 \2/p' \
+	-e 's/.*mac=([0-9a-f:]+), mld\(sta_idx=[0-9]+,addr=([0-9a-f:]+)\).*/\1 \2/p'
+
+section leases
+cat /tmp/dhcp.leases
+
+section wg
+wg show all dump
+
+section wan
+for d in eth1.832; do
+	echo "$d $(cat /sys/class/net/$d/statistics/rx_bytes) $(cat /sys/class/net/$d/statistics/tx_bytes)"
+done
+
+section wan6
+ubus call network.interface.wan6 status
+
+section sys
+echo "uptime $(cut -d' ' -f1 /proc/uptime)"
+echo "load1 $(cut -d' ' -f1 /proc/loadavg)"
+awk '/^MemTotal:|^MemAvailable:/ { sub(":", ""); print $1, $2 * 1024 }' /proc/meminfo
+echo "conntrack $(cat /proc/sys/net/netfilter/nf_conntrack_count)"
+echo "conntrack_max $(cat /proc/sys/net/netfilter/nf_conntrack_max)"
+for z in /sys/class/thermal/thermal_zone*; do
+	echo "thermal $(basename "$z") $(cat "$z/type") $(cat "$z/temp")"
+done

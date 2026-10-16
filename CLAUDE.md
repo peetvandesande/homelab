@@ -251,9 +251,11 @@ must go out is routed via ruby with a mailcow transport map. See
 ## Monitoring
 
 Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
-(192.168.8.54) for dashboards and alerting. Two dashboards and eighteen alert
-rules are provisioned from `grafana/` — `homelab-dns` and `homelab-fleet`, with
-rule groups `dns` and `fleet`. They are delivered to
+(192.168.8.54) for dashboards and alerting. Three dashboards are provisioned
+from `grafana/` — `homelab-dns`, `homelab-fleet` and `homelab-router` — with
+the alert rules in groups `dns`, `fleet` and one per concern beside them. The
+router and the ONT in it cannot run node-exporter, so lenora collects both into
+its textfile collector – `router-metrics/`. Alerts are delivered to
 **Home Assistant**, which pushes them to the phone (critical alerts break
 through Do Not Disturb) — `grafana/CLAUDE.md`, "Delivery". That path runs over
 the home connection, so it cannot report a home outage; a heartbeat rule pings

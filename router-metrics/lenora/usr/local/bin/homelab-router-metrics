@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+# Router and ONT metrics, written to lenora's node-exporter textfile
+# collector. Managed in homelab/router-metrics.
+#
+# Neither device can run node-exporter with a lab certificate, so lenora asks
+# from outside: one SSH call to the router, whose key is forced to
+# /usr/local/bin/router-metrics there - a read-only dump that also reads the
+# ONT through the router's own forced-command key on the stick. Everything is
+# parsed here, so the router side stays a few lines of shell.
+#
+# The series arrive on lenora's `node` target, so instance and role are
+# lenora's; select on the homelab_router_ / homelab_ont_ names. The rules in
+# grafana/.../alerting/router.yaml and the homelab-router dashboard use them.
+import json
+import os
+import re
+import subprocess
+import time
+
+OUT = "/var/lib/node_exporter/textfile/router.prom"
+SSH = ["ssh", "-i", "/root/.ssh/router_metrics", "-o", "BatchMode=yes",
+       "-o", "ConnectTimeout=10", "root@192.168.8.1"]
+BANDS = {"ra0": "2.4", "rai2": "5", "rax2": "6"}
+TUNNELS = {"wgclient1": "ruby", "wgclient2": "jennie"}
+# osg scaling, router/ORANGE.md "Diagnosing the PON". Bias scaling is
+# unconfirmed, so it is exported raw.
+DBM_PER_LSB = 0.002
+
+lines = []
+
+
+def metric(name, help_, value, labels="", kind="gauge"):
+    if not any(l.startswith(f"# HELP {name} ") for l in lines):
+        lines.append(f"# HELP {name} {help_}")
+        lines.append(f"# TYPE {name} {kind}")
+    lines.append(f"{name}{{{labels}}} {value}")
+
+
+def esc(v):
+    return str(v).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def sections(text):
+    out, cur = {}, None
+    for line in text.splitlines():
+        if line.startswith("== "):
+            cur = line[3:].strip()
+            out[cur] = []
+        elif cur is not None:
+            out[cur].append(line)
+    return {k: "\n".join(v) for k, v in out.items()}
+
+
+def kv(s):
+    return dict(m.groups() for m in re.finditer(r"(\w+)=(-?\d+)", s))
+
+
+def ont(raw):
+    # One line per pon command, "<command> errorcode=0 key=value ...".
+    cmds = {}
+    for line in raw.splitlines():
+        name, _, rest = line.partition(" ")
+        if "errorcode=0" in rest:
+            cmds[name] = {k: int(v) for k, v in kv(rest).items()}
+    osg = cmds.get("osg")
+    metric("homelab_ont_up", "1 if the ONT answered with its optics through the router.", int(bool(osg)))
+    if not osg:
+        return
+    metric("homelab_ont_rx_power_dbm", "Received optical power. Healthy -19 dBm; ranging breaks near -23.",
+           round(osg["rx_power"] * DBM_PER_LSB, 3))
+    metric("homelab_ont_tx_power_dbm", "Transmitted optical power.", round(osg["tx_power"] * DBM_PER_LSB, 3))
+    metric("homelab_ont_temperature_celsius", "Stick temperature.", round(osg["temperature"] / 256, 2))
+    metric("homelab_ont_voltage_volts", "Supply voltage.", round(osg["voltage"] * 100e-6, 4))
+    metric("homelab_ont_laser_bias_raw", "Laser bias, raw - the scaling is unconfirmed.", osg["bias"])
+    metric("homelab_ont_rx_los", "1 if the stick reports loss of signal.", osg["rx_los"])
+    metric("homelab_ont_tx_fault", "1 if the stick reports a transmitter fault.", osg["tx_fault"])
+
+    if "psg" in cmds:
+        metric("homelab_ont_ploam_state", "PLOAM state; 51 is O5.1, operational.", cmds["psg"]["current"])
+        metric("homelab_ont_ploam_state_seconds", "Seconds in the current PLOAM state.", cmds["psg"]["time_curr"])
+    if "gsg" in cmds:
+        for d in ("ds", "us"):
+            metric("homelab_ont_fec_locked", "1 if FEC is locked in that direction.",
+                   cmds["gsg"][f"fec_status_{d}"], f'direction="{d}"')
+
+    # Counters since the stick booted.
+    c = "counter"
+    if "gtc_counters_get" in cmds:
+        g = cmds["gtc_counters_get"]
+        metric("homelab_ont_fec_codewords_corrected_total", "FEC codewords corrected.", g["fec_codewords_corr"], kind=c)
+        metric("homelab_ont_fec_codewords_uncorrected_total", "FEC codewords that could not be corrected.",
+               g["fec_codewords_uncorr"], kind=c)
+        metric("homelab_ont_bip_errors_total", "BIP errors.", g["bip_errors"], kind=c)
+        metric("homelab_ont_lods_events_total", "Loss of downstream sync events.", g["lods_events"], kind=c)
+    if "fcg" in cmds:
+        metric("homelab_ont_fec_words_total", "FEC words received.", cmds["fcg"]["words"], kind=c)
+    if "xgtc_counters_get" in cmds:
+        x = cmds["xgtc_counters_get"]
+        metric("homelab_ont_lost_words_total", "XGTC lost words.", x["lost_words"], kind=c)
+        metric("homelab_ont_xgem_hec_errors_total", "XGEM header errors.", x["xgem_hec_err_corr"],
+               'corrected="true"', c)
+        metric("homelab_ont_xgem_hec_errors_total", "XGEM header errors.", x["xgem_hec_err_uncorr"],
+               'corrected="false"', c)
+    # The OLT's PLOAM messages; a climbing deact_onu with ranging_time stuck
+    # is the marginal-upstream signature in ORANGE.md.
+    for cmd, d, keys in (("pdcg", "ds", ("assign_onu_id", "ranging_time", "deact_onu")),
+                         ("pucg", "us", ("ser_no", "reg"))):
+        for k in keys:
+            if cmd in cmds:
+                metric("homelab_ont_ploam_messages_total", "PLOAM messages by type.", cmds[cmd][k],
+                       f'direction="{d}",type="{k}"', c)
+
+
+def wifi(sec):
+    names = {}
+    for line in sec.get("leases", "").splitlines():
+        f = line.split()
+        if len(f) >= 4 and f[3] != "*":
+            names[f[1].lower()] = f[3]
+    # "<link> <mld>" pairs, oldest first; dict() keeps the latest.
+    mld = dict(l.split() for l in sec.get("mld", "").splitlines() if len(l.split()) == 2)
+    for iface, band in BANDS.items():
+        try:
+            clients = json.loads(sec.get(f"hostapd {iface}") or "{}").get("clients", {})
+        except json.JSONDecodeError:
+            continue
+        base = f'iface="{iface}",band="{band}"'
+        metric("homelab_router_wifi_clients", "Associated Wi-Fi clients per radio.", len(clients), base)
+        for link, c in clients.items():
+            mac = mld.get(link.lower(), link.lower())
+            lab = f'{base},mac="{mac}",client="{esc(names.get(mac, "unknown"))}"'
+            metric("homelab_router_wifi_client_signal_dbm", "Client signal as the AP hears it.", c.get("signal", 0), lab)
+            for d in ("rx", "tx"):
+                metric("homelab_router_wifi_client_rate_mbps", "Last PHY rate, as hostapd reports it.",
+                       c.get("rate", {}).get(d, 0) / 1000, f'{lab},direction="{d}"')
+
+
+def router(sec):
+    for line in sec.get("wan", "").splitlines():
+        dev, rx, tx = line.split()
+        for d, v in (("rx", rx), ("tx", tx)):
+            metric("homelab_router_wan_bytes_total", "Bytes on the Orange VLAN.", v, f'device="{dev}",direction="{d}"',
+                   "counter")
+
+    try:
+        wan6 = json.loads(sec.get("wan6") or "{}")
+    except json.JSONDecodeError:
+        wan6 = {}
+    pfx = wan6.get("ipv6-prefix", [])
+    metric("homelab_router_ipv6_prefix_delegated", "1 if Orange has delegated a prefix (router/ORANGE.md, IAID).",
+           int(bool(pfx)))
+    metric("homelab_router_wan6_up", "1 if netifd has wan6 up.", int(bool(wan6.get("up"))))
+
+    for line in sec.get("wg", "").splitlines():
+        f = line.split("\t")
+        if len(f) == 9:  # peer line
+            iface, hs, rx, tx = f[0], int(f[5]), f[6], f[7]
+            lab = f'interface="{iface}",tunnel="{TUNNELS.get(iface, iface)}"'
+            metric("homelab_router_wireguard_latest_handshake_seconds",
+                   "Unix time of the last handshake; 0 if never.", hs, lab)
+            metric("homelab_router_wireguard_bytes_total", "Bytes through the tunnel.", rx, f'{lab},direction="rx"',
+                   "counter")
+            metric("homelab_router_wireguard_bytes_total", "Bytes through the tunnel.", tx, f'{lab},direction="tx"',
+                   "counter")
+
+    temps = {}
+    for line in sec.get("sys", "").splitlines():
+        f = line.split()
+        if f[0] == "thermal":
+            # Two sensors per block (cpu-thermal, cpu-1-thermal); keep the hotter.
+            block = re.sub(r"(-1)?-thermal$", "", f[2])
+            temps[block] = max(temps.get(block, -1e9), int(f[3]) / 1000)
+        elif len(f) == 2:
+            name = {"uptime": ("homelab_router_uptime_seconds", "Router uptime."),
+                    "load1": ("homelab_router_load1", "1-minute load average."),
+                    "MemTotal": ("homelab_router_memory_total_bytes", "Total memory."),
+                    "MemAvailable": ("homelab_router_memory_available_bytes", "Available memory."),
+                    "conntrack": ("homelab_router_conntrack_entries", "Tracked connections."),
+                    "conntrack_max": ("homelab_router_conntrack_max", "Conntrack table size.")}.get(f[0])
+            if name:
+                metric(*name, f[1])
+    for block, t in sorted(temps.items()):
+        metric("homelab_router_temperature_celsius", "Router SoC temperatures, hotter of each pair.", t,
+               f'sensor="{block}"')
+
+
+up = 0
+try:
+    raw = subprocess.run(SSH, capture_output=True, text=True, timeout=45, check=True).stdout
+    sec = sections(raw)
+    up = 1
+except (subprocess.SubprocessError, OSError):
+    sec = {}
+metric("homelab_router_metrics_up", "1 if the router answered.", up)
+if up:
+    ont(sec.get("ont", ""))
+    wifi(sec)
+    router(sec)
+metric("homelab_router_metrics_timestamp_seconds", "When this file was last written.", int(time.time()))
+
+tmp = OUT + ".tmp"
+with open(tmp, "w") as fh:
+    fh.write("\n".join(lines) + "\n")
+os.chmod(tmp, 0o644)
+os.replace(tmp, OUT)

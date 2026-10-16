@@ -98,6 +98,10 @@ rewrites `/etc/config/network`.
 
 ## Diagnosing the PON
 
+The readings below are collected every minute by `router-metrics/` and graphed
+on the **Router and ONT** dashboard in Grafana, with alerts on PLOAM state,
+receive power and temperature – start there for history.
+
 **Check the PON before the router.** `eth1.832` RX at exactly 0 bytes means
 there is no data path; the switch port reads `link:up 10gbase` regardless,
 because the YT92xx forces the 10G path.

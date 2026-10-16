@@ -175,6 +175,15 @@ those are set members the router adds directly and have no DNS dimension.
 `dst_net4399` is *entirely* those — a site-to-site policy that generates no
 dnsmasq lines at all.
 
+### Metrics: two more forced-command keys
+
+`router-metrics/` keeps two keys of its own here, both limited to a read-only
+command: lenora's in `/etc/dropbear/authorized_keys` (`router-metrics@lenora`,
+forced to `/usr/local/bin/router-metrics`) and the router's own
+`/etc/dropbear/ont_metrics_key`, authorised on the ONT. Unlike the pieces
+below, they need no pasting back: `router-metrics/scripts/deploy.sh` recreates
+both and the script.
+
 ### The two pieces of router-side state the DNS stack needs
 
 Neither is in this repo, and a firmware upgrade can remove both. The

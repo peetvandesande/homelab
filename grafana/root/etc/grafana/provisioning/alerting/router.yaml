@@ -1,0 +1,318 @@
+# The router and the XGS-PON stick in it. Neither can run node-exporter, so
+# lenora collects both over SSH into its textfile collector
+# (homelab/router-metrics) - they arrive on lenora's `node` target as
+# homelab_router_* and homelab_ont_*. Managed from homelab/grafana.
+#
+# These alerts go out through Home Assistant's push relay, over the same
+# Orange line the ONT carries: an ONT that is actually down delivers nothing
+# until the line is back. The Healthchecks.io heartbeat is what reports that
+# from outside; these are the record, and catch the degradations that do not
+# take the line down.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: router
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: ont-not-operational
+        title: "ONT not operational"
+        condition: B
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The ONT has left PLOAM state O5.1 - no data path to Orange"
+          description: >-
+            Any state but 51 means the stick is not passing traffic. Check Rx power on the Router and ONT dashboard, then router/ORANGE.md, 'Diagnosing the PON'. This reaches the phone only once the line is back.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_ont_ploam_state == bool 51'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: ont-rx-power-low
+        title: "ONT receive power low"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ONT Rx power is {{ $values.A }} dBm"
+          description: >-
+            Healthy is about -19 dBm. Ranging broke at -23 dBm on 7 October 2026 while the stick raised no alarm of its own. Clean or reseat the SC connector before it drops - router/ORANGE.md.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_ont_rx_power_dbm'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [-21]
+      - uid: ont-hot
+        title: "ONT running hot"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The XGS-PON stick is at {{ $values.A }} C"
+          description: >-
+            It runs about 60 C under load; the router's fan only starts at 70 C (router/ORANGE.md, open item 3).
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_ont_temperature_celsius'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [75]
+      - uid: ont-unreachable
+        title: "ONT not answering"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The router reaches the ONT no longer"
+          description: >-
+            lenora reaches the router, but the router's forced-command key on the stick returns nothing. The stick's management (192.168.11.1 on eth1.2) or its authorized_keys - rerun router-metrics/scripts/deploy.sh. Says nothing about the PON itself.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_ont_up and on() homelab_router_metrics_up == 1'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: router-metrics-stale
+        title: "Router metrics not collected"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "lenora has not collected from the router for 10 minutes"
+          description: >-
+            homelab-router-metrics.timer on lenora, or its key on the router (forced to /usr/local/bin/router-metrics). Without it the ONT and Wi-Fi alerts here are blind. Rerun router-metrics/scripts/deploy.sh after a router factory reset.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '(time() - homelab_router_metrics_timestamp_seconds) + (1 - homelab_router_metrics_up) * 1e6'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [300]
+      - uid: ipv6-prefix-missing
+        title: "No IPv6 prefix from Orange"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Orange has not delegated an IPv6 prefix"
+          description: >-
+            The LAN has only its ULA and both WireGuard tunnels, whose endpoints are IPv6, are down. After a firmware upgrade this was the IAID - check network.wan6.reqprefix is 56:1 (router/ORANGE.md, 'The IAID trap').
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_router_ipv6_prefix_delegated'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
