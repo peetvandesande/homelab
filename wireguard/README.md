@@ -21,21 +21,28 @@ Done so far:
 
 Not yet: forwarding pinned in networkd (2a), the dummy renumbering (2e), the wg0/wg1 cutover (Task 5) and the service changes that follow it (5e). jennie's firewall and forwarding (2d) aren't verified against this plan yet; the exit via jennie depends on them.
 
+Written 2026-10-15, not yet deployed:
+
+- `home.` and the lab's reverse zone on ruby: `static-stub` zones to Pythia in ruby's `wireguard` view, going live with 5e (see [Service allow lists](#service-allow-lists))
+- `.home` names for jennie itself: routing-only domains to Pythia on wg3 (TASKS.md 3.5)
+- **Clients on jennie:** a second `wg0` on jennie for the same three devices, with jennie's own BIND, routes back on ruby and two policy rules on the router (see [Clients on jennie](#clients-on-jennie), TASKS.md phase 8)
+
 ***
 
 ## Topology
 
 ```
-   mba, mbp, iphone-peet
-      (road warriors)
-                  │
-                  │ wg0 :51820
-                  ▼
+   mba, mbp, iphone-peet                                     mba, mbp, iphone-peet
+      (road warriors)                                          (when ruby is down)
+                  │                                                     │
+                  │ wg0 :51820                               wg0 :51820 │
+                  ▼                                                     ▼
    ┌────────────────────────────┐   wg2 :51822 (IPv6)    ┌────────────────────────────┐
    │            ruby            │◄──────────────────────►│           jennie           │
    │ 192.168.254.254, .253      │  172.31.1.4/30         │ 192.168.254.2              │
    │ fd33:5692:1834:254::254    │  ff02::/64             │ fd33:5692:1834:254::2      │
    │ fd33:5692:1834:254::253    │                        │ internet exit (NAT44/66)   │
+   │                            │                        │ clients 192.168.205.0/24   │
    └────────────────────────────┘                        └────────────────────────────┘
                   ▲                                                     ▲
                   │ wg1 :51821 (IPv6)                wg3 :51823 (IPv6)  │
@@ -74,7 +81,7 @@ Routing is static. Each tunnel only carries traffic for the networks directly be
 
 There is no filtering inside the VPN.
 
-**jennie is the VPN's internet exit** (see [Internet exits](#internet-exits)). It forwards and NATs traffic from ruby's clients and from home, but it's never a path *between* sites.
+**jennie is the VPN's internet exit** (see [Internet exits](#internet-exits)). It forwards and NATs traffic from ruby's clients and from home, but it's never a path *between* sites. It's also the clients' fallback server: its own `wg0` gives them home, ruby and the internet without going through ruby (see [Clients on jennie](#clients-on-jennie)).
 
 ### Interface naming
 
@@ -155,7 +162,7 @@ So nothing needs translating, and an ISP renumbering doesn't affect the VPN. One
 | Exit   | IPv4 | IPv6 | Used by |
 |--------|------|------|---------|
 | ruby   | snat to `46.105.253.72` (unchanged) | **none**, no NAT66 on ruby | clients' IPv4, by default |
-| jennie | snat to `57.129.180.73` | snat to `2001:41d0:801:2000::180f` (NAT66; jennie has a single `/128`) | clients' IPv6, opted-in clients' IPv4, and home traffic the router sends to it |
+| jennie | snat to `57.129.180.73` | snat to `2001:41d0:801:2000::180f` (NAT66; jennie has a single `/128`) | clients' IPv6, opted-in clients' IPv4, home traffic the router sends to it, and all of jennie's own clients' traffic |
 
 **On ruby:**
 
@@ -365,6 +372,8 @@ Order:
 5. Move ruby's wg0 to netplan and home to wg1.
 6. Update clients.
 7. Test everything.
+
+Clients on jennie are independent of this order and have no section here: the steps are TASKS.md phase 8, and the design is [Clients on jennie](#clients-on-jennie).
 
 Step 2 changes nothing for traffic that works today; the new rules only match interfaces and ports that aren't in use yet. Steps 3 and 4 add new tunnels and don't touch anything running. Step 5 is the only one with downtime.
 
@@ -830,6 +839,23 @@ Then put the router's tunnel back to its old settings: address `192.168.204.5`, 
 
 To remove wg2 or wg3, delete that YAML file on both ends, then run `netplan generate` and `ip link del wgN`.
 
+**jennie: clients (TASKS.md phase 8).** Nothing else depends on it, so it comes out on its own:
+
+```bash
+# on jennie
+sudo rm /etc/netplan/80-wireguard-wg0.yaml && sudo netplan generate && sudo ip link del wg0
+sudo systemctl disable --now named         # or apt purge bind9
+sudo cp -a /etc/nftables.conf.bak-YYYY-MM-DD /etc/nftables.conf && sudo systemctl reload nftables
+
+# on ruby: remove the two 205 routes from /etc/netplan/82-wireguard-wg2.yaml, then
+sudo netplan generate
+sudo ip route del 192.168.205.0/24 dev wg2; sudo ip -6 route del fd33:5692:1834:205::/64 dev wg2
+
+# on home
+uci delete network.s2s_wgclient2_205; uci delete network.s2s_wgclient2_205_6
+uci commit network && /etc/init.d/network reload
+```
+
 **ruby: services (Task 5e).** Put the originals back, *before* rolling wg0 back to wg-quick. Otherwise Postfix and Dovecot try to bind IPv6 addresses that no longer exist:
 
 ```bash
@@ -873,7 +899,7 @@ journalctl -u systemd-networkd -b          # networkd errors (bad keys, route co
 
 **Sending a client's IPv4 via jennie:** in `ruby/82-wireguard-wg2.yaml`, add `- { from: "192.168.204.N/32", table: 200, priority: 1000 }` under `routing-policy`. Then `netplan generate` and either `sudo ip rule add from 192.168.204.N/32 table 200 priority 1000` (live, no interruption) or recreate wg2. Remove the rule to switch back.
 
-**Adding a client:** generate a key on the device, take the next free address (`192.168.204.6` / `fd33:5692:1834:204::6`), and add a peer to `80-wireguard-wg0.yaml` with a fresh PSK (`wg genpsk`).
+**Adding a client:** generate a key on the device, take the next free address (`192.168.204.6` / `fd33:5692:1834:204::6`), and add a peer to `80-wireguard-wg0.yaml` with a fresh PSK (`wg genpsk`). For a fallback tunnel too, add the same public key to `jennie/80-wireguard-wg0.yaml` with the same host number in `192.168.205.0/24` and a PSK of its own, and add its PTR to both servers' reverse zones.
 
 **Adding a site:**
 
