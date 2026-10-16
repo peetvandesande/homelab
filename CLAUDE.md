@@ -256,7 +256,9 @@ rules are provisioned from `grafana/` — `homelab-dns` and `homelab-fleet`, wit
 rule groups `dns` and `fleet`. They are delivered to
 **Home Assistant**, which pushes them to the phone (critical alerts break
 through Do Not Disturb) — `grafana/CLAUDE.md`, "Delivery". That path runs over
-the home connection, so it cannot report a home outage. Loki (192.168.8.56) is the log
+the home connection, so it cannot report a home outage; a heartbeat rule pings
+**Healthchecks.io** every 5 minutes instead, and that alerts from outside when
+the pings stop – `grafana/CLAUDE.md`, "Heartbeat". Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
 twelve hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
