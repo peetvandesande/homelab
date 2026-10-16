@@ -1,0 +1,43 @@
+; /etc/bind/wireguard/1.31.172.in-addr.arpa
+;
+; Reverse zone for the site-to-site transit links, 172.31.1.0/24. Private
+; space, so no delegation exists or is needed. Without it, reverse lookups
+; of tunnel addresses (traceroute, sshd, log lines) escape to the AS112
+; servers and time out.
+;
+; Identical on ruby and jennie: change both together.
+;
+; One PTR per end of each /30, named <site>-<tunnel> so a traceroute shows
+; which link a hop is on. The next free link is 172.31.1.12/30.
+;
+; Validate after every edit:
+;   named-checkzone 1.31.172.in-addr.arpa \
+;                   /etc/bind/wireguard/1.31.172.in-addr.arpa
+;   rndc reload 1.31.172.in-addr.arpa IN wireguard     # ruby
+;   rndc reload 1.31.172.in-addr.arpa                  # jennie
+;
+; Bump the serial on every change. yyyymmddnn.
+
+$ORIGIN 1.31.172.in-addr.arpa.
+$TTL 3600
+
+@   IN  SOA vps-5ca50660.vps.ovh.net. hostmaster.peetvandesande.com. (
+            2026101601  ; serial
+            3600        ; refresh   (no secondary; value is inert)
+            900         ; retry     (inert)
+            604800      ; expire    (inert)
+            300 )       ; negative cache TTL
+
+    IN  NS  vps-5ca50660.vps.ovh.net.
+
+; wg1, ruby - home: 172.31.1.0/30
+1	IN	PTR	ruby-wg1.
+2	IN	PTR	home-wg1.
+
+; wg2, ruby - jennie: 172.31.1.4/30
+5	IN	PTR	ruby-wg2.
+6	IN	PTR	jennie-wg2.
+
+; wg3, jennie - home: 172.31.1.8/30
+9	IN	PTR	jennie-wg3.
+10	IN	PTR	home-wg3.

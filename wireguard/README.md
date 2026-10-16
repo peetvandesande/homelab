@@ -297,7 +297,7 @@ mba, mbp and iphone-peet each have a second tunnel, to jennie's `wg0` on the sta
 
 jennie runs its own BIND (`jennie/services/etc/bind/`), so jennie's clients don't depend on ruby for names. It gives the same answers as ruby's `wireguard` view:
 
-- **Split-horizon zones:** byte-for-byte copies of ruby's `/etc/bind/wireguard/` files, plus a reverse zone for `192.168.205.0/24`. Change them on both hosts together. The answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
+- **Split-horizon zones:** byte-for-byte copies of ruby's `/etc/bind/wireguard/` files, plus a reverse zone for `192.168.205.0/24`. The transit (`1.31.172.in-addr.arpa`) and ULA (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`) reverse zones are shared the same way, and the repo's copies in `jennie/services/etc/bind/wireguard/` are the ones installed on ruby too. Change them on both hosts together. The answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
 - **`home.` and the lab's reverse zone:** `static-stub` to Pythia over wg3, as on ruby.
 - **No views.** jennie has no Docker clients to tell apart from the VPN, so Debian's own `named.conf` and default zones stay. The same `acl "vpn"` as ruby's, plus jennie's clients, gates every query.
 - **Validating**, unlike ruby, which turns validation off for Postfix's DANE. `home.` and `8.168.192.in-addr.arpa` are unsigned, so they're listed in `validate-except`.
@@ -353,7 +353,7 @@ The steps are TASKS.md phase 8.
 | `jennie/83-wireguard-wg3.yaml` | jennie | `/etc/netplan/` | wg3, to home |
 | `jennie/networkd-forwarding.conf` | jennie | `/etc/systemd/networkd.conf.d/forwarding.conf` | IPv4/IPv6 forwarding (internet exit), owned by networkd |
 | `jennie/nftables.conf` | jennie | `/etc/nftables.conf` | jennie's whole firewall, including the exit's forwarding rules and NAT44/NAT66 |
-| `jennie/services/etc/bind/…` | jennie | same path under `/etc` | BIND for jennie's clients, with copies of ruby's split-horizon zones |
+| `jennie/services/etc/bind/…` | jennie (zone files: ruby too) | same path under `/etc` | BIND for jennie's clients, with copies of ruby's split-horizon zones; the transit and ULA reverse zones and `mail.peetvandesande.com` are installed on both |
 | `home/wg1.conf` | home | router UI | wg1 settings in wg-quick format, as a reference |
 | `home/wg3.conf` | home | router UI | wg3 settings in wg-quick format, as a reference |
 | `fill-secrets.py` | none | none | Fills key/PSK placeholders (see Task 1) |
@@ -902,11 +902,12 @@ journalctl -u systemd-networkd -b          # networkd errors (bad keys, route co
 
 **Sending a client's IPv4 via jennie:** in `ruby/82-wireguard-wg2.yaml`, add `- { from: "192.168.204.N/32", table: 200, priority: 1000 }` under `routing-policy`. Then `netplan generate` and either `sudo ip rule add from 192.168.204.N/32 table 200 priority 1000` (live, no interruption) or recreate wg2. Remove the rule to switch back.
 
-**Adding a client:** generate a key on the device, take the next free address (`192.168.204.6` / `fd33:5692:1834:204::6`), and add a peer to `80-wireguard-wg0.yaml` with a fresh PSK (`wg genpsk`). For a fallback tunnel too, add the same public key to `jennie/80-wireguard-wg0.yaml` with the same host number in `192.168.205.0/24` and a PSK of its own, and add its PTR to both servers' reverse zones.
+**Adding a client:** generate a key on the device, take the next free address (`192.168.204.6` / `fd33:5692:1834:204::6`), and add a peer to `80-wireguard-wg0.yaml` with a fresh PSK (`wg genpsk`). For a fallback tunnel too, add the same public key to `jennie/80-wireguard-wg0.yaml` with the same host number in `192.168.205.0/24` and a PSK of its own, and add its PTRs to both servers' reverse zones: IPv4 in `204`/`205`, IPv6 in the ULA zone `4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`.
 
 **Adding a site:**
 
 1. Use the next transit link (`172.31.1.12/30`, `fd33:5692:1834:ff04::/64`, port 51824).
+   Add PTRs for both ends to the transit and ULA reverse zones (`1.31.172.in-addr.arpa`, `4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`), on ruby and jennie.
 2. Create a YAML file on each server end, with `routes:` for the site's networks.
 3. Add the site's networks to the allowed IPs and routes of every tunnel that should reach it, and to the clients' split-tunnel list.
 4. If the tunnel ends on ruby: add the interface to `WGIFS` in `/etc/nftables.conf`, add an input rule for its UDP port on `$PUB6`, and `systemctl reload nftables`. `wg-docker-user.service` matches `wg+`, so it needs no change.

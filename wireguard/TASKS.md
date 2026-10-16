@@ -297,7 +297,26 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
 ## Follow-ups (optional, outside the rollout)
 
 - [x] **BIND reverse zone `204.168.192.in-addr.arpa`:** remove the stale PTRs `3 sylvie` and `5 home-inet`, and bump the serial
-- [ ] **BIND, optional:** reverse zones for `172.31.1.0/24` and `fd33:5692:1834::/48` (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`), so reverse lookups of tunnel and ULA addresses don't time out; an `AAAA fd33:5692:1834:204::254` for the split-horizon `mail.peetvandesande.com`
+- [ ] **BIND: transit and ULA reverse zones, mail AAAA.** Written 2026-10-16, not yet deployed: reverse zones for `172.31.1.0/24` (`1.31.172.in-addr.arpa`) and `fd33:5692:1834::/48` (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`), so reverse lookups of tunnel and ULA addresses don't time out, and `AAAA fd33:5692:1834:204::254` in the split-horizon `mail.peetvandesande.com`. The three zone files are shared: one copy, in `jennie/services/etc/bind/wireguard/`, installed on both hosts. *On ruby* first, since its live `mail.peetvandesande.com` is the original:
+  ```bash
+  cd ~/homelab/wireguard
+  diff /etc/bind/wireguard/mail.peetvandesande.com jennie/services/etc/bind/wireguard/mail.peetvandesande.com   # only the serial and the AAAA
+  sudo install -m 644 -o bind -g bind jennie/services/etc/bind/wireguard/{mail.peetvandesande.com,1.31.172.in-addr.arpa,4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa} /etc/bind/wireguard/
+  sudo install -m 644 -o root -g bind ruby/services/etc/bind/named.conf.local /etc/bind/
+  sudo named-checkconf -z && sudo rndc reconfig && sudo rndc reload mail.peetvandesande.com IN wireguard
+  dig @192.168.204.254 mail.peetvandesande.com AAAA +short          # fd33:5692:1834:204::254
+  dig @192.168.204.254 -x 172.31.1.6 +short                         # jennie-wg2.
+  dig @192.168.204.254 -x fd33:5692:1834:204::254 +short            # mail.peetvandesande.com.
+  dig @192.168.204.254 -x fd33:5692:1834:1000::1 | grep status      # NXDOMAIN, at once
+  ```
+  Then *on jennie*:
+  ```bash
+  cd ~/homelab/wireguard
+  sudo install -m 644 -o bind -g bind jennie/services/etc/bind/wireguard/{mail.peetvandesande.com,1.31.172.in-addr.arpa,4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa} /etc/bind/wireguard/
+  sudo install -m 644 -o root -g bind jennie/services/etc/bind/named.conf.local /etc/bind/
+  sudo named-checkconf -z && sudo rndc reconfig && sudo rndc reload mail.peetvandesande.com
+  ```
+  and the same four `dig`s against `@192.168.205.254`. ruby's `named.conf.local` in the repo also carries the 205 ACL line (8.5), so check `diff` against the live one before installing it.
 - [x] **Postfix:** `wireguard_clients.cidr` isn't referenced. Either wire it into `mua_client_restrictions` (extended to the VPN ranges) or correct the `main.cf` comments that say it's in use. Update `main.cf`'s header, which still describes the VPN as `192.168.204.0/24 (wg0)`.
 - [ ] **Failover:** with static routing, a wg3 outage cuts jennie off from home. BIRD or FRR (OSPF) over wg1/wg2/wg3 could reroute via ruby.
 - [x] **Remove sylvie** wherever else it's referenced (monitoring, password managers, …)

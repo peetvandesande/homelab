@@ -109,6 +109,22 @@ view "wireguard" {
         file "/etc/bind/wireguard/204.168.192.in-addr.arpa";
     };
 
+    // Transit links and the VPN ULA /48. The zone files live in the repo
+    // under jennie/services/etc/bind/wireguard/ and are identical on both
+    // hosts. The automatic empty zones 31.172.in-addr.arpa and
+    // d.f.ip6.arpa stay: these more specific zones answer beneath them.
+    zone "1.31.172.in-addr.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/1.31.172.in-addr.arpa";
+        notify no;
+    };
+
+    zone "4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa";
+        notify no;
+    };
+
     // The lab's internal domain, from Pythia over wg1. static-stub rather
     // than forward: Pythia is authoritative-only, so it is queried as the
     // zone's server (RD=0) and BIND does any further resolution itself.

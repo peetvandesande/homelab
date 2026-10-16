@@ -1,9 +1,9 @@
 // /etc/bind/named.conf.local - jennie
 //
 // The zones of ruby's "wireguard" view, so jennie's clients get the same
-// answers as ruby's. The split-horizon and 204 reverse zone files are
-// copies of ruby's /etc/bind/wireguard/ files: keep them identical, and
-// change them on both hosts together. Their answers still point at ruby
+// answers as ruby's. The split-horizon, 204, transit and ULA reverse zone
+// files are copies of ruby's /etc/bind/wireguard/ files: keep them
+// identical, and change them on both hosts together. Their answers still point at ruby
 // (192.168.204.254), so mail and the sites follow ruby's availability,
 // but resolution itself does not.
 //
@@ -39,7 +39,8 @@ zone "www.sogode.com" {
 };
 
 // ===========================================================================
-// Reverse zones for the client ranges: ruby's copied, jennie's own.
+// Reverse zones: the client ranges (ruby's copied, jennie's own), and the
+// transit links and VPN ULA /48 (identical on both hosts).
 // ===========================================================================
 zone "204.168.192.in-addr.arpa" {
     type primary;
@@ -50,6 +51,18 @@ zone "204.168.192.in-addr.arpa" {
 zone "205.168.192.in-addr.arpa" {
     type primary;
     file "/etc/bind/wireguard/205.168.192.in-addr.arpa";
+    notify no;
+};
+
+zone "1.31.172.in-addr.arpa" {
+    type primary;
+    file "/etc/bind/wireguard/1.31.172.in-addr.arpa";
+    notify no;
+};
+
+zone "4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa" {
+    type primary;
+    file "/etc/bind/wireguard/4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa";
     notify no;
 };
 
