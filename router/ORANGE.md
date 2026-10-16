@@ -69,6 +69,16 @@ everything else.
 | **`userclass`** | **15** | `FSVDSL_livebox.Internet.softathome.Livebox3`, plain string – see below |
 | `sendopts '16:…'` | 16 | enterprise 1038 + `sagem` |
 | `norelease '1'`, `noclientfqdn '1'` | – | |
+| **`reqprefix '56:1'`** | 25 | IA_PD IAID pinned to 1 – see below |
+
+### The IAID trap
+
+Orange binds the delegated prefix to the DUID **and** the IA_PD IAID. The
+21.02 odhcp6c always sent IAID 1; from OpenWrt 25.12 (GL 4.11) netifd derives
+it from the interface name (`54c55eeb` for `wan6`) unless `reqprefix` carries
+one. After that upgrade Orange answered with DNS servers but **no prefix** –
+the LAN had only its ULA, and both WireGuard tunnels, whose endpoints are
+IPv6, stayed down. `reqprefix '56:1'` brought back the same /56.
 
 The option 90 / 11 blob is MD5 of a random byte, the password and a random
 salt, wrapped in fixed TLVs with the `fti/` login. `tools/orange-opt90.py`
