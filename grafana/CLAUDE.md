@@ -97,7 +97,9 @@ out and no Alertmanager running — so the rules are Grafana unified-alerting
 rules, provisioned from
 `root/etc/grafana/provisioning/alerting/homelab.yaml` into the same `Homelab`
 folder and read-only in the UI. Eighteen rules in two groups, `dns` and
-`fleet`, plus the heartbeat in `heartbeat.yaml` (see "Heartbeat" below).
+`fleet`, plus the heartbeat in `heartbeat.yaml` (see "Heartbeat" below) and
+the `outside` group in `outside.yaml`, which alerts on ruby and jennie probing
+each other's public side (`outside/CLAUDE.md`).
 
 7. **Alert rules carry the Prometheus datasource uid, substituted at deploy
    time.** A rule needs `datasourceUid`, and the provisioned datasource has no

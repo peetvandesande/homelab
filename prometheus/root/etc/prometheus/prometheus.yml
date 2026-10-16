@@ -199,3 +199,59 @@ scrape_configs:
         labels: {role: delphi, component: recursor }
       - targets: ['192.168.8.52:8081']
         labels: {role: pythia, component: auth }
+
+  # ruby and jennie seen from outside (homelab/outside): each runs a blackbox
+  # exporter that probes the OTHER's public side, and this host scrapes each
+  # exporter over that server's own tunnel - jennie over wg3, ruby over wg1 -
+  # so either can report the other being down. Plain HTTP on purpose: the
+  # exporters listen only on their dummy0 address, which is reachable only
+  # through WireGuard, and neither server holds a lab certificate.
+  #
+  # Targets are public IP literals: both servers resolve ruby's names to its
+  # tunnel addresses, so the modules carry the Host header and TLS name.
+  - job_name: outside-jennie
+    metrics_path: /probe
+    scrape_interval: 2m
+    scrape_timeout: 20s
+    static_configs:
+      - targets: ['145.239.73.18:25', '[2001:41d0:305:2100::1:3a0e]:25']
+        labels: {vantage: jennie, subject: ruby, check: smtp, __param_module: smtp_mail }
+      - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
+        labels: {vantage: jennie, subject: ruby, check: sogode.com, __param_module: https_sogode }
+      - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
+        labels: {vantage: jennie, subject: ruby, check: ruby.peetvandesande.com, __param_module: https_ruby }
+      - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
+        labels: {vantage: jennie, subject: ruby, check: peetvandesande.com, __param_module: https_peetvandesande }
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: family
+        replacement: v4
+      - source_labels: [__param_target]
+        regex: '.*\[.*'
+        target_label: family
+        replacement: v6
+      - target_label: __address__
+        replacement: 192.168.254.2:9115
+
+  - job_name: outside-ruby
+    metrics_path: /probe
+    scrape_interval: 1m
+    static_configs:
+      - targets: ['57.129.180.73', '2001:41d0:801:2000::180f']
+        labels: {vantage: ruby, subject: jennie, check: ping, __param_module: icmp }
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: family
+        replacement: v4
+      - source_labels: [__param_target]
+        regex: '.*:.*'
+        target_label: family
+        replacement: v6
+      - target_label: __address__
+        replacement: 192.168.254.254:9115

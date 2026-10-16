@@ -1,0 +1,4 @@
+# Managed in homelab/outside; install.sh fills in @@ADDR@@, this server's
+# dummy0 address. Listening there and nowhere else keeps the exporter off the
+# public interface - home Prometheus reaches it over this server's tunnel.
+ARGS="--config.file=/etc/prometheus/blackbox.yml --web.listen-address=@@ADDR@@:9115"

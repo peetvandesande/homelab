@@ -36,8 +36,10 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    enrolled but not listed here is unmonitored; a host listed here but not
    enrolled fails its scrape the moment node-exporter goes TLS.
 
-5. **Every scrape job is TLS except `navidrome`, `traefik` and the broken
-   `pve`.** Navidrome has one listener for both UI and `/metrics`, and the UI is
+5. **Every scrape job is TLS except `navidrome`, `traefik`, `outside-*` and
+   the broken `pve`.** The `outside-*` blackbox exporters on ruby and jennie
+   listen only on their dummy0 address, reachable only through WireGuard, and
+   neither server holds a lab certificate - `outside/CLAUDE.md`. Navidrome has one listener for both UI and `/metrics`, and the UI is
    deliberately plain HTTP because media streaming is LAN-only — see
    `navidrome/CLAUDE.md`. Jellyfin keeps `:8920` HTTPS alongside its plain UI
    for exactly this scrape. The `dns` job reaches nginx, not the PowerDNS

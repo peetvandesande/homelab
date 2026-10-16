@@ -82,7 +82,8 @@ c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
 print(*[r[0] for r in c.execute(\"select uid from alert_rule\")], sep=\" \")"' 2>/dev/null)
 fi
 for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-empty \
-           rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat; do
+           rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat \
+           outside-probe-failing outside-vantage-down outside-cert-expiring; do
   if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done

@@ -1,0 +1,69 @@
+# blackbox_exporter modules for ruby and jennie, which probe each other's
+# public side. Managed in homelab/outside; installed by install.sh.
+#
+# Targets are public IP literals, never names: both servers' BIND answers
+# mail., ruby.peetvandesande.com and sogode.com with ruby's tunnel addresses
+# (wireguard/, split-horizon), so a probe by name would test the tunnel, not
+# the internet. So each site has its own module carrying the Host header and
+# TLS server name, and redirects are not followed - following one would
+# resolve a name.
+modules:
+  icmp:
+    prober: icmp
+    timeout: 5s
+
+  # Port 25 as another mail server sees it: banner, EHLO, STARTTLS and a
+  # certificate for mail.peetvandesande.com. A server that stops offering
+  # STARTTLS answers 502 instead of 220 and fails the probe.
+  smtp_mail:
+    prober: tcp
+    timeout: 15s
+    tcp:
+      tls_config:
+        server_name: mail.peetvandesande.com
+      query_response:
+        - expect: "^220 "
+        - send: "EHLO probe.peetvandesande.com\r"
+        - expect: "^250 "
+        - send: "STARTTLS\r"
+        - expect: "^220"
+        - starttls: true
+        - send: "QUIT\r"
+
+  https_sogode:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: sogode.com
+      tls_config:
+        server_name: sogode.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [200]
+
+  https_ruby:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: ruby.peetvandesande.com
+      tls_config:
+        server_name: ruby.peetvandesande.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [200]
+
+  # No site at the root: nginx answers 404, and that is the healthy answer.
+  # The probe is for reachability and the certificate.
+  https_peetvandesande:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: peetvandesande.com
+      tls_config:
+        server_name: peetvandesande.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [404]

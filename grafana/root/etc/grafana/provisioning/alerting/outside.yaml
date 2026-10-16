@@ -1,0 +1,165 @@
+# ruby and jennie seen from outside: blackbox exporters on each probing the
+# other's public side, scraped over the tunnels (homelab/outside). Managed from
+# homelab/grafana; delivered through Home Assistant like everything else.
+#
+# A server going down shows twice, and that is the design: its own exporter
+# stops answering (outside-vantage-down) and the other's probes of it fail
+# (outside-probe-failing). Either alone still says which server it is.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: outside
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: outside-probe-failing
+        title: "Public service failing from outside"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.subject }} {{ $labels.check }} ({{ $labels.family }}) is failing, seen from {{ $labels.vantage }}"
+          description: >-
+            No probe has succeeded for 10 minutes. The probe uses the public address, so this is what the internet sees. To see which step failed, run the probe by hand on the vantage server with debug=true - outside/CLAUDE.md has the command.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1200
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max_over_time(probe_success{job=~"outside-.*"}[10m])'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 1200
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: outside-vantage-down
+        title: "Outside prober unreachable"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cannot reach the blackbox exporter on {{ $labels.vantage }}"
+          description: >-
+            Prometheus cannot scrape the exporter over the tunnel, so the probes it runs are blind. Either the server is down - the other server's probes of it will say so - or the tunnel or the exporter is.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'min by (vantage) (up{job=~"outside-.*"})'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: outside-cert-expiring
+        title: "Public certificate expiring"
+        condition: B
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.check }} certificate on {{ $labels.subject }} expires within 14 days"
+          description: >-
+            certbot on ruby renews at 30 days remaining, so under 14 means renewal has been failing for over two weeks.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'min by (subject, check) (probe_ssl_earliest_cert_expiry{job=~"outside-.*"} - time()) / 86400'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [14]
