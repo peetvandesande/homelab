@@ -4,7 +4,7 @@ The WireGuard design for **ruby**, **jennie** and the **home** router: what goes
 
 **To deploy, work through [TASKS.md](TASKS.md):** every remaining step in order, with commands. This README is the reference behind it.
 
-Status as of 2026-10-16: the configs in this directory are **written and validated** (`netplan generate` succeeds for both ruby's and jennie's file sets). **Deployed**: the whole rollout is live and cleaned up (TASKS.md phases 0–7). Only the clients on jennie (phase 8) are still to do.
+Status as of 2026-10-16: the configs in this directory are **written and validated** (`netplan generate` succeeds for both ruby's and jennie's file sets). **Deployed**: the whole rollout is live and cleaned up (TASKS.md phases 0–7). The clients on jennie (phase 8) are live on the server side; only the client devices (8.7) are still to do.
 
 Done so far:
 
@@ -27,11 +27,12 @@ Done so far:
 - Task 6: clients updated, with their IPv4 exits chosen
 - Task 7: tested end to end, ruby and jennie rebooted
 - Task 8: secrets and the wg-quick leftovers removed
+- Task 8.1–8.6, clients on jennie: jennie's wg0, firewall and BIND, ruby's routes back over wg2 (main-table routes to `192.168.205.0/24` and `fd33:5692:1834:205::/64`, added live by hand alongside the file) and the router's two policy rules into wgclient2
 - home router: wg3 is configured and up, with the routes, IPv6 masquerade and destination policy described in [Task 4c](#task-4-jennie--home-wg3), and the LAN ULA `/64`s (see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6))
 
-Written 2026-10-15, not yet deployed:
+Not yet deployed:
 
-- **Clients on jennie:** a second `wg0` on jennie for the same three devices, with jennie's own BIND, routes back on ruby and two policy rules on the router (see [Clients on jennie](#clients-on-jennie), TASKS.md phase 8)
+- **Clients on jennie, the devices (TASKS.md 8.7):** the second tunnel on mba, mbp and iphone-peet (see [Clients on jennie](#clients-on-jennie) and [Client config](#client-config))
 
 ***
 
@@ -217,7 +218,7 @@ ruby's firewall is the hand-written `/etc/nftables.conf` (`table inet filter`, p
 
 ### Service allow lists
 
-DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN**: clients, the home LANs, jennie and the tunnel links, over IPv4 and IPv6. The services are reached at the wg0 addresses (`192.168.204.254`, `fd33:5692:1834:204::254`), which every site already routes to ruby. Task 5e (`ruby/services/`) makes the changes:
+DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN**: clients, the home LANs, jennie and the tunnel links, over IPv4 and IPv6. The services are reached at the wg0 addresses (`192.168.204.254`, `fd33:5692:1834:204::254`), which every site already routes to ruby. Task 5e (`ruby/services/`) made the changes, and they're live:
 
 | Service | What limits it | Change |
 |---------|----------------|--------|
@@ -232,6 +233,7 @@ DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN
 | Range | What |
 |-------|------|
 | `192.168.204.0/24` | wg0 clients |
+| `192.168.205.0/24` | jennie's wg0 clients (see [Clients on jennie](#clients-on-jennie)) |
 | `192.168.8.0/21` | home LANs |
 | `192.168.254.0/24` | site service addresses (dummies) |
 | `172.31.1.0/24` | tunnel links: jennie's and the home router's own queries leave from their tunnel address |
