@@ -367,7 +367,7 @@ ruby's live `/etc/wireguard/wg0.conf` is **never modified**. The migration only 
 
 ## Tasks
 
-Run commands on ruby from this directory (`cd ~/wg`) unless marked *on jennie* or *on home*.
+These tasks ran on ruby from a copy of this directory (`cd ~/wg`), and on jennie from `~/wg-jennie`, unless marked *on home*. They are kept as the record of how it was done. Since then ruby and jennie each have a clone of the repo at `~/homelab`: new work runs from `~/homelab/wireguard`, and secrets are filled into the installed copy under `/etc`, never into the clone (see TASKS.md).
 
 Order:
 

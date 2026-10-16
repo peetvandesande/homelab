@@ -20,7 +20,12 @@ is a `<placeholder>`. The real values – ruby's `wg1.key`/`wg2.key`, the PSKs,
 the filled-in configs and the old wg-quick configs (`superseded/`) – live
 outside git in `~/projects/homelab-private/wireguard/`.
 
-To deploy, copy this directory to ruby as `~/wg`, add the key files from
+ruby and jennie each have a clone of the repo at `~/homelab`; deploy steps
+run from `~/homelab/wireguard` there. **Never fill a secret into the clone**:
+install the template to its destination (`/etc/netplan/`, ...) and fill it
+there with `sudo sed -i`, then check `git status` is clean.
+
+For `fill-secrets.py`, copy this directory out of the clone, add the key files from
 `homelab-private`, and run `./fill-secrets.py` **there**. It edits files in
 place, so it refuses to run inside a git work tree. Never commit a filled file;
 public keys are fine, anything else that looks like a WireGuard key is not.

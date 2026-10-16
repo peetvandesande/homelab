@@ -2,7 +2,9 @@
 
 Every remaining step, in order, from where things stand on 2026-10-16. Explanations, full test output and rollback are in [README.md](README.md); each task names its README section.
 
-Unless a task says otherwise, run commands **on ruby** from `~/wg`. *On jennie* means in `~/wg-jennie` on jennie. *On home* means the home router's own UI or CLI.
+ruby and jennie each have a clone of this repo at `~/homelab`. Unless a task says otherwise, run commands **on ruby** from `~/homelab/wireguard`; *on jennie* means the same directory on jennie, and *on home* means the home router's own UI or CLI. `git pull` first.
+
+**Never fill secrets into the clone:** the repo is public, and a filled file there is one `git add` from being pushed. Install the template to its destination and fill it there. Phases 0–7 predate the clones and ran from copies in `~/wg` and `~/wg-jennie`, so their commands say so.
 
 `[x]` = done (phase 0 verified on ruby 2026-10-09; phases 1–7 reported done 2026-10-16), `[ ]` = to do. Phases 1–3 don't disturb anything running; phase 4 is the only one with downtime.
 
@@ -218,34 +220,37 @@ Clients drop for a few seconds; home ↔ ruby is down until 4.5. Have 4.1 ready 
 
 ## Phase 8: clients on jennie (README [Clients on jennie](README.md#clients-on-jennie))
 
-No impact on anything running: wg0 on jennie is a new tunnel, and the routes and rules elsewhere only match the new range. Copy the new `jennie/` files into `~/wg-jennie` first: `80-wireguard-wg0.yaml`, `nftables.conf` and `services/`.
+No impact on anything running: wg0 on jennie is a new tunnel, and the routes and rules elsewhere only match the new range. `git -C ~/homelab pull` on jennie and ruby first.
 
-- [ ] **8.1 Key and PSKs** (*on jennie*). Keep copies in `~/projects/homelab-private/wireguard/`.
+- [ ] **8.1 Key and PSKs** (*on jennie*). The template is installed first and filled in `/etc/netplan`, never in the clone. Keep copies of the key and PSKs in `~/projects/homelab-private/wireguard/`.
   ```bash
-  cd ~/wg-jennie
+  cd ~/homelab/wireguard
   (umask 077; wg genkey | sudo tee /etc/wireguard/wg0.key | wg pubkey)     # jennie wg0 public key, for the clients
   for c in mba iphone-peet mbp; do (umask 077; wg genpsk | sudo tee /etc/wireguard/jennie-$c.psk >/dev/null); done
-  sed -i "s|<jennie wg0 private key>|$(sudo cat /etc/wireguard/wg0.key)|" 80-wireguard-wg0.yaml
-  for c in mba iphone-peet mbp; do sed -i "s|<psk jennie-$c>|$(sudo cat /etc/wireguard/jennie-$c.psk)|" 80-wireguard-wg0.yaml; done
-  grep -n '<' 80-wireguard-wg0.yaml || echo filled
+  F=/etc/netplan/80-wireguard-wg0.yaml
+  sudo install -m 600 -o root -g root jennie/80-wireguard-wg0.yaml $F
+  sudo sed -i "s|<jennie wg0 private key>|$(sudo cat /etc/wireguard/wg0.key)|" $F
+  for c in mba iphone-peet mbp; do sudo sed -i "s|<psk jennie-$c>|$(sudo cat /etc/wireguard/jennie-$c.psk)|" $F; done
+  sudo grep -n '<' $F || echo filled
+  git status --short                                                        # clean: nothing filled in the clone
   ```
 - [ ] **8.2 Firewall** (*on jennie*): opens UDP 51820 on both families and adds wg0 to the VPN.
   ```bash
   sudo cp /etc/nftables.conf /etc/nftables.conf.bak-$(date +%F)
-  sudo install -m 644 nftables.conf /etc/nftables.conf
+  sudo install -m 644 jennie/nftables.conf /etc/nftables.conf
   sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables
   ```
 - [ ] **8.3 Install wg0** (*on jennie*)
   ```bash
-  sudo install -m 600 80-wireguard-wg0.yaml /etc/netplan/ && sudo netplan generate && sudo networkctl reload
+  sudo netplan generate && sudo networkctl reload                # the file was installed and filled in 8.1
   sudo wg show wg0; ip -br addr show wg0       # 192.168.205.254/24, fd33:5692:1834:205::254/64
   ```
 - [ ] **8.4 BIND** (*on jennie*)
   ```bash
   sudo apt install bind9
-  sudo install -m 644 -o root -g bind services/etc/bind/named.conf.options services/etc/bind/named.conf.local /etc/bind/
+  sudo install -m 644 -o root -g bind jennie/services/etc/bind/named.conf.options jennie/services/etc/bind/named.conf.local /etc/bind/
   sudo install -d -m 755 -o bind -g bind /etc/bind/wireguard
-  sudo install -m 644 -o bind -g bind services/etc/bind/wireguard/* /etc/bind/wireguard/
+  sudo install -m 644 -o bind -g bind jennie/services/etc/bind/wireguard/* /etc/bind/wireguard/
   sudo named-checkconf -z && sudo systemctl restart named
   sudo ss -lnup 'sport = 53'                                   # 205::254, 254::2, loopback; never 57.129.180.73
   dig @192.168.205.254 mail.peetvandesande.com +short          # 192.168.204.254
