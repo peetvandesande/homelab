@@ -7,10 +7,11 @@ internet exit). The home end is the router's `wgclient1` (wg1, to ruby) and
 into them.
 
 Unlike the other top-level directories this is not a container filesystem and
-has no `deploy.sh`. It is a hand-run rollout, mid-way through:
+has no `deploy.sh`. It was a hand-run rollout, now live:
 
-- `README.md` – the design and the reference behind every step
-- `TASKS.md` – the remaining steps in order, with commands. **Start here.**
+- `README.md` – the design and why: explanation only, no runbook steps
+- `TASKS.md` – the rollout's steps in order, with commands, the open
+  follow-ups, and (as appendices) the original task notes and rollback.
   Status was last recorded on 2026-10-16; check the hosts before trusting it.
 
 ## Secrets are not in this repo

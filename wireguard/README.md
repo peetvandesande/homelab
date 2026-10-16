@@ -1,38 +1,8 @@
 # WireGuard: ruby, jennie and home
 
-The WireGuard design for **ruby**, **jennie** and the **home** router: what goes where, and the steps to deploy it.
+How the WireGuard network between **ruby**, **jennie** and the **home** router is built, and why. This file explains the design; it isn't a runbook. The rollout's steps, what's still open, and rollback are in [TASKS.md](TASKS.md).
 
-**To deploy, work through [TASKS.md](TASKS.md):** every remaining step in order, with commands. This README is the reference behind it.
-
-Status as of 2026-10-16: the configs in this directory are **written and validated** (`netplan generate` succeeds for both ruby's and jennie's file sets). **Deployed**: the whole rollout is live and cleaned up (TASKS.md phases 0–7). The clients on jennie (phase 8) are live on the server side; only the client devices (8.7) are still to do.
-
-Done so far:
-
-- `/etc/wireguard.bak-2026-10-08` backup made on ruby
-- ruby's wg1 and wg2 keys generated (`wg1.key`/`wg1.pub`, `wg2.key`/`wg2.pub`)
-- PSKs generated for ruby–jennie (`jennie.psk`) and home–jennie (`home-jennie.psk`)
-- jennie's wg2 key generated on jennie (public key `+0MxQ46pU2YUBHPrY7cLHr+ahAhS5fMXImlLRvBoOgk=`)
-- Task 1a: ruby's wg0 key and the client/home PSKs filled in
-- Task 2b/2c: ruby's new `/etc/nftables.conf` installed (2026-10-08 20:44) and `wg-docker-user.service` enabled. `ruby/nftables.conf.orig` is the pre-change original.
-- ruby: `82-wireguard-wg2.yaml` installed (2026-10-08 20:57); wg2 is up with the via-jennie table and rules
-- jennie: wg2 and dummy0 are up. From ruby, `172.31.1.6`, `fd33:5692:1834:ff02::2`, `192.168.254.2` and `fd33:5692:1834:254::2` all answer (checked 2026-10-09).
-- jennie: wg3 is up
-- Task 2a: forwarding owned by networkd on ruby
-- Task 2d: jennie's firewall and forwarding, so the exit via jennie works
-- Task 2e: ruby's dummies renumbered to `fd33:5692:1834:254::254`/`::253`
-- ruby's live `/etc/nftables.conf` matches `ruby/nftables.conf`, comments included
-- `.home` names for jennie itself: routing-only domains to Pythia on wg3 (TASKS.md 3.5)
-- no provider firewall is in use on either server (Task 2f)
-- Task 5: ruby's wg0 on netplan, home moved to wg1 (`wgclient1`), and 5e's service changes (IPv6 listeners, VPN-wide DNS, start order), including ruby's `home.` zones
-- Task 6: clients updated, with their IPv4 exits chosen
-- Task 7: tested end to end, ruby and jennie rebooted
-- Task 8: secrets and the wg-quick leftovers removed
-- Task 8.1–8.6, clients on jennie: jennie's wg0, firewall and BIND, ruby's routes back over wg2 (main-table routes to `192.168.205.0/24` and `fd33:5692:1834:205::/64`, added live by hand alongside the file) and the router's two policy rules into wgclient2
-- home router: wg3 is configured and up, with the routes, IPv6 masquerade and destination policy described in [Task 4c](#task-4-jennie--home-wg3), and the LAN ULA `/64`s (see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6))
-
-Not yet deployed:
-
-- **Clients on jennie, the devices (TASKS.md 8.7):** the second tunnel on mba, mbp and iphone-peet (see [Clients on jennie](#clients-on-jennie) and [Client config](#client-config))
+Status as of 2026-10-16: everything described here is live, except the reverse zones in ruby's `internal` view (TASKS.md follow-ups).
 
 ***
 
@@ -98,16 +68,19 @@ Each tunnel uses the **same interface name and port on both ends**, so `wg3` mea
 |-----------|---------------------|
 | ruby      | wg0, wg1, wg2       |
 | jennie    | wg0, wg2, wg3       |
-| home | wg1, wg3            |
+| home | wg1 (`wgclient1`), wg3 (`wgclient2`) |
 
 ### Netplan, not wg-quick
 
-ruby and jennie configure their networks with netplan, so all WireGuard interfaces (including ruby's existing wg0) are netplan `tunnels:` of `mode: wireguard`, rendered by systemd-networkd. Things that differ from wg-quick:
+ruby and jennie configure their networks with netplan, so every WireGuard interface is a netplan `tunnels:` entry of `mode: wireguard`, rendered by systemd-networkd. Things that differ from wg-quick:
 
 - **Routes are explicit.** networkd doesn't add routes for `AllowedIPs`, so each YAML file lists the routes for the far end's networks under `routes:`. The transit `/30` and `/64` come from the interface addresses.
-- **No PostUp/PostDown hooks.** ruby's firewall and NAT stay where they already are, in `/etc/nftables.conf` (see [Firewall on ruby](#firewall-on-ruby)). The one thing that can't go there, an exception in Docker's IPv6 forward chain, is a small systemd unit, `wg-docker-user.service`.
-- **Keys are inline in the YAML.** Files in `/etc/netplan` must be mode `600`; networkd's generated copies in `/run/systemd/network` are `640 root:systemd-network`.
+- **No PostUp/PostDown hooks.** Firewalls and NAT live in each host's `/etc/nftables.conf` (see [Firewall on ruby](#firewall-on-ruby)). The one thing that can't go there, an exception in Docker's IPv6 forward chain, is a small systemd unit, `wg-docker-user.service`.
+- **Keys are inline in the YAML.** Files in `/etc/netplan` must be mode `600`; networkd's generated copies in `/run/systemd/network` are `640 root:systemd-network`. The repo's copies hold `<placeholders>` only.
+- **New interfaces come up with `networkctl reload`**, which leaves existing ones alone. `netplan apply` also works, but it reconfigures every netplan-managed interface, ens3 included.
 - **Changes to an existing tunnel** don't always get applied by `networkctl reload`. See [Day-to-day](#day-to-day).
+
+**Forwarding is owned by networkd**, set globally for both families in `networkd-forwarding.conf` on each server (needs systemd ≥ 256). On ruby it used to be IPv4 from a per-interface drop-in and IPv6 only because dockerd happened to enable it.
 
 ***
 
@@ -127,7 +100,7 @@ IPv6 inside the VPN uses the ULA prefix **`fd33:5692:1834::/48`** (randomly gene
 
 `172.31.1.0/24` is for site-to-site transit links, one `/30` each, paired with `fd33:5692:1834:ffNN::/64`. ruby takes the first address on its links. On links without ruby, the server takes the first address and the router the second. The next free link is `172.31.1.12/30`, `ff04::/64`, port 51824.
 
-The home tunnels use MTU 1388 to allow for the home connection (e.g. PPPoE). wg2 runs between two hosts on clean IPv6, so it uses 1420 (1500 minus 80 bytes of WireGuard-over-IPv6 overhead).
+The home tunnels use MTU 1388 to allow for the home connection (e.g. PPPoE). wg2 runs between two hosts on clean IPv6, so it uses 1420 (1500 minus 80 bytes of WireGuard-over-IPv6 overhead). A don't-fragment ping of MTU − 28 (IPv4) or MTU − 48 (IPv6) bytes checks a link: `ping -M do -s 1360 172.31.1.10` for wg3. If that fails but smaller sizes work, the home link's MTU is lower; lower it on both ends of wg1 and wg3.
 
 ### Clients (wg0)
 
@@ -149,7 +122,7 @@ On jennie each client keeps its host number and reuses its key pair, with a PSK 
 | jennie    | `192.168.254.2/32` (dummy0)                          | `fd33:5692:1834:254::2/128` (dummy0)                              |
 | home | `192.168.8.0/21`                                     | `fd33:5692:1834:1000::/56` (one `/64` per LAN: lan `1000::/64`, iot `1001::/64`, guest `1002::/64`), plus the ISP's own ranges |
 
-ruby's dummies used to be `fd00::1`/`fd00::2`. `fd00::/64` is a common default on other networks (Fritz!Box routers use it on the LAN), so a client or home network using it would collide. They're being renumbered into `fd33:5692:1834:254::/64` (Task 2e), with `::254`/`::253` matching their IPv4 addresses. `fd33:5692:1834:254::/64` holds all the sites' service addresses.
+`fd33:5692:1834:254::/64` holds all the sites' service addresses, with host numbers matching their IPv4 ones. ruby's dummies used to be `fd00::1`/`fd00::2`, but `fd00::/64` is a common default on other networks (Fritz!Box routers use it on the LAN), so a client or home network using it would collide. rspamd's `local_addrs` (`fd00::/8`) covers both old and new.
 
 ### Home LANs and the ISP's IPv6
 
@@ -162,13 +135,13 @@ So nothing needs translating, and an ISP renumbering doesn't affect the VPN. One
 
 **On the router,** the global ULA prefix is `fd33:5692:1834::/48` (replacing GL's default `fd0c:aa7b:aee6::/48`). The LANs get their `/64`s by static `ip6addr` on the interface, and the ISP `/60` delegations are unchanged. odhcpd first gave iot an extra ULA `fd33:5692:1834::/60`, because iot had `ip6assign` and no `ip6class`. Setting iot's `ip6class` to LAN's list stopped that, and the stray address and route were removed. Clients only need the `/64` per LAN; a `/60` isn't a client prefix.
 
-**Exception: IPv6 internet traffic sent via jennie.** For internet destinations, hosts use their ISP address as the source. jennie only accepts and routes back VPN addresses, so the router must masquerade IPv6 going into wg3 to its wg3 address `fd33:5692:1834:ff03::2`. jennie then NAT66s that to its own address. This only applies to the traffic the router chooses to send via jennie; tunnel-to-tunnel traffic is still never translated. IPv4 needs no NAT on the router.
+**Exception: IPv6 internet traffic sent via jennie.** For internet destinations, hosts use their ISP address as the source. jennie only accepts and routes back VPN addresses, so the router masquerades IPv6 going into wg3 to its wg3 address `fd33:5692:1834:ff03::2`, and jennie then NAT66s that to its own address. The rule skips VPN sources (`! -s fd33:5692:1834::/48`), so only ISP-sourced traffic is translated and jennie still sees home hosts' real ULA addresses. Tunnel-to-tunnel traffic is never translated. IPv4 needs no NAT on the router.
 
 ### Internet exits
 
 | Exit   | IPv4 | IPv6 | Used by |
 |--------|------|------|---------|
-| ruby   | snat to `46.105.253.72` (unchanged) | **none**, no NAT66 on ruby | clients' IPv4, by default |
+| ruby   | snat to `46.105.253.72` | **none**, no NAT66 on ruby | clients' IPv4, by default |
 | jennie | snat to `57.129.180.73` | snat to `2001:41d0:801:2000::180f` (NAT66; jennie has a single `/128`) | clients' IPv6, opted-in clients' IPv4, home traffic the router sends to it, and all of jennie's own clients' traffic |
 
 **On ruby:**
@@ -178,55 +151,71 @@ So nothing needs translating, and an ISP renumbering doesn't affect the VPN. One
 - **Routing-policy rules** decide what uses table 200:
   - priority 900: destinations in `fd33:5692:1834::/48`, `192.168.0.0/16` and `172.16.0.0/12` always use the main table, so clients sent via jennie still reach ruby, each other, home and jennie
   - priority 1000: client IPv6 (`fd33:5692:1834:204::/64`) goes to table 200, so it exits via jennie
-  - client IPv4 is commented out by default; add a `from: 192.168.204.N/32` rule per client to switch that client's IPv4 exit to jennie
+  - client IPv4 is commented out by default; a `from: 192.168.204.N/32` rule per client switches that client's IPv4 exit to jennie (see [Day-to-day](#day-to-day))
 - **ruby's firewall still drops IPv6 from any tunnel heading out of ens3.** If the policy routing were ever missing, client IPv6 fails closed instead of leaking ULA-sourced packets.
 
 **On jennie:**
 
-- Forwarding is on for both families, set globally in systemd-networkd (`jennie/networkd-forwarding.conf`).
 - jennie's firewall, `jennie/nftables.conf`, does NAT44 and NAT66 out of ens3 and clamps TCP MSS. Its forward chain has a drop policy and only allows VPN → internet and the replies back (see [Firewall on jennie](#firewall-on-jennie)).
 - Return traffic needs nothing extra: jennie already routes the client and home ranges back over wg2 and wg3.
 
 **On home:** wg3's peer allows `0.0.0.0/0, ::/0`, and that's intentional. The router's GL route policy decides what goes into wg3, not the WireGuard config. The main routing table only holds routes to jennie's own addresses (`172.31.1.9`, `192.168.254.2`, `fd33:5692:1834:ff03::1`, `fd33:5692:1834:254::2`). Table 1002 has a default route via wg3, but only traffic the policy marks (`0x2000`) uses it, so home traffic isn't sent to jennie by default.
 
-Today the policy is the `UK` rule (tunnel 6611). Its targets are in `/etc/domain_mac_list/dst_net6611_manual`: 28 BBC domains, resolved by the router's dnsmasq, plus jennie's `192.168.254.2` and `fd33:5692:1834:254::2`. Traffic into wg3 is masqueraded to `fd33:5692:1834:ff03::2` as described above.
+Today the policy is the `UK` rule (tunnel 6611). Its targets are in `/etc/domain_mac_list/dst_net6611_manual`: 28 BBC domains, resolved by the router's dnsmasq, plus jennie's `192.168.254.2` and `fd33:5692:1834:254::2`. **Domain-based policy only sees DNS that goes through the router.** A device using its own DNS (browser DNS-over-HTTPS, iCloud Private Relay, a hard-coded resolver) gets BBC addresses dnsmasq never sees, so that traffic isn't marked and leaves via the ISP. If BBC checks fail on one device, check its DNS first.
 
-Two things to know about this setup:
+***
 
-- **Domain-based policy only sees DNS that goes through the router.** A device using its own DNS (browser DNS-over-HTTPS, iCloud Private Relay, a hard-coded resolver) gets BBC addresses dnsmasq never sees, so that traffic isn't marked and leaves via the ISP. If BBC checks fail on one device, check its DNS first.
-- **The IPv6 masquerade should skip VPN sources.** Translation is only needed for ISP-sourced traffic. A plain `-o wgclient2 -j MASQUERADE` also rewrites home hosts' ULA traffic to jennie (for example to `fd33:5692:1834:254::2`), so jennie sees `ff03::2` instead of the real host. Add `! -s fd33:5692:1834::/48` to the rule (Task 4c).
+## Home router
+
+The router's settings live in `uci`, written by the GL.iNet UI; `home/wg1.conf` and `home/wg3.conf` are wg-quick-format references, not something to install. `router/README.md` covers the router as a whole, including the policy rules at priority 19000 that make router-originated traffic to the tunnels' far ends work.
+
+| Setting | wg1 (`wgclient1`, to ruby) | wg3 (`wgclient2`, to jennie) |
+|---------|----------------------------|------------------------------|
+| Tunnel address | `172.31.1.2/30`, `fd33:5692:1834:ff01::2/64` | `172.31.1.10/30`, `fd33:5692:1834:ff03::2/64` |
+| MTU | `1388` | `1388` |
+| Endpoint | `[2001:41d0:305:2100::1:3a0e]:51821` | `[2001:41d0:801:2000::180f]:51823` |
+| Persistent keepalive | `25` | `25` |
+| Peer allowed IPs | `172.31.1.1/32, fd33:5692:1834:ff01::1/128, 192.168.204.0/24, fd33:5692:1834:204::/64, 192.168.254.253/32, 192.168.254.254/32, fd33:5692:1834:254::254/128, fd33:5692:1834:254::253/128` | `0.0.0.0/0, ::/0` (jennie is an internet exit) |
+| Routing table | 1001 | 1002, holding the default via wg3; automatic routes off (wg-quick `Table = off`), so main is unaffected |
+| Routes | `route6` entries for the remote IPv6 prefixes, which land in table 1001 (the interface's `ip6table` wins over a per-route `table`); IPv4 uses the table's default | in main: `172.31.1.9/32`, `192.168.254.2/32`, `fd33:5692:1834:ff03::1/128`, `fd33:5692:1834:254::2/128`, as `route`/`route6` entries on `wgclient2` |
+| Policy | site-to-site IP set `dst_net4399` | GL route policy `UK` (tunnel 6611, mark `0x2000`) |
+| NAT | none | IPv6 MASQUERADE for non-VPN sources, in `/etc/firewall.user` |
+
+The router's firewall accepts wgclient1/wgclient2 → lan.
 
 ***
 
 ## Firewall on ruby
 
-ruby's firewall is the hand-written `/etc/nftables.conf` (`table inet filter`, plus `table ip wgnat` for client NAT). Docker manages its own `ip`/`ip6` tables through iptables-nft. The live ruleset dumped to `ruby/current-nft-ruleset` matches the file.
+ruby's firewall is the hand-written `/etc/nftables.conf` (`table inet filter`, plus `table ip wgnat` for client NAT), and `ruby/nftables.conf` matches it. Docker manages its own `ip`/`ip6` tables through iptables-nft. There's no provider firewall (no OVH network firewall or security groups) on either server, so each host's nftables is the only filtering.
 
-`ruby/nftables.conf` is the proposed new version. `ruby/nftables.conf.diff` shows exactly what changes against the live file. It passes `nft -c`. The changes:
+What the WireGuard work changed against the original (`ruby/nftables.conf.orig`, diff in `ruby/nftables.conf.diff`):
 
 | Area | Change |
 |------|--------|
 | `define`s | `WGIFS = { "wg0", "wg1", "wg2" }`, `DOCKERNET6`, `JENNIE6` |
 | input | UDP 51821 accepted on `$PUB6` from anywhere (home has a dynamic address); UDP 51822 on `$PUB6` only from jennie |
-| input | The VPN-side service rules (SSH, DNS, web, mail submission/IMAP/Sieve, mosh) now apply to all `$WGIFS`, not just wg0. The firewall then lets home LANs and jennie through, but most of those services still only accept clients (see [Service allow lists](#service-allow-lists)) |
-| input | Removed: the `wg0` rule for TCP 19080. The WordPress container is now published on loopback only and reached through the host nginx on 80/443 (see the end of this README) |
-| forward | `wg0 ↔ wg0` accept becomes `$WGIFS ↔ $WGIFS`: anything in the VPN reaches anything else |
-| forward | The "no route into Docker or other private space" drops now apply to all tunnels, and gain an IPv6 rule for Docker's `fda6:50ae:40f0::/64` |
+| input | The VPN-side service rules (SSH, DNS, web, mail submission/IMAP/Sieve, mosh) apply to all `$WGIFS`, not just wg0. The firewall lets home LANs and jennie through, and the services themselves decide who they accept (see [Service allow lists](#service-allow-lists)) |
+| input | Removed: the dead `wg0` rule for TCP 19080 (see the end of this README) |
+| forward | `wg0 ↔ wg0` accept became `$WGIFS ↔ $WGIFS`: anything in the VPN reaches anything else |
+| forward | The "no route into Docker or other private space" drops apply to all tunnels, with an IPv6 rule for Docker's `fda6:50ae:40f0::/64` |
 | forward | New: `ens3 → $WGIFS` drop. Under the accept policy, nothing previously stopped the internet side from starting connections into the VPN |
-| forward | New: IPv6 from any tunnel to ens3 is dropped (no NAT66) |
-| nat | Unchanged: IPv4 `wgnat` only; comment notes there is deliberately no NAT66 |
+| forward | New: IPv6 from any tunnel to ens3 is dropped (no NAT66 on ruby) |
+| nat | IPv4 `wgnat` only, deliberately no NAT66 |
 
 ### Service allow lists
 
-DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN**: clients, the home LANs, jennie and the tunnel links, over IPv4 and IPv6. The services are reached at the wg0 addresses (`192.168.204.254`, `fd33:5692:1834:204::254`), which every site already routes to ruby. Task 5e (`ruby/services/`) made the changes, and they're live:
+DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN**: clients, the home LANs, jennie and the tunnel links, over IPv4 and IPv6. They're reached at the wg0 addresses (`192.168.204.254`, `fd33:5692:1834:204::254`), which every site routes to ruby.
 
-| Service | What limits it | Change |
-|---------|----------------|--------|
-| BIND | listen addresses, plus the `wireguard` view's `match-clients` and ACLs (`192.168.204.0/24` only) | new `acl "vpn"` used by the view and all its ACLs; also listens on `fd33:5692:1834:204::/64` |
-| Postfix submission/smtps | the bind address only; it requires SMTP AUTH from every source (the VPN is deliberately absent from `mynetworks`) | also binds `[fd33:5692:1834:204::254]` (the IPv6 services `master.cf` already had prepared) |
-| Dovecot ManageSieve | the listen addresses only; it requires TLS and auth from every source | also listens on `fd33:5692:1834:204::254` and `fd33:5692:1834:254::254` |
-| Dovecot IMAPS | none (`*, ::`) | none |
-| nftables | `$WGIFS` input rules (Task 2b, live) | none |
+| Service | Listens on | What else gates it |
+|---------|------------|--------------------|
+| BIND | `192.168.204.0/24` and `fd33:5692:1834:204::/64` (the wg0 addresses), plus loopback and Docker | the `wireguard` view's `match-clients` and ACLs, all `acl "vpn"` |
+| Postfix submission/smtps | `192.168.204.254`, `[fd33:5692:1834:204::254]` | SMTP AUTH from every source; the VPN is deliberately absent from `mynetworks` |
+| Dovecot ManageSieve | `192.168.204.254`, `192.168.254.254` and their IPv6 twins | TLS and auth from every source |
+| Dovecot IMAPS | `*, ::` | auth |
+| nftables | n/a | the `$WGIFS` input rules |
+
+Postfix's `wireguard_clients.cidr` exists but isn't referenced: binding only the wg0 addresses plus SASL is the real gate, and `main.cf`'s comments say so.
 
 `acl "vpn"` in `named.conf.local`:
 
@@ -239,32 +228,29 @@ DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN
 | `172.31.1.0/24` | tunnel links: jennie's and the home router's own queries leave from their tunnel address |
 | `fd33:5692:1834::/48` | the whole VPN ULA prefix |
 
-The `wireguard` view also resolves the lab's internal names. `home` and `8.168.192.in-addr.arpa` are `static-stub` zones pointing at Pythia (`192.168.8.52`), the lab's authoritative server, reached over wg1. They don't go to Themis or Delphi because those only accept queries from the home LAN and the Proxmox lab networks. `disable-empty-zone "168.192.in-addr.arpa"` stops BIND's built-in RFC 1918 empty zone answering the lab's PTRs first. No DNSSEC exception is needed because ruby doesn't validate (`dnssec-validation no`). Check with `dig @192.168.204.254 pythia.home` from a client.
+The `wireguard` view also resolves the lab's internal names. `home` and `8.168.192.in-addr.arpa` are `static-stub` zones pointing at Pythia (`192.168.8.52`), the lab's authoritative server, reached over wg1. They don't go to Themis or Delphi because those only accept queries from the home LAN and the Proxmox lab networks. `disable-empty-zone "168.192.in-addr.arpa"` stops BIND's built-in RFC 1918 empty zone answering the lab's PTRs first, which is also why every other `192.168.x` range the VPN uses needs a reverse zone of its own (see [Reverse zones](#reverse-zones)). No DNSSEC exception is needed because ruby doesn't validate (`dnssec-validation no`).
 
-Home hosts reach ruby over IPv6 from their **ULA** address (the router advertises a ULA `/64`; see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6)). Their ISP address isn't in wg1's allowed IPs, so it never gets through. That's by design.
+Home hosts reach ruby over IPv6 from their **ULA** address (see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6)). Their ISP address isn't in wg1's allowed IPs, so it never gets through. That's by design.
 
-Start order: Postfix and Dovecot bind specific addresses, which must exist when they start, so Task 5e also makes both wait for systemd-networkd to finish configuring wg0 (and dummy0 for Dovecot):
+**Start order:** Postfix and Dovecot bind specific addresses, which must exist when they start, so both wait for systemd-networkd to finish configuring them (`ruby/services/etc/systemd/`):
 
-- **Dovecot:** its existing drop-in ordered it after `wg-quick@wg0`, which no longer applies once wg0 moves to netplan. It now waits for `systemd-networkd-wait-online@wg0:routable` and `@dummy0:routable`.
-- **Postfix:** a new drop-in does the same for wg0. Postfix had none, so it was only ordered after `network.target`, which waits for no interface. With wg-quick, it already risked failing to bind `192.168.204.254` at boot.
-
-Left as they are (see [TASKS.md](TASKS.md), follow-ups):
-
-- **Postfix's CIDR table** (`wireguard_clients.cidr`) isn't referenced anywhere, although `main.cf`'s comments say it rejects sources outside `192.168.204.0/24`. The real gate is binding only the wg0 addresses, plus SASL. `main.cf`'s header still describes the VPN as `192.168.204.0/24 (wg0)`.
-- **The split-horizon `mail.peetvandesande.com`** has only an A record, so mail keeps going over IPv4. That's fine, since hosts prefer IPv4 over ULA anyway.
+- **Dovecot** waits for `systemd-networkd-wait-online@wg0:routable` and `@dummy0:routable`.
+- **Postfix** waits for wg0 the same way. Before, it was only ordered after `network.target`, which waits for no interface, so it could fail to bind `192.168.204.254` at boot.
 
 ### Docker's IPv6 forward policy is DROP
 
-Docker runs with `"ip6tables": true`, so its `ip6 filter` FORWARD chain has **policy drop**. As the header of `nftables.conf` explains, a drop in any chain on the forward hook wins, so accepts in `nftables.conf` can't override it. **All IPv6 forwarding through ruby is currently dropped.** That wasn't visible before because nothing in the VPN used IPv6.
+Docker runs with `"ip6tables": true`, so its `ip6 filter` FORWARD chain has **policy drop**. As the header of `nftables.conf` explains, a drop in any chain on the forward hook wins, so accepts in `nftables.conf` can't override it. Without an exception, all IPv6 forwarding through ruby is dropped.
 
-`ruby/wg-docker-user.service` fixes this by adding narrow accepts to Docker's `DOCKER-USER` chain:
+`ruby/wg-docker-user.service` adds narrow accepts to Docker's `DOCKER-USER` chain:
 
 - **IPv6:** tunnel ↔ tunnel only. With no NAT66, IPv6 never goes from a tunnel to the internet.
-- **IPv4:** tunnel ↔ tunnel, tunnel → ens3, and ens3 → tunnel for established/related traffic. IPv4's policy is currently accept, so these are insurance. It runs after dockerd, re-runs whenever Docker restarts (`PartOf=docker.service`), and checks before inserting, so rules never duplicate. Nothing in it touches traffic to containers, so Docker's isolation still applies.
+- **IPv4:** tunnel ↔ tunnel, tunnel → ens3, and ens3 → tunnel for established/related traffic. IPv4's policy is currently accept, so these are insurance.
+
+It runs after dockerd, re-runs whenever Docker restarts (`PartOf=docker.service`), and checks before inserting, so rules never duplicate. Nothing in it touches traffic to containers, so Docker's isolation still applies.
 
 ### Applying firewall changes
 
-Use **`systemctl reload nftables`**, never `restart`. The unit's `ExecStop` is `nft flush ruleset`, which wipes Docker's tables as well, and container networking stays broken until dockerd restarts. `reload` re-runs the file, whose declare-then-delete idiom only replaces ruby's own tables.
+Use **`systemctl reload nftables`**, never `restart`. The unit's `ExecStop` is `nft flush ruleset`, which wipes Docker's tables as well, and container networking stays broken until dockerd restarts. `reload` re-runs the file, whose declare-then-delete idiom only replaces ruby's own tables. The same goes for jennie, for consistency.
 
 ***
 
@@ -279,33 +265,43 @@ jennie had no firewall. `jennie/nftables.conf` follows ruby's conventions (inet 
 | output | accept | none |
 | nat (`inet wgnat`) | n/a | snat VPN IPv4 sources to `57.129.180.73` and VPN IPv6 (`fd33:5692:1834::/48`) to `2001:41d0:801:2000::180f`, on ens3 only |
 
-The forward chain can use a drop policy here, unlike on ruby, because jennie has no Docker bridges.
+The forward chain can use a drop policy here, unlike on ruby, because jennie has no Docker. If Docker is ever installed, its IPv6 FORWARD policy is drop as on ruby, and jennie would need a copy of `wg-docker-user.service`, also allowing IPv6 `wg+ → ens3`. Anything else jennie serves publicly needs a rule under "Public services".
 
 ***
 
-## Clients on jennie
+## Clients
+
+### Clients on ruby
+
+Each client's ruby tunnel:
+
+```ini
+[Interface]
+Address = 192.168.204.1/32, fd33:5692:1834:204::1/128     # mba; iphone-peet .2 / ::2, mbp .4 / ::4
+
+[Peer]
+AllowedIPs = 0.0.0.0/0, ::/0                              # full tunnel
+```
+
+Full tunnel sends IPv4 to the internet via ruby (or jennie, if opted in on ruby) and IPv6 via jennie. Which exit a client uses isn't set on the client: ruby's routing-policy rules decide it (see [Internet exits](#internet-exits)). For a split tunnel, use only the networks ruby routes; clients don't need the `172.31.1.0/24` transit addresses:
+
+```ini
+AllowedIPs = 192.168.204.0/24, 192.168.8.0/21, 192.168.254.2/32, 192.168.254.253/32, 192.168.254.254/32, fd33:5692:1834:204::/64, fd33:5692:1834:1000::/56, fd33:5692:1834:254::2/128, fd33:5692:1834:254::254/128, fd33:5692:1834:254::253/128
+```
+
+### Clients on jennie
 
 mba, mbp and iphone-peet each have a second tunnel, to jennie's `wg0` on the standard port 51820, so they can still reach home, ruby and the internet when ruby is down. The two tunnels are alternatives: a device runs one or the other, and the WireGuard apps only bring up one at a time anyway.
 
 - **Keys:** each device reuses the key pair it has on ruby. WireGuard allows one key to have peers on several servers. Each peer gets a fresh PSK on jennie.
 - **Addresses:** `192.168.205.0/24` and `fd33:5692:1834:205::/64`, with the same host number as on ruby.
 - **Endpoint:** jennie's public IPv4 *and* IPv6. Unlike the site-to-site tunnels, wg0 listens on both, since mobile networks are often IPv4-only.
-- **Reach:** home over wg3 and ruby over wg2, both direct from jennie. The other ends need routes back to `192.168.205.0/24` and `fd33:5692:1834:205::/64`. On ruby they're main-table routes in `82-wireguard-wg2.yaml`. On the router they're two policy rules at priority 19000 into table 1002, like the existing `s2s_*` rules (`router/README.md`). The router's firewall already accepts wgclient2 → lan.
+- **Reach:** home over wg3 and ruby over wg2, both direct from jennie. The other ends route back to `192.168.205.0/24` and `fd33:5692:1834:205::/64`: on ruby with main-table routes in `82-wireguard-wg2.yaml`, on the router with two policy rules at priority 19000 into table 1002, like the other `s2s_*` rules (`router/README.md`).
 - **Internet:** exits via jennie with NAT44 and NAT66, both families, for every client. Nothing needs opting in.
-
-### DNS on jennie
-
-jennie runs its own BIND (`jennie/services/etc/bind/`), so jennie's clients don't depend on ruby for names. It gives the same answers as ruby's `wireguard` view:
-
-- **Split-horizon zones:** byte-for-byte copies of ruby's `/etc/bind/wireguard/` files, plus a reverse zone for `192.168.205.0/24`. That one, and the service-address (`254.168.192.in-addr.arpa`), transit (`1.31.172.in-addr.arpa`) and ULA (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`) reverse zones, are shared the same way, and the repo's copies in `jennie/services/etc/bind/wireguard/` are the ones installed on ruby too. Change them on both hosts together. The answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
-- **`home.` and the lab's reverse zone:** `static-stub` to Pythia over wg3, as on ruby.
-- **No views.** jennie has no Docker clients to tell apart from the VPN, so Debian's own `named.conf` and default zones stay. The same `acl "vpn"` as ruby's, plus jennie's clients, gates every query.
-- **Validating**, unlike ruby, which turns validation off for Postfix's DANE. `home.` and `8.168.192.in-addr.arpa` are unsigned, so they're listed in `validate-except`.
-- **Listens on** `192.168.205.254`, `fd33:5692:1834:205::254`, jennie's dummy0 addresses and loopback, never ens3.
 
 ### Client config
 
-Add a second tunnel on each device, e.g. `jennie`, next to the existing one:
+The jennie tunnel, next to the existing one:
 
 ```ini
 [Interface]
@@ -326,558 +322,73 @@ The IPv4 endpoint works on IPv6-only networks too, through the NAT64 that iOS an
 AllowedIPs = 192.168.205.0/24, 192.168.204.0/24, 192.168.8.0/21, 192.168.254.2/32, 192.168.254.253/32, 192.168.254.254/32, fd33:5692:1834:205::/64, fd33:5692:1834:204::/64, fd33:5692:1834:1000::/56, fd33:5692:1834:254::2/128, fd33:5692:1834:254::254/128, fd33:5692:1834:254::253/128
 ```
 
-The steps are TASKS.md phase 8.
+***
+
+## DNS
+
+### DNS on jennie
+
+jennie runs its own BIND (`jennie/services/etc/bind/`), so jennie's clients don't depend on ruby for names. It gives the same answers as ruby's `wireguard` view:
+
+- **Split-horizon and reverse zones:** the same files as ruby's `/etc/bind/wireguard/` (see [Reverse zones](#reverse-zones)). The split-horizon answers still point at ruby (`192.168.204.254`), so mail follows ruby's availability, but resolving names doesn't.
+- **`home.` and the lab's reverse zone:** `static-stub` to Pythia over wg3, as on ruby.
+- **No views.** jennie has no Docker clients to tell apart from the VPN, so Debian's own `named.conf` and default zones stay. The same `acl "vpn"` as ruby's, plus jennie's clients, gates every query.
+- **Validating**, unlike ruby, which turns validation off for Postfix's DANE. `home.` and `8.168.192.in-addr.arpa` are unsigned, so they're listed in `validate-except`.
+- **Listens on** `192.168.205.254`, `fd33:5692:1834:205::254`, jennie's dummy0 addresses and loopback, never ens3.
+
+jennie's own lookups of lab names don't go through its BIND. wg3's `nameservers` block in `83-wireguard-wg3.yaml` sends `home.` and `8.168.192.in-addr.arpa` to Pythia as routing-only domains, so systemd-resolved queries Pythia over wg3 for those names and nothing else. Themis and Delphi would refuse jennie's queries. If wg3 is down, `.home` stops resolving on jennie, but the lab is unreachable then anyway.
+
+### Split horizon
+
+The `wireguard` view's `mail.peetvandesande.com` answers `192.168.204.254` and `fd33:5692:1834:204::254`, so VPN clients reach mail over either family, preferring IPv6. That's separate from the home LAN's override in `dns/` (A only, to `192.168.254.254`), which is A only for reasons of its own.
+
+### Reverse zones
+
+| Zone | Range |
+|------|-------|
+| `204.168.192.in-addr.arpa` | ruby's clients |
+| `205.168.192.in-addr.arpa` | jennie's clients |
+| `254.168.192.in-addr.arpa` | the sites' service addresses |
+| `1.31.172.in-addr.arpa` | the transit links, named `<site>-<tunnel>` |
+| `4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa` | the whole ULA `/48`, with the same names as the IPv4 zones |
+
+All five are served on both servers from the same files: one copy in the repo, in `jennie/services/etc/bind/wireguard/`, installed on ruby too. Change them on both hosts together. They're copies rather than a primary and a secondary on purpose: the repo is already the single source, a secondary would add a TSIG key and a zone that expires when its primary is down, and the zones only change when a device or site is added.
+
+The 192.168.x zones matter most. Both servers disable the `168.192.in-addr.arpa` empty zone so the lab's PTRs reach Pythia, so without a zone of their own those lookups go out to the public AS112 servers and fail. The transit and ULA zones sit beneath BIND's automatic `31.172.in-addr.arpa` and `d.f.ip6.arpa` empty zones, which already answer NXDOMAIN at once; they add names. The home LANs' SLAAC addresses (`1000::/56`) have no PTRs and get that fast NXDOMAIN.
+
+On ruby they're also in the `internal` view, where the host's own daemons resolve, so Postfix and Dovecot log VPN peers by name. Only the reverse zones: the split-horizon forward zones stay out of `internal` on purpose (see `named.conf.local`).
 
 ***
 
 ## Files in this directory
 
-| File | Install on | Destination | Purpose |
-|------|------------|-------------|---------|
-| `ruby/70-dummy-interfaces.yaml` | ruby | `/etc/netplan/` | Replaces the live file: dummy0/dummy1 with the renumbered IPv6 addresses |
+Every private key and PSK in these files is a `<placeholder>`. The real keys, PSKs, filled configs and the old wg-quick configs live outside git, in `~/projects/homelab-private/wireguard/`.
+
+| File | Installed on | Destination | Purpose |
+|------|--------------|-------------|---------|
+| `ruby/70-dummy-interfaces.yaml` | ruby | `/etc/netplan/` | dummy0/dummy1, ruby's service addresses |
 | `ruby/80-wireguard-wg0.yaml` | ruby | `/etc/netplan/` | wg0, clients |
 | `ruby/81-wireguard-wg1.yaml` | ruby | `/etc/netplan/` | wg1, to home |
-| `ruby/82-wireguard-wg2.yaml` | ruby | `/etc/netplan/` | wg2, to jennie |
-| `ruby/nftables.conf` | ruby | `/etc/nftables.conf` | Proposed firewall with the WireGuard changes |
-| `ruby/nftables.conf.diff` | none | none | Diff of the above against the live `/etc/nftables.conf` |
-| `ruby/nftables.conf.orig` | none | none | Copy of the live `/etc/nftables.conf` the draft was made from |
-| `ruby/networkd-forwarding.conf` | ruby | `/etc/systemd/networkd.conf.d/forwarding.conf` | IPv4/IPv6 forwarding owned by networkd (IPv6 currently only on because of Docker) |
+| `ruby/82-wireguard-wg2.yaml` | ruby | `/etc/netplan/` | wg2, to jennie, with table 200 and the exit policy rules |
+| `ruby/nftables.conf` | ruby | `/etc/nftables.conf` | ruby's firewall |
+| `ruby/networkd-forwarding.conf` | ruby | `/etc/systemd/networkd.conf.d/forwarding.conf` | IPv4/IPv6 forwarding, owned by networkd |
 | `ruby/wg-docker-user.service` | ruby | `/etc/systemd/system/` | IPv4/IPv6 `DOCKER-USER` accepts for WireGuard forwarding |
-| `ruby/services/etc/…` | ruby | same path under `/etc` | BIND, Postfix and Dovecot configs with IPv6 listeners, plus systemd start-order drop-ins (Task 5e) |
-| `ruby/services/orig/etc/…` | none | none | The live originals those were made from (2026-10-09) |
-| `ruby/services/services.diff` | none | none | All service changes as one diff |
-| `ruby/current-nft-ruleset` | none | none | Dump of ruby's live ruleset (2026-10-08), for reference |
+| `ruby/services/etc/…` | ruby | same path under `/etc` | BIND, Postfix and Dovecot configs with IPv6 listeners, plus systemd start-order drop-ins |
+| `ruby/nftables.conf.orig`, `ruby/nftables.conf.diff`, `ruby/current-nft-ruleset` | none | none | ruby's firewall before the WireGuard work (2026-10-08), the diff against it, and the live ruleset then |
+| `ruby/services/orig/etc/…`, `ruby/services/services.diff` | none | none | The service configs before the WireGuard work (2026-10-09), and the diff against them |
 | `jennie/70-dummy0.yaml` | jennie | `/etc/netplan/` | dummy0 with `192.168.254.2`, `fd33:5692:1834:254::2` |
 | `jennie/80-wireguard-wg0.yaml` | jennie | `/etc/netplan/` | wg0, clients |
 | `jennie/82-wireguard-wg2.yaml` | jennie | `/etc/netplan/` | wg2, to ruby |
-| `jennie/83-wireguard-wg3.yaml` | jennie | `/etc/netplan/` | wg3, to home |
+| `jennie/83-wireguard-wg3.yaml` | jennie | `/etc/netplan/` | wg3, to home, with the routing-only DNS domains for `home.` |
 | `jennie/networkd-forwarding.conf` | jennie | `/etc/systemd/networkd.conf.d/forwarding.conf` | IPv4/IPv6 forwarding (internet exit), owned by networkd |
 | `jennie/nftables.conf` | jennie | `/etc/nftables.conf` | jennie's whole firewall, including the exit's forwarding rules and NAT44/NAT66 |
-| `jennie/services/etc/bind/…` | jennie (zone files: ruby too) | same path under `/etc` | BIND for jennie's clients, with copies of ruby's split-horizon zones; the 205, 254, transit and ULA reverse zones and `mail.peetvandesande.com` are installed on both |
-| `home/wg1.conf` | home | router UI | wg1 settings in wg-quick format, as a reference |
-| `home/wg3.conf` | home | router UI | wg3 settings in wg-quick format, as a reference |
-| `fill-secrets.py` | none | none | Fills key/PSK placeholders (see Task 1) |
-| `wg1.key`, `wg1.pub`, `wg2.key`, `wg2.pub` | none | none | ruby's new wg1/wg2 keypairs |
-| `jennie.psk`, `home-jennie.psk` | none | none | PSKs for wg2 and wg3 |
-| `superseded/` | none | none | The earlier wg-quick versions, kept for reference. Not used. |
+| `jennie/services/etc/bind/…` | jennie (zone files: ruby too) | same path under `/etc` | jennie's BIND; the zone files under `wireguard/` are the shared split-horizon and reverse zones |
+| `home/wg1.conf`, `home/wg3.conf` | none | none | The router's wg1 and wg3 settings in wg-quick format, as a reference |
+| `fill-secrets.py` | none | none | Fills key/PSK placeholders from a wg-quick config on stdin; refuses to run inside a git work tree |
 
-The ruby files are split one per tunnel so they can be installed in stages. wg1 can't go live while the old wg0 still holds the `192.168.8.0/21` route.
-
-ruby's live `/etc/wireguard/wg0.conf` is **never modified**. The migration only stops `wg-quick@wg0`, which keeps rollback simple.
+The ruby files are split one per tunnel, so each can be installed and removed on its own.
 
 ***
-
-## Tasks
-
-These tasks ran on ruby from a copy of this directory (`cd ~/wg`), and on jennie from `~/wg-jennie`, unless marked *on home*. They are kept as the record of how it was done. Since then ruby and jennie each have a clone of the repo at `~/homelab`: new work runs from `~/homelab/wireguard`, and secrets are filled into the installed copy under `/etc`, never into the clone (see TASKS.md).
-
-Order:
-
-1. Fill in ruby's secrets.
-2. Update ruby's firewall, and open ports on jennie.
-3. ruby ↔ jennie (wg2).
-4. jennie ↔ home (wg3).
-5. Move ruby's wg0 to netplan and home to wg1.
-6. Update clients.
-7. Test everything.
-
-Clients on jennie are independent of this order and have no section here: the steps are TASKS.md phase 8, and the design is [Clients on jennie](#clients-on-jennie).
-
-Step 2 changes nothing for traffic that works today; the new rules only match interfaces and ports that aren't in use yet. Steps 3 and 4 add new tunnels and don't touch anything running. Step 5 is the only one with downtime.
-
-### Task 1: Fill in secrets
-
-**1a. ruby's existing wg0 key and PSKs, from the backup of the live config.**
-
-```bash
-sudo cat /etc/wireguard.bak-2026-10-08/wg0.conf | ./fill-secrets.py
-```
-
-This fills ruby's wg0 private key, the PSKs for mba, iphone-peet and mbp, and home's PSK (in `ruby/81-wireguard-wg1.yaml` and `home/wg1.conf`). It never prints secrets.
-
-If it prints `live hook: …` lines, the old wg0 has `PostUp`/`PostDown` commands that stop running once wg-quick is retired. Client NAT and the forward rules are already in `/etc/nftables.conf`, so there probably aren't any. If there are, check whether `nftables.conf` or `wg-docker-user.service` already covers them before carrying anything over.
-
-**1b. Check what's left.** Run `./fill-secrets.py </dev/null` at any time. After 1a, the only placeholders left should be:
-
-- `jennie/*`: jennie's private keys and home's wg3 public key (filled on jennie in Tasks 3 and 4)
-- `home/*`: router-side values (the router's own keys, and jennie's wg3 public key from Task 4)
-
-### Task 2: Firewalls and forwarding
-
-**2a. ruby: forwarding.** It's on in both families today, but not pinned down:
-
-- **IPv4** is set by `/etc/systemd/network/10-netplan-ens3.network.d/networkd-ipforward.conf`.
-- **IPv6** is only on because dockerd enables it.
-
-On a networkd host, forwarding belongs in networkd itself (systemd 257 here), so make it global and explicit:
-
-```bash
-sudo install -D -m 644 ruby/networkd-forwarding.conf /etc/systemd/networkd.conf.d/forwarding.conf
-sudo systemctl restart systemd-networkd    # re-reads networkd.conf; keeps existing addresses and tunnels
-cat /proc/sys/net/ipv4/conf/all/forwarding /proc/sys/net/ipv6/conf/all/forwarding   # 1 and 1
-```
-
-**2b. ruby: nftables.** Review `ruby/nftables.conf.diff` (summarised in [Firewall on ruby](#firewall-on-ruby)), then install it:
-
-```bash
-sudo cp -a /etc/nftables.conf /etc/nftables.conf.bak-$(date +%F)
-cmp /etc/nftables.conf ruby/nftables.conf.orig \
-  && echo "live file unchanged since the draft" || echo "LIVE FILE CHANGED: redo the edits"
-sudo install -m 755 -o root -g root ruby/nftables.conf /etc/nftables.conf
-sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables     # reload, NOT restart
-sudo nft list table inet filter | grep -E 'WGIFS|wg[0-2]|51821|51822'
-sudo iptables -S | grep -c DOCKER                                       # Docker's rules still there
-```
-
-Use `reload`, not `restart`; see [Applying firewall changes](#applying-firewall-changes). The `cmp` check guards against the live file having been edited since this draft was made. If it says the live file changed, redo the edits on the new version instead of overwriting it.
-
-**2c. ruby: Docker's DOCKER-USER exceptions.** These are needed for any IPv6 forwarding (see [Docker's IPv6 forward policy is DROP](#dockers-ipv6-forward-policy-is-drop)):
-
-```bash
-sudo install -m 644 -o root -g root ruby/wg-docker-user.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now wg-docker-user.service
-sudo ip6tables -S DOCKER-USER; sudo iptables -S DOCKER-USER             # three wg+ rules each
-```
-
-**2d. jennie: firewall and forwarding.** *On jennie.* jennie has no firewall yet, so `jennie/nftables.conf` becomes its whole firewall. The input policy is drop, so first check what jennie serves publicly:
-
-```bash
-sudo ss -tulpn | grep -vE '127\.0\.0\.|\[::1\]'   # anything listening beyond localhost
-systemctl is-active docker                          # expected: inactive (see below if not)
-```
-
-- SSH (22) and WireGuard (51822 from ruby, 51823 from anywhere) are already allowed, over IPv6.
-- Add a rule under "Public services" in `nftables.conf` for anything else that must stay reachable from the internet.
-- Everything arriving over wg2/wg3 is accepted.
-- If Docker turns out to be installed, stop and adapt first: its IPv6 FORWARD policy is drop (as on ruby), and jennie would need a copy of `ruby/wg-docker-user.service`, also allowing IPv6 `wg+ → ens3`.
-
-Copy the files over (*run on ruby*):
-
-```bash
-scp ~/wg/jennie/networkd-forwarding.conf ~/wg/jennie/nftables.conf jennie:wg-jennie/
-```
-
-Enable forwarding (*on jennie*):
-
-```bash
-systemctl --version | head -1              # needs systemd >= 256 for IPv4Forwarding=/IPv6Forwarding=
-sudo install -D -m 644 ~/wg-jennie/networkd-forwarding.conf /etc/systemd/networkd.conf.d/forwarding.conf
-sudo systemctl restart systemd-networkd
-cat /proc/sys/net/ipv4/conf/all/forwarding /proc/sys/net/ipv6/conf/all/forwarding   # 1 and 1
-ip -6 route show default                   # still there (networkd handles RAs itself)
-```
-
-Apply the firewall with a **dead-man switch**: a timer that removes it again after 3 minutes, unless you cancel the timer from a *new* SSH session that proves you're not locked out.
-
-```bash
-sudo cp -a /etc/nftables.conf /etc/nftables.conf.bak-$(date +%F) 2>/dev/null   # Debian ships a stub
-sudo install -m 755 -o root -g root ~/wg-jennie/nftables.conf /etc/nftables.conf
-sudo nft -c -f /etc/nftables.conf && echo "syntax OK"
-sudo systemd-run --on-active=180 --unit=nft-deadman /usr/sbin/nft delete table inet filter
-sudo nft -f /etc/nftables.conf
-# now open a NEW ssh session to jennie; if it works:
-sudo systemctl stop nft-deadman.timer
-sudo systemctl enable --now nftables       # load it at boot
-sudo nft list ruleset | head -40
-```
-
-If the new session doesn't connect, wait 3 minutes: the timer deletes `inet filter` (input drop policy and forward rules) and access returns. The NAT table stays but does nothing harmful on its own.
-
-Later changes: `sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables`. Never `restart`, as on ruby.
-
-**2e. ruby: renumber the dummy interfaces' IPv6.** `fd00::1` → `fd33:5692:1834:254::254` (dummy0) and `fd00::2` → `fd33:5692:1834:254::253` (dummy1). Nothing listens on the old addresses (checked with `ss`), and rspamd's `local_addrs` (`fd00::/8`) already covers the new ones. Do this before clients get IPv6 addresses (Task 6), so nothing ever uses the old addresses.
-
-`ruby/70-dummy-interfaces.yaml` was written from the live addresses, because the live file isn't readable without root. Compare first; only the two IPv6 lines (and comments) should differ:
-
-```bash
-sudo diff /etc/netplan/70-dummy-interfaces.yaml ruby/70-dummy-interfaces.yaml
-sudo cp -a /etc/netplan/70-dummy-interfaces.yaml /etc/netplan/70-dummy-interfaces.yaml.bak-$(date +%F)   # netplan only reads *.yaml
-sudo install -m 600 -o root -g root ruby/70-dummy-interfaces.yaml /etc/netplan/
-sudo netplan generate
-sudo networkctl reload && sudo networkctl reconfigure dummy0 dummy1
-ip -br addr show dummy0; ip -br addr show dummy1                          # new IPv6 only, no fd00::
-```
-
-If an old `fd00::` address lingers, remove it with `sudo ip -6 addr del fd00::1/128 dev dummy0` (and `fd00::2/128` on dummy1).
-
-jennie's `82-wireguard-wg2.yaml` has the new addresses in its allowed IPs and routes. If you already installed an earlier copy on jennie, reinstall it there and recreate wg2: `sudo netplan generate && sudo ip link del wg2 && sudo networkctl reload`.
-
-**2f. Provider firewalls.** Neither server has one (no OVH network firewall or security groups), so jennie's and ruby's nftables are the only filtering.
-
-### Task 3: ruby ↔ jennie (wg2)
-
-*On jennie.* Copy the files over and fill in jennie's wg2 key:
-
-```bash
-scp -r ~/wg/jennie jennie:wg-jennie        # run on ruby
-```
-
-```bash
-# on jennie
-cd ~/wg-jennie
-sudo apt install wireguard-tools           # for the wg command; networkd does the tunnel itself
-sed -i "s|<jennie wg2 private key>|$(sudo cat /etc/wireguard/jennie.key)|" 82-wireguard-wg2.yaml
-#      ^ wherever jennie's wg2 private key was saved earlier
-grep -n '<' 70-dummy0.yaml 82-wireguard-wg2.yaml || echo "wg2 files filled"
-```
-
-Check whether jennie already has a `dummy0`, and see what netplan files exist:
-
-```bash
-ip -br link show type dummy; ls -l /etc/netplan/
-```
-
-If `dummy0` is taken, rename it in `70-dummy0.yaml` (e.g. `dummy1`).
-
-Install and bring up dummy0 and wg2:
-
-```bash
-# on jennie
-sudo install -m 600 -o root -g root 70-dummy0.yaml 82-wireguard-wg2.yaml /etc/netplan/
-sudo netplan generate
-sudo networkctl reload
-ip -br addr show dummy0; ip -br addr show wg2
-```
-
-*On ruby:*
-
-```bash
-sudo install -m 600 -o root -g root ruby/82-wireguard-wg2.yaml /etc/netplan/
-sudo netplan generate
-sudo networkctl reload
-sudo wg show wg2      # recent handshake; endpoint [2001:41d0:801:2000::180f]:51822
-```
-
-`networkctl reload` creates the new interfaces without touching existing ones. `sudo netplan apply` also works, but it reconfigures every netplan-managed interface (including ens3).
-
-Test from ruby:
-
-```bash
-ping -c3 172.31.1.6
-ping -c3 fd33:5692:1834:ff02::2
-ping -c3 192.168.254.2
-ping -c3 fd33:5692:1834:254::2
-ping -M do -c3 -s 1392 172.31.1.6               # MTU: 1420 - 28
-ping -M do -c3 -s 1372 fd33:5692:1834:ff02::2   # MTU: 1420 - 48
-```
-
-### Task 4: jennie ↔ home (wg3)
-
-This links the home LANs directly to jennie and doesn't affect anything else.
-
-**4a. Keys.** On jennie, generate jennie's wg3 key:
-
-```bash
-# on jennie
-(umask 077; wg genkey | sudo tee /etc/wireguard/wg3.key | wg pubkey)
-cd ~/wg-jennie
-sed -i "s|<jennie wg3 private key>|$(sudo cat /etc/wireguard/wg3.key)|" 83-wireguard-wg3.yaml
-```
-
-On home, create a **new WireGuard interface** for wg3 with its own key; most routers generate one when you create the interface. Then swap public keys:
-
-```bash
-# on jennie: home's wg3 public key
-sed -i "s|<home wg3 public key>|PASTE_HOME_INET_WG3_PUBKEY|" 83-wireguard-wg3.yaml
-
-# on ruby: jennie's wg3 public key, into the router reference
-sed -i "s|<jennie wg3 public key>|PASTE_JENNIE_WG3_PUBKEY|" home/wg3.conf
-```
-
-**4b. jennie.**
-
-```bash
-# on jennie
-grep -n '<' 83-wireguard-wg3.yaml || echo "wg3 file filled"
-sudo install -m 600 -o root -g root 83-wireguard-wg3.yaml /etc/netplan/
-sudo netplan generate
-sudo networkctl reload
-```
-
-wg3 also gives jennie the lab's internal names. Its `nameservers` block sends `home.` and `8.168.192.in-addr.arpa` to Pythia (`192.168.8.52`) as routing-only domains, so systemd-resolved queries Pythia over wg3 for those names and nothing else. This goes direct, like all of jennie's traffic to home, rather than via ruby's stub zones. Themis and Delphi would refuse jennie's queries. If wg3 is down, `.home` stops resolving, but the lab is unreachable then anyway. Check with `resolvectl query pythia.home`.
-
-**4c. home router.** Configure the new interface from `home/wg3.conf`:
-
-| Setting              | Value |
-|----------------------|-------|
-| Interface            | new, e.g. `wg3` |
-| Private key          | new, generated on the router (4a) |
-| Tunnel address       | `172.31.1.10/30`, `fd33:5692:1834:ff03::2/64` |
-| MTU                  | `1388` |
-| Peer public key      | jennie's wg3 public key (4a) |
-| Preshared key        | contents of `home-jennie.psk` (already in `home/wg3.conf`) |
-| Endpoint             | `[2001:41d0:801:2000::180f]:51823` |
-| Persistent keepalive | `25` |
-| Peer allowed IPs     | `0.0.0.0/0, ::/0` (jennie is an internet exit) |
-| Automatic routes     | **off** (wg-quick: `Table = off`). The router's GL client installs its default only in table 1002, so main-table traffic is unaffected |
-| Routes via wg3       | `172.31.1.9/32`, `192.168.254.2/32`, `fd33:5692:1834:ff03::1/128`, `fd33:5692:1834:254::2/128`, as persistent `route`/`route6` entries on `wgclient2` |
-| Internet via jennie  | GL route policy `UK` (tunnel 6611, mark `0x2000`), with targets in `/etc/domain_mac_list/dst_net6611_manual`. Table 1002 holds the default route via wg3 (IPv4 and IPv6). Other clients or destinations can be added as further policy rules |
-| IPv6 NAT             | `ip6tables -t nat` MASQUERADE on `wgclient2`, in `/etc/firewall.user` (no IPv4 NAT). **Recommended:** limit it to non-VPN sources, so only ISP-sourced traffic is translated: `ip6tables -t nat -A POSTROUTING -o wgclient2 ! -s fd33:5692:1834::/48 -j MASQUERADE` |
-
-**4d. Test.**
-
-```bash
-# on jennie
-sudo wg show wg3                           # handshake from the router's IPv6 address
-ping -c3 172.31.1.10
-ping -c3 fd33:5692:1834:ff03::2
-ping -c3 192.168.8.1                       # or any home LAN host
-traceroute -n 192.168.8.1                  # first hop 172.31.1.10, not via ruby
-ping -M do -c3 -s 1360 172.31.1.10         # MTU: 1388 - 28
-```
-
-If the MTU ping fails but smaller sizes work, the home link has a lower MTU. Lower it on both ends of wg3 (and wg1).
-
-### Task 5: Move wg0 to netplan, move home to wg1
-
-This is the only step with downtime:
-
-- **Clients** drop for a few seconds while wg0 is recreated.
-- **home ↔ ruby** is down from the moment wg0 stops until the router's wg1 is configured. home ↔ jennie keeps working over wg3.
-
-Have the router settings from 5a ready before starting.
-
-**5a. Prepare these settings on the home router.** Convert its existing tunnel to ruby into wg1, using `home/wg1.conf`:
-
-| Setting              | Value |
-|----------------------|-------|
-| Interface            | the existing tunnel to ruby (rename to `wg1` if the router allows) |
-| Private key          | **unchanged** (ruby's wg1 expects the router's existing public key, `vQww1GLu…`) |
-| Tunnel address       | `172.31.1.2/30`, `fd33:5692:1834:ff01::2/64` (remove the old `192.168.204.5`) |
-| MTU                  | `1388` |
-| Peer public key      | ruby's wg1 key: `UFJld/qzjF6JzLwIVxayR48jfkZgTmTXhyPlK6txDCc=` |
-| Preshared key        | **unchanged** (already in `home/wg1.conf` after Task 1a) |
-| Endpoint             | `[2001:41d0:305:2100::1:3a0e]:51821` |
-| Persistent keepalive | `25` |
-| Peer allowed IPs     | `172.31.1.1/32, fd33:5692:1834:ff01::1/128, 192.168.204.0/24, fd33:5692:1834:204::/64, 192.168.254.253/32, 192.168.254.254/32, fd33:5692:1834:254::254/128, fd33:5692:1834:254::253/128` |
-| Routes via wg1       | the same, minus the two transit addresses, if the router doesn't add routes from allowed IPs |
-| LAN IPv6             | **Done** for lan (`fd33:5692:1834:1000::/64`) and iot (`…:1001::/64`), and guest (`…:1002::/64`, disabled). The ISP prefixes are kept (see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6)) |
-
-Remove any old routes on the router that pointed jennie's or ruby's networks at the old tunnel.
-
-**5b. Install on ruby.** The files go in place first; nothing changes until wg-quick is stopped.
-
-```bash
-sudo install -m 600 -o root -g root ruby/80-wireguard-wg0.yaml ruby/81-wireguard-wg1.yaml /etc/netplan/
-sudo netplan generate && echo "netplan OK"
-```
-
-**5c. Cut over.**
-
-```bash
-sudo systemctl disable --now wg-quick@wg0  # removes wg0 and its routes, runs its PostDown
-sudo networkctl reload                     # networkd creates wg0 and wg1
-```
-
-Then apply the router settings from 5a.
-
-**5d. Check from ruby.**
-
-```bash
-networkctl list                            # wg0, wg1, wg2: routable / configured
-sudo wg show                               # wg0 clients reconnecting; wg1 handshake from an IPv6 address
-ip route | grep -E 'wg[0-2]'
-ip -6 route | grep -E 'wg[0-2]'
-ping -c3 172.31.1.2
-ping -c3 fd33:5692:1834:ff01::2
-ping -c3 192.168.8.1                       # or any home LAN host
-ping -c3 <a home host's ULA address>
-ping -M do -c3 -s 1360 172.31.1.2          # MTU: 1388 - 28
-```
-
-**5e. IPv6 for BIND, Postfix and Dovecot.** Do this right after 5c. It needs wg0's IPv6 address (5c) and dummy0's renumbered address (Task 2e), and the Dovecot drop-in it replaces still refers to wg-quick. Review `ruby/services/services.diff` first.
-
-Check the live files haven't changed since the copies were taken:
-
-```bash
-cd ~/wg/ruby/services
-for f in $(cd orig && find etc -type f); do cmp -s "orig/$f" "/$f" && echo "unchanged: /$f" || echo "CHANGED:   /$f  (redo the edit on the new version)"; done
-```
-
-Start-order drop-ins. These change nothing until the next restart:
-
-```bash
-sudo install -m 644 etc/systemd/system/dovecot.service.d/dovecot-local-deps.conf /etc/systemd/system/dovecot.service.d/
-sudo install -D -m 644 etc/systemd/system/postfix@-.service.d/local-deps.conf /etc/systemd/system/postfix@-.service.d/local-deps.conf
-sudo systemctl daemon-reload
-systemctl show -p After dovecot postfix@- | grep -o 'systemd-networkd-wait-online@[^ ]*'
-```
-
-BIND (picks up the new address without restarting):
-
-```bash
-sudo install -m 644 -o root -g bind etc/bind/named.conf.options etc/bind/named.conf.local /etc/bind/
-sudo named-checkconf && sudo rndc reconfig
-ss -ulnH 'sport = :53' | grep fd33          # [fd33:5692:1834:204::254]:53
-```
-
-Postfix:
-
-```bash
-sudo install -m 644 etc/postfix/master.cf /etc/postfix/master.cf
-sudo postfix check && sudo systemctl restart postfix
-ss -ltnH | grep -E ':(587|465)\b'           # 192.168.204.254 and [fd33:5692:1834:204::254], both ports
-```
-
-Dovecot:
-
-```bash
-sudo install -m 644 etc/dovecot/conf.d/20-managesieve.conf /etc/dovecot/conf.d/
-sudo doveconf -n >/dev/null && sudo systemctl reload dovecot
-ss -ltnH 'sport = :4190'                    # four addresses; if the IPv6 ones are missing: sudo systemctl restart dovecot
-```
-
-From a client with its IPv6 address (Task 6):
-
-```bash
-dig @fd33:5692:1834:204::254 mail.peetvandesande.com +short                      # 192.168.204.254
-openssl s_client -connect '[fd33:5692:1834:204::254]:465' -brief </dev/null       # TLS handshake OK
-nc -zv fd33:5692:1834:204::254 587 && nc -zv fd33:5692:1834:204::254 4190
-```
-
-From jennie and from a home LAN host (once wg1 and wg2/wg3 are up):
-
-```bash
-dig @192.168.204.254 mail.peetvandesande.com +short                              # 192.168.204.254 (split horizon)
-dig @fd33:5692:1834:204::254 mail.peetvandesande.com +short                      # same, over IPv6
-nc -zv 192.168.204.254 587 && nc -zv 192.168.204.254 4190
-```
-
-### Task 6: Update the clients
-
-Each client keeps its keys, PSK and endpoint. Only `Address` and `AllowedIPs` change:
-
-```ini
-[Interface]
-Address = 192.168.204.1/32, fd33:5692:1834:204::1/128     # mba; iphone-peet .2 / ::2, mbp .4 / ::4
-```
-
-Pick one `AllowedIPs` line:
-
-```ini
-# Full tunnel: IPv4 internet via ruby (or jennie, if opted in on ruby), IPv6 internet via jennie
-AllowedIPs = 0.0.0.0/0, ::/0
-
-# VPN networks only
-AllowedIPs = 192.168.204.0/24, 192.168.8.0/21, 192.168.254.2/32, 192.168.254.253/32, 192.168.254.254/32, fd33:5692:1834:204::/64, fd33:5692:1834:1000::/56, fd33:5692:1834:254::2/128, fd33:5692:1834:254::254/128, fd33:5692:1834:254::253/128
-```
-
-The split-tunnel list only contains networks ruby actually routes. Clients don't need the `172.31.1.0/24` transit addresses.
-
-Which exit a client uses isn't set on the client: it's decided by ruby's routing-policy rules (see [Internet exits](#internet-exits)).
-
-Test from a client:
-
-```bash
-ping 192.168.204.254 && ping6 fd33:5692:1834:204::254   # ruby
-ping 192.168.254.2   && ping6 fd33:5692:1834:254::2     # jennie, via ruby
-ping 192.168.8.1                                         # home, via ruby
-curl -4 https://ifconfig.co                              # full tunnel: 46.105.253.72 (ruby), or 57.129.180.73 if opted in to jennie
-curl -6 https://ifconfig.co                              # full tunnel: 2001:41d0:801:2000::180f (jennie)
-```
-
-### Task 7: Test end to end and reboot
-
-```bash
-# on jennie
-ping -c3 192.168.204.1                     # a client, via ruby (wg2)
-ping -c3 fd33:5692:1834:204::1
-ping -c3 192.168.254.254                   # ruby's dummy0
-traceroute -n 192.168.8.1                  # direct over wg3 (first hop 172.31.1.10)
-
-# from a home LAN host
-traceroute -n 192.168.204.1                # via ruby (172.31.1.1)
-traceroute -n 192.168.254.2                # via jennie (172.31.1.9)
-
-# from a home host the router sends via jennie (e.g. the laptop)
-curl -4 https://ifconfig.co                # 57.129.180.73
-curl -6 https://ifconfig.co                # 2001:41d0:801:2000::180f
-
-# on ruby: the exit policy
-ip rule; ip -6 rule                        # priorities 900 (main) and 1000 (table 200)
-ip route show table 200; ip -6 route show table 200
-
-# on jennie: NAT counters go up as exit traffic flows
-sudo nft list table inet wgnat
-```
-
-Reboot ruby and jennie (one at a time) to confirm everything comes back on its own (netplan, nftables, `wg-docker-user.service`):
-
-```bash
-networkctl list; sudo wg show; sudo ip6tables -S DOCKER-USER; sudo iptables -S DOCKER-USER   # ruby
-networkctl list; sudo wg show; sudo nft list tables; cat /proc/sys/net/ipv4/conf/all/forwarding /proc/sys/net/ipv6/conf/all/forwarding   # jennie
-```
-
-### Task 8: Clean up
-
-```bash
-# on ruby, once everything has run fine for a while
-shred -u ~/wg/wg1.key ~/wg/wg2.key ~/wg/jennie.psk ~/wg/home-jennie.psk
-# the filled YAML/conf files in ~/wg also contain secrets: shred them, or keep ~/wg as a 700 directory
-
-# on jennie
-shred -u ~/wg-jennie/*.yaml
-```
-
-The old `/etc/wireguard/wg0.conf` on ruby is no longer used. Keep it until you're confident you won't roll back, then remove it along with `/etc/wireguard.bak-2026-10-08`.
-
-Remove sylvie from any other place it's referenced (DNS, monitoring).
-
-***
-
-## Rollback
-
-**ruby: back to wg-quick wg0.** No longer possible as written: Task 8 removed `/etc/wireguard/wg0.conf` and its backup. Kept for reference; restore the config from `~/projects/homelab-private/wireguard/superseded/` first if it's ever needed:
-
-```bash
-sudo rm /etc/netplan/80-wireguard-wg0.yaml /etc/netplan/81-wireguard-wg1.yaml
-sudo netplan generate
-sudo ip link del wg1
-sudo ip link del wg0                       # networkd doesn't remove links it no longer manages
-sudo systemctl enable --now wg-quick@wg0
-```
-
-Then put the router's tunnel back to its old settings: address `192.168.204.5`, endpoint port 51820, ruby's wg0 public key.
-
-To remove wg2 or wg3, delete that YAML file on both ends, then run `netplan generate` and `ip link del wgN`.
-
-**jennie: clients (TASKS.md phase 8).** Nothing else depends on it, so it comes out on its own:
-
-```bash
-# on jennie
-sudo rm /etc/netplan/80-wireguard-wg0.yaml && sudo netplan generate && sudo ip link del wg0
-sudo systemctl disable --now named         # or apt purge bind9
-sudo cp -a /etc/nftables.conf.bak-YYYY-MM-DD /etc/nftables.conf && sudo systemctl reload nftables
-
-# on ruby: remove the two 205 routes from /etc/netplan/82-wireguard-wg2.yaml, then
-sudo netplan generate
-sudo ip route del 192.168.205.0/24 dev wg2; sudo ip -6 route del fd33:5692:1834:205::/64 dev wg2
-
-# on home
-uci delete network.s2s_wgclient2_205; uci delete network.s2s_wgclient2_205_6
-uci commit network && /etc/init.d/network reload
-```
-
-**ruby: services (Task 5e).** Put the originals back, *before* rolling wg0 back to wg-quick. Otherwise Postfix and Dovecot try to bind IPv6 addresses that no longer exist:
-
-```bash
-cd ~/wg/ruby/services
-for f in $(cd orig && find etc -type f); do sudo cp "orig/$f" "/$f"; done
-sudo rm /etc/systemd/system/postfix@-.service.d/local-deps.conf
-sudo systemctl daemon-reload
-sudo named-checkconf && sudo rndc reconfig
-sudo postfix check && sudo systemctl restart postfix
-sudo systemctl restart dovecot
-```
-
-**ruby: firewall.** The new rules are harmless with the old setup, so this is only needed if the firewall change itself causes trouble:
-
-```bash
-sudo cp -a /etc/nftables.conf.bak-YYYY-MM-DD /etc/nftables.conf
-sudo systemctl reload nftables             # reload, NOT restart
-sudo systemctl disable --now wg-docker-user.service
-```
 
 ## Day-to-day
 
@@ -902,23 +413,22 @@ journalctl -u systemd-networkd -b          # networkd errors (bad keys, route co
 
 **Sending a client's IPv4 via jennie:** in `ruby/82-wireguard-wg2.yaml`, add `- { from: "192.168.204.N/32", table: 200, priority: 1000 }` under `routing-policy`. Then `netplan generate` and either `sudo ip rule add from 192.168.204.N/32 table 200 priority 1000` (live, no interruption) or recreate wg2. Remove the rule to switch back.
 
-**Adding a client:** generate a key on the device, take the next free address (`192.168.204.6` / `fd33:5692:1834:204::6`), and add a peer to `80-wireguard-wg0.yaml` with a fresh PSK (`wg genpsk`). For a fallback tunnel too, add the same public key to `jennie/80-wireguard-wg0.yaml` with the same host number in `192.168.205.0/24` and a PSK of its own, and add its PTRs to both servers' reverse zones: IPv4 in `204`/`205`, IPv6 in the ULA zone `4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`.
+**Adding a client:** generate a key on the device, take the next free address (`192.168.204.6` / `fd33:5692:1834:204::6`), and add a peer to `80-wireguard-wg0.yaml` with a fresh PSK (`wg genpsk`). For a fallback tunnel too, add the same public key to `jennie/80-wireguard-wg0.yaml` with the same host number in `192.168.205.0/24` and a PSK of its own. Add its PTRs to the shared reverse zones: IPv4 in `204`/`205`, IPv6 in `4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`.
 
 **Adding a site:**
 
-1. Use the next transit link (`172.31.1.12/30`, `fd33:5692:1834:ff04::/64`, port 51824).
-   Add PTRs for both ends to the transit and ULA reverse zones (`1.31.172.in-addr.arpa`, `4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`), on ruby and jennie.
+1. Use the next transit link (`172.31.1.12/30`, `fd33:5692:1834:ff04::/64`, port 51824), and add PTRs for both ends to `1.31.172.in-addr.arpa` and the ULA zone.
 2. Create a YAML file on each server end, with `routes:` for the site's networks.
-3. Add the site's networks to the allowed IPs and routes of every tunnel that should reach it, and to the clients' split-tunnel list.
+3. Add the site's networks to the allowed IPs and routes of every tunnel that should reach it, and to the clients' split-tunnel lists.
 4. If the tunnel ends on ruby: add the interface to `WGIFS` in `/etc/nftables.conf`, add an input rule for its UDP port on `$PUB6`, and `systemctl reload nftables`. `wg-docker-user.service` matches `wg+`, so it needs no change.
 
 ***
 
 ## Found while reviewing ruby's firewall (not WireGuard)
 
-**Port 19080 was reachable from the internet. Fixed on 2026-10-08.** The `wordpress-sogode-nginx-1` container was published on `0.0.0.0:19080` and `[::]:19080`. Docker DNATs published ports in `prerouting`, so the traffic never hit the `input` chain, and `inet filter forward` has an accept policy. The live ruleset's counters showed connections from outside reaching the container.
+**Port 19080 was reachable from the internet. Fixed on 2026-10-08.** The `wordpress-sogode-nginx-1` container was published on `0.0.0.0:19080` and `[::]:19080`. Docker DNATs published ports in `prerouting`, so the traffic never hit the `input` chain, and `inet filter forward` has an accept policy. The live ruleset's counters showed connections from outside reaching the container. `nftables.conf`'s `wg0` input rule for 19080 was dead for the same reason, and is gone.
 
-It's meant to be fronted by the host's nginx (`proxy_pass http://localhost:19080` in `/etc/nginx/sites-available/sogode.com`). `/opt/wordpress-sogode/docker-compose.yml` now publishes it on loopback only:
+It's meant to be fronted by the host's nginx (`proxy_pass http://localhost:19080` in `/etc/nginx/sites-available/sogode.com`). `/opt/wordpress-sogode/docker-compose.yml` publishes it on loopback only:
 
 ```yaml
     ports:
@@ -926,12 +436,6 @@ It's meant to be fronted by the host's nginx (`proxy_pass http://localhost:19080
       - "[::1]:${WEB_PORT:-80}:80"
 ```
 
-Both loopbacks are needed because `localhost` resolves to `::1` as well as `127.0.0.1`. The nginx container was recreated, and these checks pass:
+Both loopbacks are needed because `localhost` resolves to `::1` as well as `127.0.0.1`. Port 19080 listens on loopback only, `https://sogode.com/` through the host nginx returns 200, and `http://145.239.73.18:19080/` gets no response.
 
-- port 19080 listens on `127.0.0.1` and `::1` only
-- `https://sogode.com/` through the host nginx returns 200
-- `http://145.239.73.18:19080/` gets no response (tested from ruby itself; nothing listens on a public address any more, and Docker's DNAT rule now only matches loopback)
-
-The compose change isn't committed; that repo already had other uncommitted edits. `nftables.conf`'s `wg0` input rule for 19080 was dead (DNAT bypasses `input`), and the draft removes it.
-
-Also: `/etc/nginx/sites-available/sogode.com.wordpress` (not enabled) proxies to the container's bridge address (`wordpress-sogode-nginx-1.docker.local:19080`). That wouldn't work, since the container listens on port 80 inside the bridge. It's harmless while it isn't enabled.
+`/etc/nginx/sites-available/sogode.com.wordpress` (not enabled) proxies to the container's bridge address (`wordpress-sogode-nginx-1.docker.local:19080`). That wouldn't work, since the container listens on port 80 inside the bridge. It's harmless while it isn't enabled.

@@ -49,6 +49,42 @@ view "internal" {
         file "/var/lib/bind/db.docker.local";
         allow-update { 127.0.0.0/8; ::1; };
     };
+
+    // The VPN's reverse zones, so Postfix and Dovecot log VPN peers by name.
+    // The same files as the wireguard view's: they are plain primaries with
+    // no journal, so two views may share them. Reverse zones only - the
+    // split-horizon forward zones stay out of this view, as above. They
+    // answer beneath this view's automatic 168.192, 31.172 and d.f.ip6.arpa
+    // empty zones.
+    zone "204.168.192.in-addr.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/204.168.192.in-addr.arpa";
+        notify no;
+    };
+
+    zone "205.168.192.in-addr.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/205.168.192.in-addr.arpa";
+        notify no;
+    };
+
+    zone "254.168.192.in-addr.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/254.168.192.in-addr.arpa";
+        notify no;
+    };
+
+    zone "1.31.172.in-addr.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/1.31.172.in-addr.arpa";
+        notify no;
+    };
+
+    zone "4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa" {
+        type primary;
+        file "/etc/bind/wireguard/4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa";
+        notify no;
+    };
 };
 
 // ===========================================================================
