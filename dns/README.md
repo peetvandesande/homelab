@@ -290,11 +290,16 @@ CA's CRL and AIA files live. See `homelab/ca`.
 
 `mail.peetvandesande.com` is the second one, and overridden for a different
 reason: ruby, the mail server, serves IMAP only on its WireGuard address.
-Internally the name is an A record for 192.168.254.254, reachable from the LAN
-because that address is a member of `dst_net4399`, the Main VPN policy's ipset
-— see `router/README.md`. Publicly it has an AAAA as well; the internal zone
-deliberately has none, because ruby's v6 address does not answer from the LAN
-and an AAAA would be preferred over the A and hang the client.
+Internally the name is ruby's dummy0: A `192.168.254.254` and AAAA
+`fd33:5692:1834:254::254`, both routed into wgclient1 by the router's
+site-to-site rules — see `router/README.md`. The AAAA arrived on 16 October
+2026; before the router's 19000 rules, the v6 address did not answer from the
+LAN, and an AAAA that does not answer hangs any client that tries it first.
+
+`ruby.peetvandesande.com` is the third, pointing at the same two addresses:
+ruby's nginx admits its admin pages only from home and VPN ranges, and a LAN
+client resolving the public name arrives over the internet from its ISP IPv6
+address.
 
 It takes **three** changes, and it is broken until all three are in place:
 

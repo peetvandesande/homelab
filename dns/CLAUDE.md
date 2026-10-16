@@ -75,7 +75,7 @@ the rest came out of putting the stack behind the lab CA.
    `dnssec.validation=validate` the resolver proves its non-existence and every
    internal lookup SERVFAILs before Pythia's answer is considered.
 
-5. **`ca.peetvandesande.com` and `mail.peetvandesande.com` are split-horizon,
+5. **`ca.`, `mail.` and `ruby.peetvandesande.com` are split-horizon,
    and each needs three separate pieces to be — none of which works alone.** A zone on Pythia
    (`pythia/var/lib/powerdns/zones/ca.peetvandesande.com.zone` plus a block in
    `bindbackend.conf`), a `forward_zones` entry on Delphi, and an `addNTA()` in
@@ -102,11 +102,18 @@ the rest came out of putting the stack behind the lab CA.
 
    `mail.peetvandesande.com` is the same mechanism for a different reason:
    ruby serves IMAP only on its WireGuard address, so the public answer
-   (145.239.73.18) times out from the LAN while 192.168.254.254 answers. It is
-   **A only on purpose** — the public name has an AAAA, ruby's v6 twin does not
-   answer from the LAN, and an AAAA here would be preferred over the A and hang
-   every mail client. The address is reachable only because it is in the
-   router's `dst_net4399` ipset; nothing in `dns/` routes it.
+   (145.239.73.18) times out from the LAN while ruby's dummy0 answers. It
+   carries both of dummy0's addresses, `192.168.254.254` and
+   `fd33:5692:1834:254::254`. **Every address here must reach ruby over the
+   tunnel** — an AAAA that does not answer would be tried first by some
+   clients and hang them, which is why there was none until 16 October 2026.
+   The router's 19000 rules (11 October) are what made the v6 one answer; the
+   A is reachable via `dst_net4399` as well. Nothing in `dns/` routes either.
+
+   `ruby.peetvandesande.com` points at the same two addresses. Its nginx admits
+   the admin pages (postfixadmin, rspamd, webchat) only from home and VPN
+   ranges, and a LAN client that resolved the public name arrived over the
+   internet from Orange's IPv6 prefix and was refused.
 
 6. **No PowerDNS component here can serve TLS on its own webserver, so nginx
    fronts all three.** The authoritative server and the recursor have no

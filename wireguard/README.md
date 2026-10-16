@@ -214,6 +214,7 @@ DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN
 | Dovecot ManageSieve | `192.168.204.254`, `192.168.254.254` and their IPv6 twins | TLS and auth from every source |
 | Dovecot IMAPS | `*, ::` | auth |
 | nftables | n/a | the `$WGIFS` input rules |
+| nginx admin pages on `ruby.peetvandesande.com` (postfixadmin, rspamd, webchat, reports, `nginx_status`) | all addresses | `allow` list in `/etc/nginx/snippets/home-lan-allow.conf`: `172.31.1.0/24`, `192.168.0.0/16`, `fd33:5692:1834::/48`. Home reaches them over wg1 because the lab's DNS resolves the name to ruby's dummy0 |
 
 Postfix's `wireguard_clients.cidr` exists but isn't referenced: binding only the wg0 addresses plus SASL is the real gate, and `main.cf`'s comments say so.
 
@@ -340,7 +341,7 @@ jennie's own lookups of lab names don't go through its BIND. wg3's `nameservers`
 
 ### Split horizon
 
-The `wireguard` view's `mail.peetvandesande.com` answers `192.168.204.254` and `fd33:5692:1834:204::254`, so VPN clients reach mail over either family, preferring IPv6. That's separate from the home LAN's override in `dns/` (A only, to `192.168.254.254`), which is A only for reasons of its own.
+The `wireguard` view's `mail.peetvandesande.com` answers `192.168.204.254` and `fd33:5692:1834:204::254`, so VPN clients reach mail over either family, preferring IPv6. That's separate from the home LAN's override in `dns/`, which answers ruby's dummy0 addresses `192.168.254.254` and `fd33:5692:1834:254::254`, reached over wg1; `ruby.peetvandesande.com` gets the same override there.
 
 ### Reverse zones
 

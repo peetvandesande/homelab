@@ -178,8 +178,11 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   DNSSEC-signed domain needs three coordinated pieces — read `dns/CLAUDE.md`
   invariant 5 before touching it.
 - **`mail.peetvandesande.com` is overridden internally too**, to ruby's
-  WireGuard address 192.168.254.254, because ruby serves IMAP only there.
-  Same three pieces, same invariant 5. A only — no AAAA, deliberately.
+  WireGuard addresses 192.168.254.254 and `fd33:5692:1834:254::254`, because
+  ruby serves IMAP only there. Same three pieces, same invariant 5. An AAAA
+  here must answer over the tunnel or it hangs clients; check before changing it.
+  **`ruby.peetvandesande.com`** is overridden to the same addresses, so the LAN
+  reaches ruby's nginx admin pages over the tunnel, where they are allowed.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.

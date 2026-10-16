@@ -5,13 +5,16 @@
 ; WireGuard address: 993 answers on 192.168.254.254 and times out on the
 ; public address, so a client that resolves the public name simply hangs.
 ;
-; 192.168.254.254 is reachable from the LAN because it is a member of
-; dst_net4399, the Main VPN policy's ipset, which marks it into wgclient1 -
-; see router/README.md. Nothing here routes; this only names it.
+; Both of ruby's dummy0 addresses are reachable from the LAN over wgclient1:
+; 192.168.254.254 via dst_net4399 and the router's 19000 rules, and
+; fd33:5692:1834:254::254 via the 19000 rules and table 1001's route6 entries -
+; see router/README.md. Nothing here routes; this only names them.
 ;
-; A only, deliberately. Ruby's v6 twin fd33:5692:1834:254::254 is in the same
-; ipset but does not answer ICMP or TCP from the LAN today, and an AAAA would
-; be preferred over the A and hang every mail client.
+; The AAAA was left out until 2026-10-16, because the v6 address did not answer
+; from the LAN before the 19000 rules went in on 2026-10-11. Checked from ruby,
+; sourced from 254::254: the router's LAN ULA answers ping and HTTP. Both
+; addresses offer the same mail services - 993, 4190 and 25 - and neither has
+; submission (465/587), which ruby binds only on its wg0 addresses.
 ;
 ; The zone is deliberately the SINGLE NAME, not peetvandesande.com - a zone for
 ; the parent would shadow www and everything else in the domain with an empty
@@ -24,7 +27,7 @@ $TTL 3600
 $ORIGIN mail.peetvandesande.com.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026101101  ; serial
+                2026101601  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -32,4 +35,5 @@ $ORIGIN mail.peetvandesande.com.
 
 @       IN  NS      pythia.home.
 
-@       IN  A       192.168.254.254  ; ruby, over wgclient1
+@       IN  A       192.168.254.254          ; ruby, over wgclient1
+@       IN  AAAA    fd33:5692:1834:254::254  ; ruby's dummy0, over wgclient1

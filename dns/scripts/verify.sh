@@ -36,10 +36,12 @@ check_eq "ca.peetvandesande.com answers with pistis, not the VPS" \
   "192.168.8.55" "$($DIG ca.peetvandesande.com A +short)"
 check_eq "mail.peetvandesande.com answers with ruby's tunnel address" \
   "192.168.254.254" "$($DIG mail.peetvandesande.com A +short)"
-# No AAAA: ruby's v6 twin does not answer from the LAN, and an AAAA would be
-# preferred over the A and hang every mail client.
-check_eq "mail.peetvandesande.com has no AAAA" \
-  "" "$($DIG mail.peetvandesande.com AAAA +short)"
+check_eq "mail.peetvandesande.com answers with ruby's tunnel ULA" \
+  "fd33:5692:1834:254::254" "$($DIG mail.peetvandesande.com AAAA +short)"
+check_eq "ruby.peetvandesande.com answers with ruby's tunnel address" \
+  "192.168.254.254" "$($DIG ruby.peetvandesande.com A +short)"
+check_eq "ruby.peetvandesande.com answers with ruby's tunnel ULA" \
+  "fd33:5692:1834:254::254" "$($DIG ruby.peetvandesande.com AAAA +short)"
 # Scoping: the NTA must cover the one name and nothing more, so the parent
 # domain has to keep validating. A missing 'ad' here means the NTA is too wide
 # and peetvandesande.com is no longer DNSSEC-protected for the whole LAN.
