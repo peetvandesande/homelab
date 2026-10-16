@@ -296,12 +296,9 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
 
 ## Follow-ups (optional, outside the rollout)
 
-- [ ] **BIND reverse zone `204.168.192.in-addr.arpa`:** remove the stale PTRs `3 sylvie` and `5 home-inet`, and bump the serial
+- [x] **BIND reverse zone `204.168.192.in-addr.arpa`:** remove the stale PTRs `3 sylvie` and `5 home-inet`, and bump the serial
 - [ ] **BIND, optional:** reverse zones for `172.31.1.0/24` and `fd33:5692:1834::/48` (`4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa`), so reverse lookups of tunnel and ULA addresses don't time out; an `AAAA fd33:5692:1834:204::254` for the split-horizon `mail.peetvandesande.com`
-- [ ] **Postfix:** `wireguard_clients.cidr` isn't referenced. Either wire it into `mua_client_restrictions` (extended to the VPN ranges) or correct the `main.cf` comments that say it's in use. Update `main.cf`'s header, which still describes the VPN as `192.168.204.0/24 (wg0)`.
-- [ ] **WordPress:** commit the `docker-compose.yml` loopback change in `/opt/wordpress-sogode` (that repo had other uncommitted edits)
-- [ ] **nginx:** `/etc/nginx/sites-available/sogode.com.wordpress` (not enabled) proxies to the container's bridge address on 19080, which can't work; fix it or delete it
+- [x] **Postfix:** `wireguard_clients.cidr` isn't referenced. Either wire it into `mua_client_restrictions` (extended to the VPN ranges) or correct the `main.cf` comments that say it's in use. Update `main.cf`'s header, which still describes the VPN as `192.168.204.0/24 (wg0)`.
 - [ ] **Failover:** with static routing, a wg3 outage cuts jennie off from home. BIRD or FRR (OSPF) over wg1/wg2/wg3 could reroute via ruby.
-- [ ] **Remove sylvie** wherever else it's referenced (monitoring, password managers, …)
-- [ ] **Home, BBC policy and DNS:** the `UK` rule is domain-based through dnsmasq. Devices using their own DNS (browser DoH, iCloud Private Relay) bypass it. Disable DoH on the devices that need BBC, or block it on the router.
+- [x] **Remove sylvie** wherever else it's referenced (monitoring, password managers, …)
 - [ ] **Home, `home/wg3.conf`:** fill in `<jennie wg3 public key>` in the reference copy (`sed -i "s|<jennie wg3 public key>|PUBKEY|" home/wg3.conf`), so it matches the router
