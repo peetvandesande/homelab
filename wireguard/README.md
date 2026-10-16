@@ -4,7 +4,7 @@ The WireGuard design for **ruby**, **jennie** and the **home** router: what goes
 
 **To deploy, work through [TASKS.md](TASKS.md):** every remaining step in order, with commands. This README is the reference behind it.
 
-Status as of 2026-10-09: the configs in this directory are **written and validated** (`netplan generate` succeeds for both ruby's and jennie's file sets). **Partly deployed**: ruby's side of wg2 is live. Some secrets still need filling in (see [Task 1](#task-1-fill-in-secrets)).
+Status as of 2026-10-16: the configs in this directory are **written and validated** (`netplan generate` succeeds for both ruby's and jennie's file sets). **Deployed**: the whole rollout is live and cleaned up (TASKS.md phases 0–7). Only the clients on jennie (phase 8) are still to do.
 
 Done so far:
 
@@ -13,18 +13,24 @@ Done so far:
 - PSKs generated for ruby–jennie (`jennie.psk`) and home–jennie (`home-jennie.psk`)
 - jennie's wg2 key generated on jennie (public key `+0MxQ46pU2YUBHPrY7cLHr+ahAhS5fMXImlLRvBoOgk=`)
 - Task 1a: ruby's wg0 key and the client/home PSKs filled in
-- Task 2b/2c: ruby's new `/etc/nftables.conf` installed (2026-10-08 20:44) and `wg-docker-user.service` enabled. The live file matches `ruby/nftables.conf` except two comments renamed from home-inet to home since; copying it over again and reloading is cosmetic. `ruby/nftables.conf.orig` is the pre-change original.
+- Task 2b/2c: ruby's new `/etc/nftables.conf` installed (2026-10-08 20:44) and `wg-docker-user.service` enabled. `ruby/nftables.conf.orig` is the pre-change original.
 - ruby: `82-wireguard-wg2.yaml` installed (2026-10-08 20:57); wg2 is up with the via-jennie table and rules
 - jennie: wg2 and dummy0 are up. From ruby, `172.31.1.6`, `fd33:5692:1834:ff02::2`, `192.168.254.2` and `fd33:5692:1834:254::2` all answer (checked 2026-10-09).
 - jennie: wg3 is up
+- Task 2a: forwarding owned by networkd on ruby
+- Task 2d: jennie's firewall and forwarding, so the exit via jennie works
+- Task 2e: ruby's dummies renumbered to `fd33:5692:1834:254::254`/`::253`
+- ruby's live `/etc/nftables.conf` matches `ruby/nftables.conf`, comments included
+- `.home` names for jennie itself: routing-only domains to Pythia on wg3 (TASKS.md 3.5)
+- no provider firewall is in use on either server (Task 2f)
+- Task 5: ruby's wg0 on netplan, home moved to wg1 (`wgclient1`), and 5e's service changes (IPv6 listeners, VPN-wide DNS, start order), including ruby's `home.` zones
+- Task 6: clients updated, with their IPv4 exits chosen
+- Task 7: tested end to end, ruby and jennie rebooted
+- Task 8: secrets and the wg-quick leftovers removed
 - home router: wg3 is configured and up, with the routes, IPv6 masquerade and destination policy described in [Task 4c](#task-4-jennie--home-wg3), and the LAN ULA `/64`s (see [Home LANs and the ISP's IPv6](#home-lans-and-the-isps-ipv6))
-
-Not yet: forwarding pinned in networkd (2a), the dummy renumbering (2e), the wg0/wg1 cutover (Task 5) and the service changes that follow it (5e). jennie's firewall and forwarding (2d) aren't verified against this plan yet; the exit via jennie depends on them.
 
 Written 2026-10-15, not yet deployed:
 
-- `home.` and the lab's reverse zone on ruby: `static-stub` zones to Pythia in ruby's `wireguard` view, going live with 5e (see [Service allow lists](#service-allow-lists))
-- `.home` names for jennie itself: routing-only domains to Pythia on wg3 (TASKS.md 3.5)
 - **Clients on jennie:** a second `wg0` on jennie for the same three devices, with jennie's own BIND, routes back on ruby and two policy rules on the router (see [Clients on jennie](#clients-on-jennie), TASKS.md phase 8)
 
 ***
@@ -366,7 +372,7 @@ Run commands on ruby from this directory (`cd ~/wg`) unless marked *on jennie* o
 Order:
 
 1. Fill in ruby's secrets.
-2. Update ruby's firewall, and open ports on jennie and in provider firewalls.
+2. Update ruby's firewall, and open ports on jennie.
 3. ruby ↔ jennie (wg2).
 4. jennie ↔ home (wg3).
 5. Move ruby's wg0 to netplan and home to wg1.
@@ -495,12 +501,7 @@ If an old `fd00::` address lingers, remove it with `sudo ip -6 addr del fd00::1/
 
 jennie's `82-wireguard-wg2.yaml` has the new addresses in its allowed IPs and routes. If you already installed an earlier copy on jennie, reinstall it there and recreate wg2: `sudo netplan generate && sudo ip link del wg2 && sudo networkctl reload`.
 
-**2f. Provider firewalls.** If OVH's network firewall or Public Cloud security groups are in use for either server, allow the same ports there:
-
-| Host   | UDP, IPv6        | UDP, IPv4 |
-|--------|------------------|-----------|
-| ruby   | 51821, 51822     | 51820 (unchanged) |
-| jennie | 51820, 51822, 51823 | 51820 |
+**2f. Provider firewalls.** Neither server has one (no OVH network firewall or security groups), so jennie's and ruby's nftables are the only filtering.
 
 ### Task 3: ruby ↔ jennie (wg2)
 
@@ -825,7 +826,7 @@ Remove sylvie from any other place it's referenced (DNS, monitoring).
 
 ## Rollback
 
-**ruby: back to wg-quick wg0** (`/etc/wireguard/wg0.conf` was never changed):
+**ruby: back to wg-quick wg0.** No longer possible as written: Task 8 removed `/etc/wireguard/wg0.conf` and its backup. Kept for reference; restore the config from `~/projects/homelab-private/wireguard/superseded/` first if it's ever needed:
 
 ```bash
 sudo rm /etc/netplan/80-wireguard-wg0.yaml /etc/netplan/81-wireguard-wg1.yaml

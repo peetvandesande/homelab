@@ -11,7 +11,7 @@ has no `deploy.sh`. It is a hand-run rollout, mid-way through:
 
 - `README.md` – the design and the reference behind every step
 - `TASKS.md` – the remaining steps in order, with commands. **Start here.**
-  Status was last recorded on 2026-10-09; check the hosts before trusting it.
+  Status was last recorded on 2026-10-16; check the hosts before trusting it.
 
 ## Secrets are not in this repo
 
