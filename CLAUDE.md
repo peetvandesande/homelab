@@ -265,6 +265,8 @@ end to end and every lab certificate – `prometheus/CLAUDE.md` invariant 7. Lok
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
 twelve hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
+The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
+instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
 `/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the

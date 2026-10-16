@@ -22,7 +22,10 @@ push both need the certificate material. Loki must be up, or deploy refuses.
 
 1. **The journal is the only source.** No host runs rsyslog and nothing in the
    lab writes its own log files that matter; adding a `loki.source.file` is a
-   per-service decision, not a fleet one. `path` stays empty so sd_journal
+   per-service decision, not a fleet one. The one other source in the lab is
+   the router's syslog, received by Loki's Alloy alone through its own
+   `loki/root/etc/alloy/router.alloy` — invariant 5's per-host file, not a
+   fleet change. `path` stays empty so sd_journal
    opens whatever exists — lenora's journal is `Storage=volatile`
    (`/run/log/journal`), the containers' are persistent. Do not "fix" lenora's
    journald to make it match: Loki is now its persistent log.

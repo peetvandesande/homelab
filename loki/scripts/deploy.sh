@@ -23,6 +23,15 @@ $SSH "root@$HOST" '
   loki -config.file=/etc/loki/config.yml -verify-config >/dev/null
   systemctl daemon-reload
   systemctl enable loki >/dev/null
+  # router.alloy sits beside the fleet config.alloy; validate the pair.
+  chown root:alloy /etc/alloy/*.alloy && chmod 0640 /etc/alloy/*.alloy
+  alloy validate /etc/alloy >/dev/null
 '
 restart_assert "$HOST" loki
 echo "   loki restarted"
+restart_assert "$HOST" alloy
+# The unit is active before the components have started; give the listener a
+# few seconds to open.
+$SSH "root@$HOST" 'for _ in $(seq 10); do ss -uln | grep -q ":1514 " && exit 0; sleep 1; done; exit 1' \
+  || { echo "   alloy is not listening on :1514"; exit 1; }
+echo "   alloy restarted, router syslog listener on :1514"

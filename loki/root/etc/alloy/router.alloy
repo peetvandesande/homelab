@@ -1,0 +1,103 @@
+// The router's syslog, received here and written through the fleet file's
+// loki.write.loki. Managed from homelab/loki - the router side is a few uci
+// settings, documented in homelab/router/README.md, "Logs".
+//
+// Plain UDP, not TLS: the router's logd has no TLS. loki.relabel.router_only
+// keeps only lines whose source is the router itself, so nothing else on the
+// LAN writes into {host="router"} by accident.
+//
+// UDP, not TCP: over TCP logread ends a message with nothing this parser
+// takes as a frame boundary (no LF; -0's NUL is not one either), so every
+// line sat in the buffer until the next one arrived. A datagram is one
+// message. The cost is that lines sent while this listener is down are lost
+// here - the router's 2 MB ring buffer still has them.
+loki.source.syslog "router" {
+  listener {
+    // Unprivileged port - alloy runs as user alloy. The wildcard, so no
+    // wait-for-address drop-in is needed.
+    address       = "0.0.0.0:1514"
+    protocol      = "udp"
+    syslog_format = "rfc3164"
+
+    // RFC 3164 timestamps carry no year and no zone, and the router runs on
+    // local time. Stamp lines on receipt instead.
+    use_incoming_timestamp = false
+
+    labels = { host = "router" }
+  }
+
+  relabel_rules = loki.relabel.router.rules
+  forward_to    = [loki.relabel.router_only.receiver]
+}
+
+// Drop anything not sent by the router. This cannot live in relabel_rules
+// above: there a failed keep only strips the relabelled labels and the entry
+// is forwarded anyway, with just host. A standalone loki.relabel does drop
+// it. The __syslog_ labels are gone by this point, so the source address
+// travels as src and is removed here, before it reaches Loki.
+loki.relabel "router_only" {
+  forward_to = [loki.write.loki.receiver]
+
+  rule {
+    source_labels = ["src"]
+    regex         = "192\\.168\\.8\\.1"
+    action        = "keep"
+  }
+
+  rule {
+    regex  = "src"
+    action = "labeldrop"
+  }
+}
+
+// The same bounded labels as the journal: identifier and level. The router
+// has no systemd, so there is no unit. src is temporary - see above.
+loki.relabel "router" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__syslog_connection_ip_address"]
+    target_label  = "src"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_app_name"]
+    target_label  = "identifier"
+  }
+
+  // Syslog names severities in full; the journal uses the short keywords.
+  // Map to the journal's so {level="err"} means the same on every host.
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    regex         = "informational"
+    replacement   = "info"
+    target_label  = "level"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    regex         = "(debug|notice|warning|alert)"
+    target_label  = "level"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    regex         = "error"
+    replacement   = "err"
+    target_label  = "level"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    regex         = "critical"
+    replacement   = "crit"
+    target_label  = "level"
+  }
+
+  rule {
+    source_labels = ["__syslog_message_severity"]
+    regex         = "emergency"
+    replacement   = "emerg"
+    target_label  = "level"
+  }
+}

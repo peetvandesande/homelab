@@ -88,6 +88,32 @@ script renders no subnets; `/etc/hotplug.d/iface/20-chrony` adds them with
 config. Guest and IoT are not allowed, and their firewall zones reject input
 anyway.
 
+## Logs
+
+```
+system.@system[0].log_ip       192.168.8.56   ← Loki's Alloy, loki/root/etc/alloy/router.alloy
+system.@system[0].log_port     1514
+system.@system[0].log_proto    udp
+system.@system[0].log_hostname router
+system.@system[0].log_size     2048           ← KB of ring buffer, up from 512
+```
+
+`logread -f -r` forwards the whole ring buffer – kernel, hostapd, dnsmasq,
+netifd – to Loki as RFC 3164 syslog. Query `{host="router"}`; `identifier` is
+the syslog tag and `level` the severity, mapped to the journal's keywords.
+
+- **UDP, not TCP.** Over TCP, logread ends a message with nothing Alloy's
+  RFC 3164 parser takes as a frame boundary – not LF, and `log_trailer_null`'s
+  NUL is not one either – so every line sat in Alloy's buffer until the next
+  one arrived. A datagram is one message.
+- **Not TLS.** logd cannot do it. The listener drops anything whose source is
+  not 192.168.8.1.
+- **Lines sent while Loki is down are lost there**, not queued. The 2 MB ring
+  buffer – a few days – still has them on the router. `loki/scripts/verify.sh`
+  fails if no router line has arrived in 15 minutes.
+
+Keep Settings on a firmware upgrade keeps these; a factory reset does not.
+
 ## Routing-rule priority map
 
 Identical shape for IPv4 and IPv6. `ip rule` / `ip -6 rule`:

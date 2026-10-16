@@ -41,3 +41,15 @@ the certificate and Loki will not start without it.
 Every enrolled host runs Grafana Alloy (`alloy/`) and pushes its journal here
 over TLS. `limits_config.reject_old_samples_max_age` (168h) and Alloy's
 `max_age` (166h) are a pair — change one, change the other.
+
+The router cannot run Alloy, so it sends syslog **to** Loki's own Alloy:
+`root/etc/alloy/router.alloy`, a UDP listener on `:1514` beside the fleet
+`config.alloy`, labelled `host="router"`. `scripts/deploy.sh` pushes it and
+proves the listener is open; `scripts/verify.sh` fails if no router line has
+arrived in 15 minutes. Two things in that file are not obvious:
+
+- **The source filter is a separate `loki.relabel`.** In the syslog source's
+  own `relabel_rules`, a failed `keep` strips the relabelled labels and still
+  forwards the entry, so a spoofed line arrived as `{host="router"}`. The
+  address travels as a temporary `src` label and is dropped before Loki.
+- **UDP, not TCP** — see `router/README.md`, "Logs".

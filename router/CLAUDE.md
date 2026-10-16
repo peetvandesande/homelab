@@ -104,6 +104,19 @@ of them is obvious from the router's own UI.
    runtime and will not survive a reboot. Check `proto`: netifd routes say
    `proto static`, hand-added ones say nothing at all.
 
+9. **`firewall.tcp_dns_leak_drop` stays `enabled '0'`.** GL created it under
+   fw3 as a drop of dnsmasq's (uid 453) unmarked TCP, the uid match living in
+   the iptables-only `extra` option. Upgrading to 4.11 (OpenWrt 25.12, fw4)
+   with Keep Settings carried the rule over and fw4 ignored `extra`, so it
+   dropped **every** new TCP connection the router itself opened – HTTPS,
+   firmware checks, log shipping – while forwarded traffic, DNS, WireGuard and
+   SSH in all kept working. On fw4 GL writes the narrow version as
+   `/usr/share/nftables.d/ruleset-post/tcp_dns_leak_drop.nft` instead (the
+   `skuid 453` line at the top of `inet fw4 output`), so nothing is lost. A
+   GL script may re-enable the legacy rule; after any upgrade or VPN change,
+   check `wget -O /dev/null https://1.1.1.1/` from the router fails only on
+   the certificate, not with "Operation not permitted".
+
 ## Backups
 
 The device keeps `/etc/config/<name>.bak-<date>-<reason>` files from previous

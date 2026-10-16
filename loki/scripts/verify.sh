@@ -37,6 +37,16 @@ if $CURL -G "https://$HOST:3100/loki/api/v1/query_range" \
   pass "query returns the pushed line"
 else bad "query returns the pushed line" "line not found within 60s window"; fi
 
+echo "== router syslog arriving"
+# The router logs continuously (dnsmasq, hostapd, the Wi-Fi driver), so 15
+# minutes of silence means the forwarder or the listener is down - see
+# router/README.md and root/etc/alloy/router.alloy.
+if $CURL -G "https://$HOST:3100/loki/api/v1/query_range" \
+     --data-urlencode 'query={host="router"}' --data-urlencode "start=$(( ($(date +%s)-900)*1000000000 ))" \
+     --data-urlencode limit=1 2>/dev/null | grep -q '"values":\[\['; then
+  pass "router lines in the last 15 minutes"
+else bad "router lines in the last 15 minutes" "check logread -r on the router and :1514 on loki"; fi
+
 echo "== scraped by prometheus"
 $CURL "https://192.168.8.53:9090/api/v1/targets" 2>/dev/null \
   | python3 -c '
