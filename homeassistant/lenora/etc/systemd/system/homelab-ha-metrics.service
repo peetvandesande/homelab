@@ -1,0 +1,9 @@
+[Unit]
+Description=Write Home Assistant VM metrics for node-exporter's textfile collector
+After=pve-guests.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/homelab-ha-metrics
+# Three guest-agent calls of up to 15 s each if the guest is hung.
+TimeoutStartSec=90s

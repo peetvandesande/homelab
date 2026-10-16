@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install the renewal driver, the helper it pushes, and the timer on lenora.
+# Install the renewal driver, the helper it pushes, the VM metrics collector,
+# and their timers on lenora.
 # Idempotent. Does not touch Home Assistant's own configuration.
 set -euo pipefail
 
@@ -22,12 +23,19 @@ push lenora/etc/systemd/system/homelab-ha-tls-renew.service \
      /etc/systemd/system/homelab-ha-tls-renew.service 0644
 push lenora/etc/systemd/system/homelab-ha-tls-renew.timer \
      /etc/systemd/system/homelab-ha-tls-renew.timer 0644
+push lenora/usr/local/bin/homelab-ha-metrics /usr/local/bin/homelab-ha-metrics 0755
+push lenora/etc/systemd/system/homelab-ha-metrics.service \
+     /etc/systemd/system/homelab-ha-metrics.service 0644
+push lenora/etc/systemd/system/homelab-ha-metrics.timer \
+     /etc/systemd/system/homelab-ha-metrics.timer 0644
 
 $SSH "root@$LENORA" '
   set -e
   systemctl daemon-reload
   systemctl enable --now homelab-ha-tls-renew.timer >/dev/null
-  systemctl list-timers homelab-ha-tls-renew.timer --no-pager | head -2
+  systemctl enable --now homelab-ha-metrics.timer >/dev/null
+  systemctl start homelab-ha-metrics.service
+  systemctl list-timers "homelab-ha-*" --no-pager | head -3
 '
 echo
 echo "== deployed - now run scripts/verify.sh"

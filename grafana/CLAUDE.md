@@ -101,7 +101,9 @@ folder and read-only in the UI. Eighteen rules in two groups, `dns` and
 the `outside` group in `outside.yaml`, which alerts on ruby and jennie probing
 each other's public side (`outside/CLAUDE.md`), and the `probes` group in
 `probes.yaml`, on the blackbox exporter at home: internet, tunnels, DNS end to
-end, and lab certificates.
+end, and lab certificates. `homeassistant-vm.yaml` covers the Home Assistant
+VM's host metrics, collected by lenora over the guest agent
+(`homeassistant/CLAUDE.md`, "VM metrics").
 
 7. **Alert rules carry the Prometheus datasource uid, substituted at deploy
    time.** A rule needs `datasourceUid`, and the provisioned datasource has no

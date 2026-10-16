@@ -6,10 +6,10 @@ GUI and `configuration.yaml`; this directory owns only the certificate.
 
 ```
 scripts/issue.sh    first issue, and recovery after an expiry
-scripts/deploy.sh   install the renewal driver + timer on lenora
+scripts/deploy.sh   install the renewal driver, VM metrics and timers on lenora
 scripts/verify.sh   smoke test TLS and the renewal path
 haos/ha-tls.py      runs inside the core container - CSR, renew, info
-lenora/             the driver and its systemd timer
+lenora/             the renewal driver, the VM metrics collector, their timers
 automations/        reference copies of automations other directories rely on
 ```
 
@@ -95,6 +95,18 @@ The driver **restarts Home Assistant by default**, because until it does the
 renewal has achieved nothing - HA reads the certificate once, at startup. The
 previous bundle is kept at `/ssl/homeassistant.crt.prev`, and the driver waits
 for a verified handshake on `:443` before reporting success.
+
+## VM metrics
+
+HAOS cannot run node-exporter: the one packaged route is a third-party app that
+needs protection mode off and the Docker socket, which is root on the
+appliance. `lenora/usr/local/bin/homelab-ha-metrics` collects from outside
+instead, every minute on `homelab-ha-metrics.timer`: Proxmox for whether the VM
+runs, the guest agent for memory, load and filesystems. It writes
+`homeassistant_vm.prom` into lenora's textfile collector, so the series arrive
+on lenora's `node` target with `vm="homeassistant"`, and
+`grafana/.../alerting/homeassistant-vm.yaml` alerts on them. The read-only OS
+image (erofs, always full) and zram are left out.
 
 ## Home Assistant's own side
 

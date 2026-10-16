@@ -1,0 +1,267 @@
+# The Home Assistant VM's host metrics. HAOS cannot run node-exporter, so
+# lenora collects them over the guest agent into its textfile collector
+# (homelab/homeassistant, homelab-ha-metrics) - they arrive on lenora's `node`
+# target and are selected by vm="homeassistant". Managed from homelab/grafana.
+# Same thresholds as disk-low and memory-low in homelab.yaml.
+#
+# These alerts go out through Home Assistant, so "the VM is down" reaches the
+# phone only once HA is back - Grafana retries, and the alert is a record of
+# the outage more than a warning of it.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: homeassistant-vm
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: ha-vm-down
+        title: "Home Assistant VM not running"
+        condition: B
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox reports the Home Assistant VM is not running"
+          description: >-
+            VM 302 on lenora. qm status 302, then qm start 302. Alert delivery runs through this VM, so nothing else reaches the phone until it is back.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_vm_up{vm="homeassistant"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: ha-vm-agent-down
+        title: "Home Assistant VM not answering"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The Home Assistant VM is running but its guest agent does not answer"
+          description: >-
+            Proxmox says running, the guest agent says nothing: the guest is hung, or the agent stopped. qm guest cmd 302 ping on lenora; a reset is qm reset 302. Certificate renewal uses the same channel.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_vm_agent_up{vm="homeassistant"} and on() homelab_vm_up{vm="homeassistant"} == 1'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: ha-vm-disk-low
+        title: "Home Assistant VM disk nearly full"
+        condition: B
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Home Assistant has {{ $values.A }}% free on {{ $labels.mountpoint }}"
+          description: >-
+            /mnt/data holds the recorder database, backups and app data. Backups are the usual culprit - they accumulate in /backup unless pruned.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '100 * homelab_vm_filesystem_avail_bytes{vm="homeassistant"} / homelab_vm_filesystem_size_bytes{vm="homeassistant"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [10]
+      - uid: ha-vm-memory-low
+        title: "Home Assistant VM memory nearly exhausted"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Home Assistant is at {{ $values.A }}% memory"
+          description: >-
+            From /proc/meminfo inside the VM. Raise the VM memory in Proxmox if this is steady rather than a spike.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: '100 * (1 - homelab_vm_memory_available_bytes{vm="homeassistant"} / homelab_vm_memory_total_bytes{vm="homeassistant"})'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [90]
+      - uid: ha-vm-metrics-stale
+        title: "Home Assistant VM metrics stale"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nothing has refreshed the Home Assistant VM metrics for over 5 minutes"
+          description: >-
+            homelab-ha-metrics.timer on lenora writes them every minute. Without it the other rules in this group see the last values forever. systemctl status homelab-ha-metrics on lenora.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - homelab_vm_metrics_timestamp_seconds{vm="homeassistant"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [300]

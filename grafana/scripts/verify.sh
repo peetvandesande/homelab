@@ -84,7 +84,8 @@ fi
 for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-empty \
            rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat \
            outside-probe-failing outside-vantage-down outside-cert-expiring \
-           internet-unreachable tunnel-down dns-resolution-failing lab-tls-failing lab-cert-expiring; do
+           internet-unreachable tunnel-down dns-resolution-failing lab-tls-failing lab-cert-expiring \
+           ha-vm-down ha-vm-agent-down ha-vm-disk-low ha-vm-memory-low ha-vm-metrics-stale; do
   if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done

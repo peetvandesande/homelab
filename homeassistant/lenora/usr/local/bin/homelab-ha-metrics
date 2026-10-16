@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+# Host metrics for the Home Assistant VM (302), written to lenora's
+# node-exporter textfile collector. Managed in homelab/homeassistant.
+#
+# HAOS cannot run node-exporter: the only packaged route is a third-party app
+# that wants protection mode off and the Docker socket, i.e. root on the
+# appliance. So lenora asks from outside instead - Proxmox for whether the VM
+# runs, the guest agent for what is inside it - the same channel the TLS
+# renewal uses. Nothing is installed in HAOS.
+#
+# Every series carries vm="homeassistant"; they are scraped as part of
+# lenora's `node` target, so instance and role are lenora's. The rules in
+# grafana/.../alerting/homeassistant-vm.yaml select on vm, not on those.
+import json
+import os
+import subprocess
+import time
+
+VMID = "302"
+VM = "homeassistant"
+OUT = "/var/lib/node_exporter/textfile/homeassistant_vm.prom"
+# The OS image is read-only and always 100% full; zram is RAM.
+SKIP_FS = {"erofs", "squashfs"}
+
+
+def run(*cmd):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=True).stdout
+
+
+def guest(*cmd):
+    """Run a command in the VM through the agent and return its stdout."""
+    r = json.loads(run("qm", "guest", "exec", VMID, "--timeout", "10", "--", *cmd))
+    if r.get("exitcode") != 0:
+        raise RuntimeError(r.get("err-data", "non-zero exit"))
+    return r.get("out-data", "")
+
+
+lab = f'vm="{VM}",vmid="{VMID}"'
+lines = []
+
+
+def metric(name, help_, value, labels=lab, kind="gauge"):
+    if not any(l.startswith(f"# HELP {name} ") for l in lines):
+        lines.append(f"# HELP {name} {help_}")
+        lines.append(f"# TYPE {name} {kind}")
+    lines.append(f"{name}{{{labels}}} {value}")
+
+
+status = json.loads(run("pvesh", "get", f"/nodes/{os.uname().nodename}/qemu/{VMID}/status/current",
+                        "--output-format", "json"))
+running = status.get("qmpstatus") == "running"
+metric("homelab_vm_up", "1 if Proxmox reports the VM running.", int(running))
+metric("homelab_vm_uptime_seconds", "VM uptime according to Proxmox.", status.get("uptime", 0))
+metric("homelab_vm_cpu_ratio", "VM CPU use as Proxmox sees it, 0-1 across all vCPUs.",
+       status.get("cpu", 0))
+
+agent = 0
+if running:
+    try:
+        fs = json.loads(run("qm", "guest", "cmd", VMID, "get-fsinfo"))
+        mem = dict(l.split(":", 1) for l in guest("cat", "/proc/meminfo").splitlines() if ":" in l)
+        load = guest("cat", "/proc/loadavg").split()
+        agent = 1
+    except (subprocess.SubprocessError, RuntimeError, ValueError):
+        pass
+metric("homelab_vm_agent_up", "1 if the guest agent answered; 0 with the VM running means the guest is hung.", agent)
+
+if agent:
+    kb = lambda k: int(mem[k].split()[0]) * 1024
+    metric("homelab_vm_memory_total_bytes", "MemTotal inside the VM.", kb("MemTotal"))
+    metric("homelab_vm_memory_available_bytes", "MemAvailable inside the VM.", kb("MemAvailable"))
+    metric("homelab_vm_load1", "1-minute load average inside the VM.", load[0])
+    seen = set()
+    for f in fs:
+        if f["type"] in SKIP_FS or f["name"].startswith("zram") or f["mountpoint"] in seen:
+            continue
+        seen.add(f["mountpoint"])
+        fl = f'{lab},mountpoint="{f["mountpoint"]}",device="{f["name"]}",fstype="{f["type"]}"'
+        metric("homelab_vm_filesystem_size_bytes", "Filesystem size inside the VM.", f["total-bytes"], fl)
+        metric("homelab_vm_filesystem_avail_bytes", "Filesystem free space inside the VM (size - used).",
+               f["total-bytes"] - f["used-bytes"], fl)
+
+metric("homelab_vm_metrics_timestamp_seconds", "When this file was last written.", int(time.time()))
+
+tmp = OUT + ".tmp"
+with open(tmp, "w") as fh:
+    fh.write("\n".join(lines) + "\n")
+os.chmod(tmp, 0o644)
+os.replace(tmp, OUT)
