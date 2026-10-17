@@ -203,6 +203,14 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   `noresolv` plus `server=192.168.8.50` on the main dnsmasq (Themis forwards
   the VPN policy domains *to* the router, so that is a loop), and the force-DNS
   redirect, which would hijack clients' queries to `.50` back to the router.
+- **Outgoing DNS that is not Themis is rejected at the router** — :53 and :853
+  from every LAN zone, and the well-known public resolvers on :443 — so DoT,
+  DoQ, DoH and hard-coded resolvers all fail fast and clients fall back to
+  Themis. Delphi and hermes are exempt from the :53 rule **by MAC**, because
+  both recurse themselves; rebuild either with a new MAC and its recursion
+  stops. `router/CLAUDE.md` invariant 10. The names of DoH resolvers are blocked
+  on Delphi as well (`doh` feed, default set); Themis answers the Firefox
+  canary NXDOMAIN.
 - **Pythia is the only authority for `home.`** The router forwards `home.` and
   `8.168.192.in-addr.arpa` to it and no longer names its own DHCP leases into
   the zone. It did both for a while, and odhcpd was injecting AAAA records for

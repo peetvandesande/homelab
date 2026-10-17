@@ -18,7 +18,7 @@ on, so Themis hands those names back to it. See invariant 11.
   to Delphi - except for the router's VPN policy domains, which it sends to the
   router instead. Also where Prometheus scrapes, and where DoT (:853) and DoH
   (:443) terminate.
-- **Delphi** does all recursion and all filtering. It loads eleven RPZ feeds and
+- **Delphi** does all recursion and all filtering. It loads twelve RPZ feeds and
   applies each only to queries carrying the matching tag, so one recursor serves
   every policy set. Ads and malware apply to everyone; the rest are opt-in per
   client.
@@ -255,12 +255,19 @@ discarded and so applies to everyone.
 
 | Set | Feeds |
 |---|---|
-| default (no tag) | ads, malware |
+| default (no tag) | ads, malware, doh |
 | `kids` | + adult, gambling, nosafesearch, social, dohbypass |
 | `iot` | + native_samsung, native_lgwebos, native_roku, native_tiktok |
 
-`dohbypass` carries more weight than its size suggests: a browser with DoH
-switched on routes around this entire stack, and that feed is what closes it.
+`doh` is in the default set because a browser or app with DoH switched on
+routes around this entire stack. It lists encrypted-DNS resolver names and
+nothing else, so it is safe for everyone; `dohbypass` is the larger list that
+also blocks VPN, Tor and proxy providers, which is why it stays kids-only.
+Names are only half of it: a client that hard-codes its resolver's address never
+asks Delphi, so the router rejects outgoing :53 and :853 and the well-known
+resolver IPs on :443 — `router/CLAUDE.md` invariant 10. The Firefox canary
+`use-application-dns.net` is answered NXDOMAIN by dnsdist on Themis, for every
+client, since hagezi leaves it out of the feed.
 
 The design says Themis tags on **source subnet**. For kids it cannot: the LAN is
 flat, one `/24`, no VLANs. Membership is an explicit per-device IP list — a

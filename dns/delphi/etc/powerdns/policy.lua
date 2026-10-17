@@ -15,7 +15,7 @@ local POLICY_TLV = 224        -- must match SetProxyProtocolValuesAction on Them
 -- Every policyName declared in recursor.lua. A feed missing from this list can
 -- never be discarded, so it would silently apply to everyone.
 local ALL_POLICIES = {
-  "ads", "malware",
+  "ads", "malware", "doh",
   "adult", "gambling", "nosafesearch", "social", "dohbypass",
   "native_samsung", "native_lgwebos", "native_roku", "native_tiktok",
 }
@@ -23,10 +23,11 @@ local ALL_POLICIES = {
 -- Keys are the TLV values Themis stamps, and the policy set names in
 -- themis/etc/dnsdist/client-policies.conf. "" is the default set: no tag.
 local POLICY_SETS = {
-  [""]   = { ads = true, malware = true },
-  kids   = { ads = true, malware = true, adult = true, gambling = true,
-             nosafesearch = true, social = true, dohbypass = true },
-  iot    = { ads = true, malware = true, native_samsung = true,
+  [""]   = { ads = true, malware = true, doh = true },
+  kids   = { ads = true, malware = true, doh = true, adult = true,
+             gambling = true, nosafesearch = true, social = true,
+             dohbypass = true },
+  iot    = { ads = true, malware = true, doh = true, native_samsung = true,
              native_lgwebos = true, native_roku = true, native_tiktok = true },
 }
 

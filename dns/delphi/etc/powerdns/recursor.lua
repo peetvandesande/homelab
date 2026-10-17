@@ -63,6 +63,7 @@ local FEEDS = {
   -- Default set: everyone gets these.
   {name = "ads",            hint =  400000, why = "advertising/tracking"},
   {name = "malware",        hint = 1300000, why = "malware/threat feed"},
+  {name = "doh",            hint =    8000, why = "encrypted DNS resolver"},
   -- kids set.
   {name = "adult",          hint =  200000, why = "adult content"},
   {name = "gambling",       hint =  450000, why = "gambling"},

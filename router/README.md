@@ -70,6 +70,60 @@ stack is down.
 
 See `CLAUDE.md` invariants 1-4 for the settings that must not change.
 
+### Outgoing DNS that is not Themis is rejected
+
+Since 17 October 2026 the firewall rejects every way a LAN client could resolve
+around Themis. The rules are plain `uci` firewall sections, so they show in
+`uci show firewall | grep dns_egress` and survive a Keep-Settings upgrade; the
+pre-change config is `/etc/config/firewall.bak-2026-10-17-dns-egress`.
+
+| Section | Matches | Catches |
+|---|---|---|
+| `dns_egress_<zone>_853` | tcp/udp 853, any family | DoT and DoQ |
+| `dns_egress_<zone>_53` | tcp/udp 53, any family | hard-coded plain resolvers (8.8.8.8 and friends) |
+| `dns_egress_<zone>_doh4` / `_doh6` | tcp/udp 443 to set `doh_resolvers4` / `doh_resolvers6` | DoH to a hard-coded resolver address |
+
+One of each for `lan`, `iot` and `guest`, with `dest '*'` so traffic bound for
+the WireGuard zones is covered as well as `wan`. Target is `REJECT`, not
+`DROP`: a client gets a TCP reset or ICMP unreachable at once and falls back to
+the system resolver instead of hanging on a timeout. The rules sit at the top
+of `forward_<zone>`, before the zone's accept jumps, so they cannot be undone
+by an allow rule further down. LAN-to-LAN traffic is bridged and never enters
+the forward chain, which is why Themis's own DoT and DoH on `.50` are
+unaffected.
+
+The two sets hold the well-known public resolvers — Cloudflare, Google, Quad9,
+AdGuard, OpenDNS/Umbrella, NextDNS, Control D, Mullvad, dns0.eu, CleanBrowsing,
+Comodo, Yandex — as single addresses or, where the provider has a dedicated
+prefix, the prefix. They match on `dest_net` and only on :443, so ICMP to
+1.1.1.1 and 8.8.8.8 still works; the blackbox exporter on .53 pings exactly
+those for its `internet` probe. The names of DoH resolvers are blocked
+separately, by the `doh` feed on Delphi, so the sets only have to catch
+clients that skip the lookup. hagezi publishes a fuller IPv4 list
+(`ips/doh.txt`, ~1400 entries) if the hand-picked set ever proves too small;
+it would need `option loadfile` and something to refresh it.
+
+**Two hosts are exempt from the :53 rule on `lan`, by MAC:** delphi (CT 106,
+`BC:24:11:7D:3B:06`), the recursor, and hermes (VM 109,
+`BC:24:11:1B:5D:14`), whose mailcow unbound also recurses. By MAC rather than
+IP so both address families are covered in one line. Nothing is exempt from
+:853 or the resolver sets.
+
+Every rule logs at `10/minute` with its name as the prefix, so a device trying
+to go around Themis shows up in Loki as `{host="router"} |= "Reject-Do"`, with
+`SRC=` naming it. Recent hits also appear in `logread | grep Reject-Do`, and
+the per-rule counters in `nft list chain inet fw4 forward_lan`.
+
+```sh
+# from any LAN host: refused at once, not a timeout
+nc -vz -w3 1.1.1.1 853                      # Connection refused
+dig @8.8.8.8 example.com +tcp +time=2       # connection refused
+curl -m5 https://1.1.1.1/dns-query          # Connection refused
+# still fine
+ping -c1 1.1.1.1; dig @192.168.8.50 example.com
+# macOS dig reports the UDP reject as a timeout; the router's counter shows the hit.
+```
+
 ## Time
 
 ```

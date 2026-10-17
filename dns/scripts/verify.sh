@@ -78,6 +78,7 @@ check_feed() { # check_feed <feed> <NXDOMAIN|NOERROR> <note>
 echo "   default set - applies to every client"
 check_feed malware "NXDOMAIN" "blocks its canary"
 check_feed ads     "NXDOMAIN" "blocks its canary"
+check_feed doh     "NXDOMAIN" "blocks its canary"
 
 echo "   kids set - must NOT apply to this workstation"
 echo "   (if this host is in client-policies.conf these will read NXDOMAIN)"
@@ -103,7 +104,14 @@ elif [[ -z "$vpn_set" ]]; then
 else
   miss=0
   for ip in $vpn_ips; do
-    $RSSH "ipset test $vpn_set $ip" >/dev/null 2>&1 || miss=$((miss+1))
+    # Since firmware 4.11 (fw4) the set is an nft set, named in via_domain as
+    # <family>#<table-family>#<table>#<set>; the legacy form is a bare ipset.
+    if [[ $vpn_set == *#* ]]; then
+      IFS='#' read -r _ tf tbl set <<<"$vpn_set"
+      $RSSH "nft get element $tf $tbl $set '{ $ip }'" >/dev/null 2>&1 || miss=$((miss+1))
+    else
+      $RSSH "ipset test $vpn_set $ip" >/dev/null 2>&1 || miss=$((miss+1))
+    fi
   done
   if (( miss )); then
     bad "every address returned for bbc.co.uk is in $vpn_set" \

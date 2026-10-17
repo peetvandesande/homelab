@@ -117,6 +117,20 @@ of them is obvious from the router's own UI.
    check `wget -O /dev/null https://1.1.1.1/` from the router fails only on
    the certificate, not with "Operation not permitted".
 
+10. **Outgoing DNS that is not Themis is rejected, and two MACs are exempt.**
+    The `dns_egress_*` firewall sections reject :53 and :853 from every LAN
+    zone and :443 to the `doh_resolvers4/6` sets, so nothing resolves around
+    Themis — `README.md` "Outgoing DNS" has the shape. The part that bites:
+    the `lan` :53 rule exempts **delphi and hermes by MAC**, because both
+    recurse to the outside themselves. Rebuild either with a new MAC and all
+    recursion (delphi) or all mail delivery lookups (hermes) stops, with
+    nothing more than `Reject-Do53-lan` lines in the router's log to say why.
+    Update `firewall.dns_egress_lan_53.src_mac` in the same change as the
+    container. Keep the target `REJECT`: with `DROP`, clients wait out a
+    timeout per query instead of falling back at once. The resolver sets must
+    stay :443-only — the blackbox `internet` probe on .53 pings 1.1.1.1 and
+    8.8.8.8, and an all-ports block would make it report the internet down.
+
 ## Backups
 
 The device keeps `/etc/config/<name>.bak-<date>-<reason>` files from previous

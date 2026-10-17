@@ -31,7 +31,7 @@ answers differently is the router's VPN policy domains — see below.
 
 | Set | Feeds | Who |
 |---|---|---|
-| default | ads, malware | everything with no tag |
+| default | ads, malware, doh | everything with no tag |
 | `kids` | + adult, gambling, nosafesearch, social, dohbypass | listed devices |
 | `iot` | + native_samsung, native_lgwebos, native_roku, native_tiktok | listed subnets |
 
@@ -72,17 +72,18 @@ the feed list, the `FEEDS` table in `recursor.lua`, and `ALL_POLICIES` plus
 `POLICY_SETS` in `policy.lua`. Miss it out of `ALL_POLICIES` and the feed can
 never be discarded, so it silently applies to everyone.
 
-All eleven come from [hagezi](https://github.com/hagezi/dns-blocklists):
+All twelve come from [hagezi](https://github.com/hagezi/dns-blocklists):
 
 | Feed | Source | Lines | Set |
 |---|---|---|---|
 | `ads` | `pro.txt` | 387k | default |
 | `malware` | `tif.medium.txt` | 1.27M | default |
+| `doh` | `doh.txt` | 6.6k | default |
 | `adult` | `nsfw.txt` | 180k | kids |
 | `gambling` | `gambling.medium.txt` | 414k | kids |
 | `nosafesearch` | `nosafesearch.txt` | 422 | kids |
 | `social` | `social.txt` | 1.8k | kids |
-| `dohbypass` | `doh-vpn-proxy-bypass.txt` | 31k | kids |
+| `dohbypass` | `doh-vpn-proxy-bypass.txt` | 32k | kids |
 | `native_samsung` | `native.samsung.txt` | 416 | iot |
 | `native_lgwebos` | `native.lgwebos.txt` | 476 | iot |
 | `native_roku` | `native.roku.txt` | 162 | iot |
