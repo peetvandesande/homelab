@@ -75,6 +75,15 @@ recursor:
       recurse: false
       forwarders:
         - 192.168.8.52
+    # The customers invented by a Proxmox lab get mailboxes on hermes under a
+    # domain in example., which RFC 2606 reserves, so it never exists at the
+    # root and can be ours in full: a lab creates and deletes <customer>.example
+    # in Pythia's gsqlite3 backend, and nothing here changes per customer.
+    # Keep in step with the addNTA() in recursor.lua.
+    - zone: example.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
     # Split-horizon: this one name resolves to pistis inside the lab, not to
     # the public VPS. Only the single name is forwarded - the rest of
     # peetvandesande.com still recurses to the internet normally. Requires the

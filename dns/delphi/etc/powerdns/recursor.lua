@@ -23,6 +23,12 @@
 addNTA("home.", "internal zone, unsigned by design")
 addNTA("8.168.192.in-addr.arpa.", "internal reverse zone, unsigned by design")
 
+-- The mail domains of a lab's customers, under the reserved example. TLD. The
+-- root proves there is no such delegation, so without this the forward to
+-- Pythia is not merely unsigned but provably bogus. Keep in step with the
+-- forward-zone in recursor.yml.
+addNTA("example.", "lab customer mail domains, unsigned by design")
+
 -- The Proxmox lab range, 192.168.32.0/21: one reverse zone per /24, held in
 -- Pythia's gsqlite3 backend while a lab runs. Same reasoning as above; keep in
 -- step with the forward-zones in recursor.yml.

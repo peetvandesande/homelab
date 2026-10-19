@@ -17,7 +17,8 @@ IPv6 SLAAC, root login by key only.
 client ──▶ themis ──▶ delphi ──▶ internet
            (tag)   │  (filter)      │
                    │      └──▶ pythia   (home., 8.168.192.in-addr.arpa.,
-                   │                      ca. and mail.peetvandesande.com.)
+                   │                      example., ca. and
+                   │                      mail.peetvandesande.com.)
                    └──▶ router :2253 ──▶ wgclient2 tunnel
                         (VPN policy domains - fills the routing ipset)
 ```
@@ -265,8 +266,14 @@ The fixed pieces are in this repo:
   The labs call the API from lenora, which has a static address and trusts
   the lab CA. The API key is `AUTH_API_KEY` in `secrets.env`.
 - Delphi forwards `32-39.168.192.in-addr.arpa.` to Pythia and has an NTA for
-  each one. The forward zones need nothing extra, because `home.` already
-  covers them.
+  each one. The lab's own forward zone needs nothing extra, because `home.`
+  already covers it.
+- Delphi also forwards `example.`, with an NTA, for the mail domains of a
+  lab's invented customers (`acme.example` and the like, delivered by hermes).
+  RFC 2606 reserves the TLD, so it never exists at the root and we can own all
+  of it: a lab creates and deletes one zone per customer through the API, and
+  Delphi needs no change per customer. Each such zone holds an MX pointing at
+  `hermes.home` - without it the cloud's mail bounces as an unknown domain.
 - Themis and Delphi accept queries from `192.168.32.0/21`, so lab nodes and
   instances can use `192.168.8.50` as their resolver.
 
