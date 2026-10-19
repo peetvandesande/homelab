@@ -5,18 +5,21 @@ whole lab. Documentation only — see `CLAUDE.md` for why there is no config her
 
 | | |
 |---|---|
-| Firmware | GL.iNet 4.9.2, OpenWrt, kernel 5.4.281, aarch64 |
-| Firewall | **fw3 / iptables + ipset** (`route_policy.global.use_fw4` unset) |
-| dnsmasq | 2.85, compiled with `ipset` and **without `nftset`** |
+| Firmware | GL.iNet 4.11.0, OpenWrt 25.12, kernel 6.12, aarch64 |
+| Firewall | **fw4 / nftables** (`route_policy.global.use_fw4=1`) |
+| dnsmasq | 2.92, with `nftset` |
 | WAN | `eth1.832`, Orange XGS-PON; `2a01:cb1c:d:3500::/56` delegated – see `ORANGE.md` |
 
 It replaced an Orange Livebox in October 2026, which is why the lab sits on
 192.168.8.0/24 — the GL.iNet default, kept rather than fought.
 
-The fw3/ipset detail matters more than it looks. Domain-based VPN routing is
-implemented with dnsmasq's `ipset=` option, which needs legacy ipset; `nftset`
-would need dnsmasq 2.90+ and this build has neither. So the whole mechanism is
-tied to fw3, and anything that moves the device to fw4 changes it.
+The firewall engine matters more than it looks. Domain-based VPN routing is
+implemented with dnsmasq's `nftset=` option, filling sets in the `inet
+vpn_table` nftables table. Until the 4.11 upgrade (fw3, dnsmasq 2.85) it was
+`ipset=` into legacy ipsets, and some things still carry that vocabulary:
+`ipset list` on the device shows only `GL_MAC_BLOCK` now, and anything that
+tests a set has to use `nft get element`. `dns/scripts/verify.sh` was caught by
+that. `CLAUDE.md` invariant 9 is the other scar the upgrade left.
 
 ## Networks
 
@@ -102,6 +105,20 @@ separately, by the `doh` feed on Delphi, so the sets only have to catch
 clients that skip the lookup. hagezi publishes a fuller IPv4 list
 (`ips/doh.txt`, ~1400 entries) if the hand-picked set ever proves too small;
 it would need `option loadfile` and something to refresh it.
+
+**iCloud Private Relay is allowed through, on purpose.** Not by the router —
+the relay runs on :443 to Apple addresses the sets do not list — but hagezi's
+`doh` feed names its ingress (`mask.icloud.com`, `mask-h2.icloud.com`) and
+Apple's oblivious-DoH resolver, and with those NXDOMAIN every Apple device
+reported Private Relay as blocked. They are in Delphi's `allowlist.conf`. The
+cost is real: a device with Private Relay on resolves and browses through
+Apple, past Themis, which is the trade-off accepted for those devices.
+
+**What the log showed in the first two days:** Home Assistant (.90) hammering
+DoT to 1.1.1.1 and 1.0.0.1, thousands of rejects — HAOS's resolver falls back
+to Cloudflare over TLS whenever it feels like it, and `ha dns options
+--fallback=false` is the switch. A handful of clients tried 8.8.8.8 once and
+fell back. Nothing has hit the resolver sets on :443.
 
 **Two hosts are exempt from the :53 rule on `lan`, by MAC:** delphi (CT 106,
 `BC:24:11:7D:3B:06`), the recursor, and hermes (VM 109,
@@ -196,7 +213,7 @@ fix.
 
 ## The two VPN tunnels
 
-| Policy | Tunnel | Mark | Table | dnsmasq | Its resolver | ipset |
+| Policy | Tunnel | Mark | Table | dnsmasq | Its resolver | nft set (`inet vpn_table`) |
 |---|---|---|---|---|---|---|
 | Main VPN | `wgclient1` | `0x1000` | 1001 | `:2153` | 192.168.204.254 | `dst_net4399` |
 | UK | `wgclient2` | `0x2000` | 1002 | `:2253` | 1.0.0.1 | `dst_net6611` |
@@ -212,10 +229,10 @@ The router routes into a tunnel by **destination IP**:
 
 1. The UI writes the policy's domains to `/etc/domain_mac_list/<set>`.
 2. The firmware generates `/var/run/dnsmasq/via_domain` with
-   `ipset=/bbc.co.uk/dst_net6611,dst_net6611_6` lines, symlinked into each
-   dnsmasq instance's `confdir`.
+   `nftset=/bbc.co.uk/4#inet#vpn_table#dst_net6611,6#inet#vpn_table#dst_net6611_6`
+   lines, symlinked into each dnsmasq instance's `confdir`.
 3. When dnsmasq answers one of those names it adds the returned addresses to
-   that ipset.
+   that set.
 4. The policy rules match destination IPs in the set and apply the tunnel's
    mark.
 

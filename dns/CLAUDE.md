@@ -262,7 +262,10 @@ discarded and so applies to everyone.
 `doh` is in the default set because a browser or app with DoH switched on
 routes around this entire stack. It lists encrypted-DNS resolver names and
 nothing else, so it is safe for everyone; `dohbypass` is the larger list that
-also blocks VPN, Tor and proxy providers, which is why it stays kids-only.
+also blocks VPN, Tor and proxy providers, which is why it stays kids-only. One
+carve-out: iCloud Private Relay's names are in `allowlist.conf`, because the
+feed lists them and every Apple device then reports the relay as blocked. That
+is a deliberate bypass of Themis for those devices — see `router/README.md`.
 Names are only half of it: a client that hard-codes its resolver's address never
 asks Delphi, so the router rejects outgoing :53 and :853 and the well-known
 resolver IPs on :443 — `router/CLAUDE.md` invariant 10. The Firefox canary
