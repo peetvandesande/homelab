@@ -116,8 +116,9 @@ Apple, past Themis, which is the trade-off accepted for those devices.
 
 **What the log showed in the first two days:** Home Assistant (.90) hammering
 DoT to 1.1.1.1 and 1.0.0.1, thousands of rejects — HAOS's resolver falls back
-to Cloudflare over TLS whenever it feels like it, and `ha dns options
---fallback=false` is the switch. A handful of clients tried 8.8.8.8 once and
+to Cloudflare over TLS whenever it feels like it; switched off on 19 October
+2026 with `ha dns options --fallback=false` (`homeassistant/CLAUDE.md`,
+"Resolver"). A handful of clients tried 8.8.8.8 once and
 fell back. Nothing has hit the resolver sets on :443.
 
 **Two hosts are exempt from the :53 rule on `lan`, by MAC:** delphi (CT 106,

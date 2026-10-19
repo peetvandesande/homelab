@@ -125,3 +125,18 @@ files out of `/ssl`.
 
 `/ssl` also holds `root_ca.crt`, put there by `issue.sh` so renewal can verify
 the CA rather than trusting it blindly.
+
+## Resolver
+
+HAOS resolves through Themis (`ha dns info` shows `dns://192.168.8.50` from
+DHCP) but its CoreDNS also has a **fallback to Cloudflare over DoT**, on by
+default, and it uses it freely: with the router rejecting :853 the VM was
+behind thousands of `Reject-DoT-DoQ-lan` log lines in two days. Switched off
+on 19 October 2026 with
+
+```sh
+qm guest exec 302 -- /usr/bin/ha dns options --fallback=false
+```
+
+It is supervisor state, not Proxmox config, so a HAOS reinstall brings it back.
+If `.90` reappears in the router's DoT rejects, this is why.
