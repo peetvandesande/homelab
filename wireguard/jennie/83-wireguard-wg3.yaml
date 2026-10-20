@@ -19,9 +19,13 @@ network:
             - "172.31.1.10/32"
             - "fd33:5692:1834:ff03::2/128"
             - "192.168.8.0/21"
+            - "192.168.32.0/21"
             - "fd33:5692:1834:1000::/56"
       routes:
         - { to: "192.168.8.0/21", scope: link }
+        # The Proxmox SDN behind lenora; see ruby's wg1 file for why it is
+        # listed separately from 192.168.8.0/21.
+        - { to: "192.168.32.0/21", scope: link }
         - { to: "fd33:5692:1834:1000::/56", scope: link }
       # The lab's internal names, straight from Pythia (its authoritative
       # server) over wg3. The ~ makes these routing-only domains: resolved

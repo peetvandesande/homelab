@@ -26,8 +26,8 @@ Status as of 2026-10-16: everything described here is live, except the reverse z
                   │ 172.31.1.0/30, ff01::/64  172.31.1.8/30, ff03::/64  │
                   │                                                     │
                   └──────────────────── home router ────────────────────┘
-                        192.168.8.0/21, fd33:5692:1834:1000::/56
-                        (+ the ISP's own IPv6 ranges)
+                 192.168.8.0/21, 192.168.32.0/21 (the Proxmox SDN),
+                     fd33:5692:1834:1000::/56 (+ the ISP's own IPv6)
 ```
 
 Three sites in a triangle, each pair with its own tunnel, plus the clients on ruby. The same clients also have a second tunnel to jennie, so they keep working if ruby is down (see [Clients on jennie](#clients-on-jennie)):
@@ -120,7 +120,7 @@ On jennie each client keeps its host number and reuses its key pair, with a PSK 
 |-----------|------------------------------------------------------|-------------------------------------------------------------------|
 | ruby      | `192.168.254.254/32`, `192.168.254.253/32` (dummy0/dummy1) | `fd33:5692:1834:254::254/128`, `fd33:5692:1834:254::253/128` (dummy0/dummy1)                |
 | jennie    | `192.168.254.2/32` (dummy0)                          | `fd33:5692:1834:254::2/128` (dummy0)                              |
-| home | `192.168.8.0/21`                                     | `fd33:5692:1834:1000::/56` (one `/64` per LAN: lan `1000::/64`, iot `1001::/64`, guest `1002::/64`), plus the ISP's own ranges |
+| home | `192.168.8.0/21`, `192.168.32.0/21`                  | `fd33:5692:1834:1000::/56` (one `/64` per LAN: lan `1000::/64`, iot `1001::/64`, guest `1002::/64`), plus the ISP's own ranges |
 
 `fd33:5692:1834:254::/64` holds all the sites' service addresses, with host numbers matching their IPv4 ones. ruby's dummies used to be `fd00::1`/`fd00::2`, but `fd00::/64` is a common default on other networks (Fritz!Box routers use it on the LAN), so a client or home network using it would collide. rspamd's `local_addrs` (`fd00::/8`) covers both old and new.
 
@@ -181,7 +181,19 @@ The router's settings live in `uci`, written by the GL.iNet UI; `home/wg1.conf` 
 | Policy | site-to-site IP set `dst_net4399` | GL route policy `UK` (tunnel 6611, mark `0x2000`) |
 | NAT | none | IPv6 MASQUERADE for non-VPN sources, in `/etc/firewall.user` |
 
-The router's firewall accepts wgclient1/wgclient2 → lan.
+The router's firewall accepts wgclient1/wgclient2 → lan, which is what carries
+a tunnel's traffic on to lenora's SDN as well: `192.168.32.0/21` is reached via
+`192.168.8.21` on `lan` (`network.lab_sdn`, `router/README.md`).
+
+**The lab SDN is a second prefix behind home, not part of `192.168.8.0/21`.**
+It has to appear in ruby's wg1 and jennie's wg3 peer allowed IPs *and* in their
+route lists. Allowed IPs alone makes ruby accept lab-sourced packets but still
+have nowhere to send replies; the route alone makes WireGuard drop the inbound
+ones. With neither, a client's packets for `192.168.32.0/21` matched ruby's
+default route, were SNATed to `46.105.253.72` and handed to OVH — which is how
+this presented: names resolved, `traceroute` reached ruby and then an OVH
+address, nothing came back. The nftables drop for RFC1918 out of `ens3`/`eth0`
+is there so the next such omission fails closed instead.
 
 ***
 
@@ -201,6 +213,7 @@ What the WireGuard work changed against the original (`ruby/nftables.conf.orig`,
 | forward | The "no route into Docker or other private space" drops apply to all tunnels, with an IPv6 rule for Docker's `fda6:50ae:40f0::/64` |
 | forward | New: `ens3 → $WGIFS` drop. Under the accept policy, nothing previously stopped the internet side from starting connections into the VPN |
 | forward | New: IPv6 from any tunnel to ens3 is dropped (no NAT66 on ruby) |
+| forward | New (2026-10-20): RFC1918 (`192.168.0.0/16`) from any tunnel out of ens3 is dropped, so a destination missing from a peer's allowed IPs fails closed rather than being SNATed to OVH. Scoped to `oifname "ens3"`, unlike the `10.0.0.0/8` drop above, because the VPN itself lives in `192.168.0.0/16` |
 | nat | IPv4 `wgnat` only, deliberately no NAT66 |
 
 ### Service allow lists
@@ -262,7 +275,7 @@ jennie had no firewall. `jennie/nftables.conf` follows ruby's conventions (inet 
 | Chain | Policy | Rules |
 |-------|--------|-------|
 | input | drop | loopback; established/related; ICMP and the ICMPv6 essentials; DHCPv4/DHCPv6 replies from OVH; SSH; UDP 51822 from ruby's IPv6 only; UDP 51823 from anywhere (home is dynamic); UDP 51820 (wg0, clients) from anywhere on both families; everything from wg2/wg3; a placeholder for public services |
-| forward | drop | MSS clamping; wg ↔ wg; wg → ens3; ens3 → wg for established/related only |
+| forward | drop | MSS clamping; wg ↔ wg; RFC1918 out of ens3 dropped (as on ruby); wg → ens3; ens3 → wg for established/related only |
 | output | accept | none |
 | nat (`inet wgnat`) | n/a | snat VPN IPv4 sources to `57.129.180.73` and VPN IPv6 (`fd33:5692:1834::/48`) to `2001:41d0:801:2000::180f`, on ens3 only |
 

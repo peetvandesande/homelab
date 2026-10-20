@@ -297,6 +297,24 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
 
 ## Follow-ups (optional, outside the rollout)
 
+- [ ] **Clients cannot reach the Proxmox lab SDN (`192.168.32.0/21`).** Found 2026-10-20 from mbp on wg0; **not yet deployed**, the repo change is in `ruby/81-wireguard-wg1.yaml`, `jennie/83-wireguard-wg3.yaml` and both `nftables.conf`.
+  - **Cause:** the lab SDN is a second prefix behind home and is not part of `192.168.8.0/21`, so it was in neither wg1's peer allowed IPs nor its route list. Client packets for it matched ruby's default route and were SNATed to `46.105.253.72`: `traceroute 192.168.32.11` from mbp went mbp → `192.168.204.254` → an OVH private address and no further. Names resolved throughout (`os-1.openstack.home` → `192.168.32.11` from ruby's `home` static-stub), which is what made it look like a routing-only failure. Verified the same day that the lab is up and the return path is fine: from lenora, `192.168.32.11`, `192.168.33.10` and `192.168.204.4` all ping, and the router marks `192.168.204.0/24` into table 1001 from `br-lan` via `dst_net4399_sta`.
+  - *On ruby*:
+    ```bash
+    cd ~/homelab && git pull && cd wireguard
+    diff /etc/netplan/81-wireguard-wg1.yaml ruby/81-wireguard-wg1.yaml   # allowed-ips and routes only
+    sudo install -m 600 -o root -g root ruby/81-wireguard-wg1.yaml /etc/netplan/
+    sudo sed -i 's|<ruby wg1 private key>|'"$(sudo cat /etc/wireguard/wg1.key)"'|' /etc/netplan/81-wireguard-wg1.yaml
+    sudo sed -i 's|<psk home>|'"$(sudo cat /etc/wireguard/psk-home)"'|' /etc/netplan/81-wireguard-wg1.yaml
+    sudo netplan generate && sudo netplan apply
+    sudo wg show wg1 allowed-ips          # 192.168.32.0/21 present
+    ip route get 192.168.32.11            # dev wg1
+    sudo nft -c -f ruby/nftables.conf && sudo install -m 644 ruby/nftables.conf /etc/ && sudo systemctl reload nftables
+    ```
+    (the key/PSK names are whatever `homelab-private/wireguard` uses; fill them in the installed file, never in the clone)
+  - Then the same on *jennie* for `83-wireguard-wg3.yaml` and `jennie/nftables.conf`, and from mbp: `ping 192.168.32.11`, `ssh os-1`.
+  - **Optional, while in BIND:** the lab's reverse zones are missing from ruby's `wireguard` view. `dig @192.168.204.254 -x 192.168.32.11` is empty because `disable-empty-zone "168.192.in-addr.arpa"` sends it out to AS112. Pythia holds one zone per `/24`; a `static-stub` to `192.168.8.52` for `32`–`39.168.192.in-addr.arpa` beside the existing `8.168.192` one fixes it.
+
 - [ ] **LAN clients could not reach ruby over IPv6 – Wi-Fi, not routing.** Found and diagnosed 2026-10-16, *on home (router)*. Keep the AAAA records `dns/` added in e174ea4.
   - **Cause:** the laptop (mbp, on the 6 GHz MLO link `rax2`) had stopped receiving group-addressed frames from the AP. The router's NS for its ULA went out to the right solicited-node group and was never answered; ARP to its IPv4 failed the same way, and so did NS for its link-local and GUA. Unicast worked, so anything the laptop started worked, and only replies the router had to resolve first – here, return traffic from wgclient1 – died. Routing, the NDP proxy, the bridge's MLD snooping and the driver's own snooping were all ruled out. Reconnecting the laptop's Wi-Fi fixed it. Write-up and a check in `router/README.md`, "Wi-Fi: clients that stop hearing multicast".
   - **Verified after reconnecting:** from the laptop, `ping6 fd33:5692:1834:254::254` works and `curl -6 -sI https://ruby.peetvandesande.com/postfixadmin/` returns 302.
