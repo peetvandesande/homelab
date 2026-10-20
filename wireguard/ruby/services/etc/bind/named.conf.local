@@ -187,7 +187,70 @@ view "wireguard" {
     // 168.192.in-addr.arpa and the lab's PTRs never reach Pythia.
     disable-empty-zone "168.192.in-addr.arpa";
 
+    // Zones for the home network
     zone "8.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "9.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "10.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "11.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "12.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "13.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "14.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "15.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+
+    // Zones for the home lab network
+    zone "32.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "33.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "34.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "35.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "36.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "37.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "38.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
+    zone "39.168.192.in-addr.arpa" {
         type static-stub;
         server-addresses { 192.168.8.52; };
     };
