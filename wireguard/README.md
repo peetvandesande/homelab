@@ -2,7 +2,7 @@
 
 How the WireGuard network between **ruby**, **jennie** and the **home** router is built, and why. This file explains the design; it isn't a runbook. The rollout's steps, what's still open, and rollback are in [TASKS.md](TASKS.md).
 
-Status as of 2026-10-16: everything described here is live, except the reverse zones in ruby's `internal` view (TASKS.md follow-ups).
+Status as of 2026-10-20: everything described here is live. Two follow-ups are left in TASKS.md and neither is part of this design: watching for a recurrence of the Wi-Fi fault on the LAN, and dynamic routing between the three sites.
 
 ***
 

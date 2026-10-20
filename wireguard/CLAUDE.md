@@ -12,7 +12,7 @@ has no `deploy.sh`. It was a hand-run rollout, now live:
 - `README.md` – the design and why: explanation only, no runbook steps
 - `TASKS.md` – the rollout's steps in order, with commands, the open
   follow-ups, and (as appendices) the original task notes and rollback.
-  Status was last recorded on 2026-10-16; check the hosts before trusting it.
+  Status was last recorded on 2026-10-20; check the hosts before trusting it.
 
 ## Secrets are not in this repo
 

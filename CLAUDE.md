@@ -57,7 +57,10 @@ than fought.
   and which ones silently break something. Read `router/CLAUDE.md` before
   changing anything on the device. `router/ORANGE.md` covers the fibre WAN.
 - **The router's two WireGuard tunnels go to ruby and jennie**, two OVH servers
-  outside the lab. `wireguard/` holds that design and its unfinished rollout.
+  outside the lab. `wireguard/` holds that design, now live. Road-warrior
+  clients land on ruby and reach the whole lab from there, the Proxmox SDN
+  on 192.168.32.0/21 included – it is a second prefix behind the router and
+  has to be named separately from 192.168.8.0/21 everywhere it appears.
 
 ## Secrets outside the repo
 
