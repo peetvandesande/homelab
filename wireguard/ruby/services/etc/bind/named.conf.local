@@ -85,6 +85,19 @@ view "internal" {
         file "/etc/bind/wireguard/4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa";
         notify no;
     };
+
+    // The home LAN, from Pythia over wg1, for the same reason: hermes
+    // (192.168.8.57) submits to dummy0 for the domains it routes out, so
+    // Postfix logs a client in this range and resolves it in this view. No
+    // disable-empty-zone here, unlike the wireguard view - a declared zone
+    // beats the automatic 168.192 empty zone, so this names the LAN while
+    // every other 192.168 PTR still gets NXDOMAIN without leaving the host.
+    // The lab range is deliberately absent: nothing here ever sees one of
+    // its addresses, since a lab's mail reaches ruby via hermes.
+    zone "8.168.192.in-addr.arpa" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
 };
 
 // ===========================================================================
@@ -187,41 +200,23 @@ view "wireguard" {
     // 168.192.in-addr.arpa and the lab's PTRs never reach Pythia.
     disable-empty-zone "168.192.in-addr.arpa";
 
-    // Zones for the home network
+    // The home LAN. Only this one /24: Pythia's bind backend holds
+    // 8.168.192 and nothing else, so a stub for guest (9), iot (10) or the
+    // ONT net (11) is REFUSED by Pythia and SERVFAILs here, where the
+    // automatic 168.192 empty zone would have said NXDOMAIN. Routed over
+    // wg1 they may be, named by anything they are not. Add the zone on
+    // Pythia first if that changes.
     zone "8.168.192.in-addr.arpa" {
         type static-stub;
         server-addresses { 192.168.8.52; };
     };
-    zone "9.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
-    zone "10.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
-    zone "11.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
-    zone "12.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
-    zone "13.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
-    zone "14.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
-    zone "15.168.192.in-addr.arpa" {
-        type static-stub;
-        server-addresses { 192.168.8.52; };
-    };
 
-    // Zones for the home lab network
+    // The Proxmox labs, one zone per /24 of 192.168.32.0/21. A lab creates
+    // and deletes its own through Pythia's API, so while none is running
+    // these SERVFAIL - the same answer Delphi gives the LAN, and expected
+    // (dns/README.md, "Lab zones"). Note the labs are not in the "vpn" ACL
+    // and are not meant to be: they resolve through Themis and Delphi at
+    // home, never through this host.
     zone "32.168.192.in-addr.arpa" {
         type static-stub;
         server-addresses { 192.168.8.52; };

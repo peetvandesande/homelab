@@ -297,7 +297,7 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
 
 ## Follow-ups (optional, outside the rollout)
 
-- [ ] **Clients cannot reach the Proxmox lab SDN (`192.168.32.0/21`).** Found 2026-10-20 from mbp on wg0; **not yet deployed**, the repo change is in `ruby/81-wireguard-wg1.yaml`, `jennie/83-wireguard-wg3.yaml` and both `nftables.conf`.
+- [ ] **Clients cannot reach the Proxmox lab SDN (`192.168.32.0/21`).** Found 2026-10-20 from mbp on wg0; **deployed on ruby the same day, jennie still to do**. The repo change is in `ruby/81-wireguard-wg1.yaml`, `jennie/83-wireguard-wg3.yaml` and both `nftables.conf`.
   - **Cause:** the lab SDN is a second prefix behind home and is not part of `192.168.8.0/21`, so it was in neither wg1's peer allowed IPs nor its route list. Client packets for it matched ruby's default route and were SNATed to `46.105.253.72`: `traceroute 192.168.32.11` from mbp went mbp → `192.168.204.254` → an OVH private address and no further. Names resolved throughout (`os-1.openstack.home` → `192.168.32.11` from ruby's `home` static-stub), which is what made it look like a routing-only failure. Verified the same day that the lab is up and the return path is fine: from lenora, `192.168.32.11`, `192.168.33.10` and `192.168.204.4` all ping, and the router marks `192.168.204.0/24` into table 1001 from `br-lan` via `dst_net4399_sta`.
   - *On ruby*:
     ```bash
@@ -313,7 +313,7 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
     ```
     (the key/PSK names are whatever `homelab-private/wireguard` uses; fill them in the installed file, never in the clone)
   - Then the same on *jennie* for `83-wireguard-wg3.yaml` and `jennie/nftables.conf`, and from mbp: `ping 192.168.32.11`, `ssh os-1`.
-  - **Optional, while in BIND:** the lab's reverse zones are missing from ruby's `wireguard` view. `dig @192.168.204.254 -x 192.168.32.11` is empty because `disable-empty-zone "168.192.in-addr.arpa"` sends it out to AS112. Pythia holds one zone per `/24`; a `static-stub` to `192.168.8.52` for `32`–`39.168.192.in-addr.arpa` beside the existing `8.168.192` one fixes it.
+  - **Done on ruby 2026-10-20**, including `static-stub`s for `32`–`39.168.192.in-addr.arpa` in the `wireguard` view: `dig @192.168.204.254 -x 192.168.32.11` answers `os-1.openstack.home.`, where before `disable-empty-zone "168.192.in-addr.arpa"` sent it out to AS112.
 
 - [ ] **LAN clients could not reach ruby over IPv6 – Wi-Fi, not routing.** Found and diagnosed 2026-10-16, *on home (router)*. Keep the AAAA records `dns/` added in e174ea4.
   - **Cause:** the laptop (mbp, on the 6 GHz MLO link `rax2`) had stopped receiving group-addressed frames from the AP. The router's NS for its ULA went out to the right solicited-node group and was never answered; ARP to its IPv4 failed the same way, and so did NS for its link-local and GUA. Unicast worked, so anything the laptop started worked, and only replies the router had to resolve first – here, return traffic from wgclient1 – died. Routing, the NDP proxy, the bridge's MLD snooping and the driver's own snooping were all ruled out. Reconnecting the laptop's Wi-Fi fixed it. Write-up and a check in `router/README.md`, "Wi-Fi: clients that stop hearing multicast".
@@ -343,19 +343,33 @@ No impact on anything running: wg0 on jennie is a new tunnel, and the routes and
   ```
   and the same four `dig`s against `@192.168.205.254`. `.253` is named `ruby.` as a placeholder: rename it in both zones if dummy1 has a service name.
 - [x] **Postfix:** `wireguard_clients.cidr` isn't referenced. Either wire it into `mua_client_restrictions` (extended to the VPN ranges) or correct the `main.cf` comments that say it's in use. Update `main.cf`'s header, which still describes the VPN as `192.168.204.0/24 (wg0)`.
+- [ ] **BIND on jennie: the labs' reverse zones.** Written 2026-10-20, not yet deployed. jennie is single-view, so a client that failed over to it loses the lab's PTRs without these. `32`–`39.168.192.in-addr.arpa` as `static-stub`s, and the same eight names in `validate-except` — jennie validates, unlike ruby (`dnssec-validation no` there), and Pythia's zones are unsigned. The guest, iot and ONT nets are deliberately not stubbed on either host: Pythia holds no reverse zone for them, so a stub turns their NXDOMAIN into a SERVFAIL. *On jennie*:
+  ```bash
+  cd ~/homelab && git pull && cd wireguard
+  diff /etc/bind/named.conf.local   jennie/services/etc/bind/named.conf.local      # the eight lab zones
+  diff /etc/bind/named.conf.options jennie/services/etc/bind/named.conf.options    # validate-except
+  sudo install -m 644 -o root -g bind jennie/services/etc/bind/named.conf.local /etc/bind/
+  sudo install -m 644 -o root -g bind jennie/services/etc/bind/named.conf.options /etc/bind/
+  sudo named-checkconf -z && sudo rndc reconfig
+  dig @192.168.205.254 -x 192.168.32.11 +short       # a lab host, while a lab is running
+  dig @192.168.205.254 -x 192.168.8.21 +short        # lenora., unchanged
+  dig @192.168.205.254 -x 192.168.9.1 +short         # nothing, and NXDOMAIN rather than SERVFAIL
+  ```
 - [ ] **Failover:** with static routing, a wg3 outage cuts jennie off from home. BIRD or FRR (OSPF) over wg1/wg2/wg3 could reroute via ruby.
 - [x] **Remove sylvie** wherever else it's referenced (monitoring, password managers, …)
 - [x] **Home, `home/wg3.conf`:** fill in `<jennie wg3 public key>` in the reference copy, so it matches the router
-- [ ] **BIND: reverse zones in ruby's `internal` view.** Written 2026-10-16, not yet deployed: the five shared reverse zones (204, 205, 254, transit, ULA) declared in the `internal` view too, so Postfix and Dovecot log VPN peers by name. Same files, nothing new to install under `/etc/bind/wireguard/`. *On ruby*:
+- [ ] **BIND: reverse zones in ruby's `internal` view.** Written 2026-10-16, extended 2026-10-20, not yet deployed: the five shared reverse zones (204, 205, 254, transit, ULA) declared in the `internal` view too, so Postfix and Dovecot log VPN peers by name, plus a `static-stub` for `8.168.192.in-addr.arpa` there. hermes (192.168.8.57) submits to dummy0 for the domains it routes out, so Postfix logs a client in the home LAN and resolves it in this view, where the automatic `168.192` empty zone answers NXDOMAIN. No `disable-empty-zone` in this view, deliberately: a declared zone beats the empty zone, so the LAN is named while every other 192.168 PTR still gets NXDOMAIN without leaving the host. The lab range stays out — nothing resolving in this view ever sees one of its addresses, since a lab's mail reaches ruby via hermes. Same files, nothing new to install under `/etc/bind/wireguard/`. *On ruby*:
   ```bash
   cd ~/homelab/wireguard
-  diff /etc/bind/named.conf.local ruby/services/etc/bind/named.conf.local      # only the five zones in view "internal"
+  diff /etc/bind/named.conf.local ruby/services/etc/bind/named.conf.local      # only the six zones in view "internal"
   sudo install -m 644 -o root -g bind ruby/services/etc/bind/named.conf.local /etc/bind/
   sudo named-checkconf -z && sudo rndc reconfig
   dig @127.0.0.1 -x 192.168.205.1 +short                         # mba.
   dig @127.0.0.1 -x 192.168.254.2 +short                         # jennie.
   dig @127.0.0.1 -x fd33:5692:1834:204::1 +short                 # mba.
   dig @192.168.204.254 -x 192.168.205.1 +short                   # mba. (the wireguard view, unchanged)
+  dig @127.0.0.1 -x 192.168.8.57 +short                          # hermes.
+  dig @127.0.0.1 -x 192.168.32.11 +short                         # nothing: the lab range is not in this view
   ```
 
 ***

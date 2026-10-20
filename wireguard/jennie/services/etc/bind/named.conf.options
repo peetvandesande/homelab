@@ -41,7 +41,15 @@ options {
     // and the lab's reverse zone are unsigned and reached by static-stub,
     // so they are exempt (named.conf.local).
     dnssec-validation auto;
-    validate-except { "home"; "8.168.192.in-addr.arpa"; };
+    validate-except {
+        "home";
+        "8.168.192.in-addr.arpa";
+        // The labs' reverse zones, unsigned like the rest of Pythia's
+        "32.168.192.in-addr.arpa"; "33.168.192.in-addr.arpa";
+        "34.168.192.in-addr.arpa"; "35.168.192.in-addr.arpa";
+        "36.168.192.in-addr.arpa"; "37.168.192.in-addr.arpa";
+        "38.168.192.in-addr.arpa"; "39.168.192.in-addr.arpa";
+    };
 
     // Without this, BIND's automatic RFC 1918 empty zone answers for
     // 168.192.in-addr.arpa and the lab's PTRs never reach Pythia.

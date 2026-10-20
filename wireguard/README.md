@@ -372,6 +372,13 @@ The 192.168.x zones matter most. Both servers disable the `168.192.in-addr.arpa`
 
 On ruby they're also in the `internal` view, where the host's own daemons resolve, so Postfix and Dovecot log VPN peers by name. Only the reverse zones: the split-horizon forward zones stay out of `internal` on purpose (see `named.conf.local`).
 
+**Everything behind home is a `static-stub` to Pythia, 192.168.8.52, not a local zone** — `8.168.192.in-addr.arpa` for the LAN, and one per `/24` of the lab range, `32`–`39.168.192.in-addr.arpa`. Two things about which prefixes get one:
+
+- **Only the prefixes Pythia is authoritative for.** Pythia's bind backend holds `8.168.192` and nothing else, and a lab creates the reverse zones for its own subnets through the API. So guest (`9`), iot (`10`) and the ONT net (`11`) get no stub even though they are routed over wg1: Pythia REFUSES them, which BIND turns into SERVFAIL, where the automatic `168.192` empty zone — or AS112, in the `wireguard` view — says NXDOMAIN. A wrong answer in a logging path costs a stall per line. Add the zone on Pythia first if that ever changes.
+- **The lab range SERVFAILs while no lab is running**, because its zones only exist while one is. That's what Delphi gives the LAN too, and it's expected (`dns/README.md`, "Lab zones").
+
+The LAN's stub is in both views on ruby; the lab range is in `wireguard` only, since nothing resolving in `internal` ever sees a lab address — a lab's mail reaches ruby via hermes, which is itself a LAN client. On jennie there is one view, so both sets are simply declared, and both also need naming in `validate-except`: jennie validates and Pythia's zones are unsigned, while ruby has `dnssec-validation no` and needs no exemption.
+
 ***
 
 ## Files in this directory
