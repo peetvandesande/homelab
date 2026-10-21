@@ -200,3 +200,7 @@ zones:
   - { name: 37.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.37, comment: 'Reverse zone for 192.168.37.0/24 - Proxmox lab.' }
   - { name: 38.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.38, comment: 'Reverse zone for 192.168.38.0/24 - Proxmox lab.' }
   - { name: 39.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.39, comment: 'Reverse zone for 192.168.39.0/24 - Proxmox lab.' }
+
+# The api tasks carry the API key in a header, so they are no_log by default.
+# Run with `-e api_no_log=false` to see what one of them actually said.
+api_no_log: true

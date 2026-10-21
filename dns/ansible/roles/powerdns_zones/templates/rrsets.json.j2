@@ -7,7 +7,9 @@
     soa_edit_api the serial moves on every change, so a managed SOA would
     differ on every run and bump the serial forever.
 
-    Expects `zone` and `zone_existing` (the server's current rrsets).         -#}
+    Expects `zone`, `zone_existing` (the server's current rrsets) and
+    `diff_only` - false to list everything this repo declares, true to narrow
+    that to what differs from the server.                                     -#}
 {% set ns = namespace(flat=[], rrsets=[], out=[]) %}
 {% if zone.kind == 'reverse' %}
 {%   for fwd in zones | selectattr('kind', 'eq', 'forward') | list %}
@@ -44,6 +46,9 @@
 {%   endfor %}
 {% endfor %}
 {#- and keep only what actually differs, so the serial moves only on a change -#}
+{% if not diff_only %}
+{{ ns.rrsets | to_json }}
+{% else %}
 {% for rr in ns.rrsets %}
 {%   set match = zone_existing | selectattr('name', 'eq', rr.name) | selectattr('type', 'eq', rr.type) | list %}
 {%   if not match
@@ -53,3 +58,4 @@
 {%   endif %}
 {% endfor %}
 {{ ns.out | to_json }}
+{% endif %}

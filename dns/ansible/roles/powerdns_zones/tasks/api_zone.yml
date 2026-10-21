@@ -7,6 +7,9 @@
 # not ours to tidy up.
 #
 # Expects `zone`, one entry from `zones` with backend == 'api'.
+#
+# The tasks that carry the API key are no_log, so a failure here is censored.
+# Re-run with `-e api_no_log=false` to see it.
 
 - name: "{{ zone.name }} | does it exist?"
   ansible.builtin.uri:
@@ -15,9 +18,21 @@
       X-API-Key: "{{ pythia_api_key }}"
     status_code: [200, 404]
   register: zone_get
-  no_log: true
+  no_log: "{{ api_no_log }}"
   changed_when: false
+  check_mode: false
 
+- name: "{{ zone.name }} | what does this repo declare for it?"
+  ansible.builtin.set_fact:
+    zone_declared: "{{ lookup('template', 'rrsets.json.j2') | from_json }}"
+  vars:
+    zone_existing: []
+    diff_only: false
+
+# Only create a zone we have something to put in. The lab's zones are its own
+# to create - it makes one per subnet it actually uses, when it uses it - and
+# pre-creating an empty one here would both invent a zone nobody asked for and
+# hand the lab's own POST a 409 on the next build.
 - name: "{{ zone.name }} | create it in gsqlite3"
   ansible.builtin.uri:
     url: "{{ pythia_api }}/zones"
@@ -46,14 +61,18 @@
             - content: "{{ soa.primary }}"
               disabled: false
     status_code: [201]
-  no_log: true
-  when: zone_get.status == 404
+  no_log: "{{ api_no_log }}"
+  register: zone_create
+  when:
+    - zone_get.status | default(0) == 404
+    - zone_declared | length > 0
 
 - name: "{{ zone.name }} | work out which declared records differ"
   ansible.builtin.set_fact:
     zone_rrsets: "{{ lookup('template', 'rrsets.json.j2') | from_json }}"
   vars:
     zone_existing: "{{ (zone_get.json | default({})).rrsets | default([]) }}"
+    diff_only: true
 
 - name: "{{ zone.name }} | patch them in"
   ansible.builtin.uri:
@@ -65,5 +84,14 @@
     body:
       rrsets: "{{ zone_rrsets }}"
     status_code: [204]
-  no_log: true
-  when: zone_rrsets | length > 0
+  no_log: "{{ api_no_log }}"
+  when:
+    - zone_rrsets | length > 0
+    - zone_get.status | default(0) == 200 or zone_declared | length > 0
+
+# Which zones really exist, so the check at the end of push.yml does not run
+# pdnsutil against a lab zone nobody has created yet.
+- name: "{{ zone.name }} | note whether it exists"
+  ansible.builtin.set_fact:
+    api_zones_present: "{{ (api_zones_present | default([])) + [zone.name] }}"
+  when: zone_get.status | default(0) == 200 or zone_create is changed

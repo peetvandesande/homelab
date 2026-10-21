@@ -44,13 +44,13 @@
   ansible.builtin.slurp:
     src: /etc/powerdns/pdns.conf
   register: pdns_conf
-  no_log: true
+  no_log: "{{ api_no_log }}"
   when: api_zones | length > 0
 
 - name: Keep the API key
   ansible.builtin.set_fact:
     pythia_api_key: "{{ pdns_conf.content | b64decode | regex_search('(?m)^api-key=(.*)$', '\\1') | first }}"
-  no_log: true
+  no_log: "{{ api_no_log }}"
   when: api_zones | length > 0
 
 - name: Assert the API key has been substituted
@@ -73,8 +73,9 @@
     label: "{{ zone.name }} ({{ zone.kind }})"
 
 # Cheap, and the only thing that proves the server parsed what we just sent -
-# a zone that fails to load otherwise just stops answering.
+# a zone that fails to load otherwise just stops answering. Only the zones
+# that exist: a declared lab zone the lab has not created yet is not an error.
 - name: Check every zone the server now holds
   ansible.builtin.command: "pdnsutil check-zone {{ item }}"
-  loop: "{{ all_zone_names }}"
+  loop: "{{ (bind_zones | map(attribute='name') | list) + (api_zones_present | default([])) }}"
   changed_when: false
