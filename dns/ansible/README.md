@@ -102,31 +102,113 @@ file, and `ptr_note:` emits a standalone comment line above its PTR.
 PTR — there is no reverse zone for the delegated prefix, which changes with the
 router.
 
-## Adding another forward or reverse zone
+## Managing a zone on the bind backend
 
-Append to `zones`. A forward zone needs a name, a comment and its `sections`; a
-reverse zone needs a name and the `prefix` whose A records become its PTRs:
+This is the full procedure. Steps 1 to 3 are all required, and the playbook
+refuses to run if step 2 is missing.
+
+**1. Declare it in `zones`, in `group_vars/all.yml`.** Every entry needs a
+`name`, a `kind`, a `backend`, and whatever that kind requires — `sections` for
+a forward zone, `prefix` for a reverse one, `records` for an override:
 
 ```yaml
-  - name: 32.168.192.in-addr.arpa
+  - name: 40.168.192.in-addr.arpa
     kind: reverse
-    prefix: 192.168.32
-    comment: Reverse zone for 192.168.32.0/24.
+    backend: bind
+    prefix: 192.168.40
+    comment: Reverse zone for 192.168.40.0/24.
 ```
 
-Then wire it up on Delphi — a `forward_zones` entry and an `addNTA()`, unless
-an ancestor zone already covers it — and `ansible-playbook zones.yml`. The
-playbook will not render a zone Delphi cannot answer for.
+The name must not already exist in the gsqlite3 backend. Two backends holding
+one zone is not an error PowerDNS reports — the gsqlite3 copy answers while it
+exists and the bind copy takes over when it goes. Check first:
+
+```sh
+ansible -i inventory.yml pythia -m shell -a \
+  'key=$(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf); \
+   curl -sS -H "X-API-Key: $key" http://127.0.0.1:8181/api/v1/servers/localhost/zones'
+```
+
+**2. Wire it up on Delphi**, in two files, unless an ancestor zone already
+covers it — `home.` covers `openstack.home`, and the `for i = 32, 39` loop
+covers the lab reverse zones:
+
+- `delphi/etc/powerdns/recursor.yml` — a `forward_zones` entry with
+  `recurse: false` and forwarder `192.168.8.52`.
+- `delphi/etc/powerdns/recursor.lua` — `addNTA("<zone>.", "<why>")`.
+
+The playbook reads both **out of the repo**, not off Delphi, so its checks pass
+as soon as you have edited them. Neither is optional: without the forward,
+Delphi recurses to the internet instead of asking Pythia; without the anchor,
+every lookup SERVFAILs. See `dns/CLAUDE.md` invariants 4 and 5.
+
+**3. Deploy Delphi.** This playbook does not push it:
+
+```sh
+cd .. && ./scripts/deploy.sh
+```
+
+**4. Run the playbook.**
+
+```sh
+cd ansible && ansible-playbook zones.yml
+```
+
+It renders `pythia/var/lib/powerdns/zones/<name>.zone` and a block in
+`pythia/etc/powerdns/bindbackend.conf`, pushes both to Pythia, runs
+`pdns_control rediscover` because `bindbackend.conf` changed, reloads each
+changed zone with `pdns_control bind-reload-now`, and finishes with
+`pdnsutil check-zone` over every zone that exists.
+
+**5. Commit the generated files.** They are tracked, and `scripts/deploy.sh`
+pushes them too, so a checkout that disagrees with the YAML will be pushed by
+the next deploy.
+
+### Writing the records
+
+`type` defaults to `A`. `@` is the zone apex. A record's `comment` becomes the
+trailing `;` comment in the file and `ptr_note` a standalone comment line above
+it. The SOA and NS come from `soa` in `group_vars/all.yml` — don't write them
+as records.
+
+The serial is this playbook's to manage: date-based `YYYYMMDDnn`, moved only
+when that zone's contents actually changed. Hand-editing a zone file is
+pointless, since the next render overwrites it.
+
+A reverse zone generates its PTRs from the A records of **every** forward zone
+in the list, whichever backend they are in, whose address falls inside its
+`prefix`. `ptr: false` on a record opts out.
+
+### Removing a zone
+
+Deleting the entry from `zones` is **not** enough, and does not do what you
+might expect. Four things, in this order:
+
+1. Remove the entry from `zones`, and run the playbook. The zone drops out of
+   `bindbackend.conf`, the push triggers `rediscover`, and PowerDNS stops
+   serving it.
+2. **Delete the zone file yourself, in both places.** Nothing prunes orphans:
+   `git rm pythia/var/lib/powerdns/zones/<name>.zone`, and remove
+   `/var/lib/powerdns/zones/<name>.zone` from Pythia.
+3. Remove the `forward_zones` entry and the `addNTA()` from Delphi, and
+   `./scripts/deploy.sh`. Leaving them is worse than untidy: Delphi keeps
+   forwarding the zone to a Pythia that no longer serves it, so those names
+   fail outright rather than falling back to whatever the internet says. For a
+   split-horizon override that is the difference between reverting to the
+   public answer and breaking the name for the whole LAN.
+4. `./scripts/verify.sh`.
 
 ## Adding a split-horizon override
 
-Add an entry to `override_zones`, then **do the Delphi half in the same
-change**: a `forward_zones` entry in `delphi/etc/powerdns/recursor.yml` and an
-`addNTA()` in `delphi/etc/powerdns/recursor.lua`. The playbook will refuse to
-run until both are there, which is the point — see `dns/CLAUDE.md` invariant 5
-for why a signed parent domain makes the NTA mandatory rather than optional.
+Add an entry to `zones` with `kind: override` and `backend: bind`, then follow
+the procedure above — the Delphi half is not optional, and the playbook will
+refuse to run until it is there. `dns/CLAUDE.md` invariant 5 explains why a
+signed parent domain makes the anchor mandatory rather than merely tidy.
 
-Delphi is not pushed from here. Run `scripts/deploy.sh` for that.
+The zone must be the **exact name** you are overriding, never its parent. The
+playbook refuses a name with fewer than three labels for this reason: a zone
+for `peetvandesande.com` would shadow mail, www and everything else in the
+domain with an empty internal zone, for the whole LAN.
 
 ## Lab zones
 

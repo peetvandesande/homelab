@@ -65,7 +65,17 @@ manages the SOA after creation, and only ever REPLACEs rrsets the YAML
 declares, so the records a lab registers at runtime are never touched. The
 bind backend could not hold them in any case - the API implements no zone
 creation against it, which is why that second backend exists at all.
-See `ansible/README.md`.
+
+**Deleting a zone is not symmetrical with adding one**, in either backend, and
+the playbook has no deletion path at all - checked, not assumed. Removing a
+`bind` zone from the YAML un-serves it, via `bindbackend.conf` and
+`rediscover`, but leaves the zone file behind in the repo and on Pythia for
+you to remove; removing an `api` zone does nothing whatsoever, by design, so a
+lab's records are never destroyed by an edit here. Either way the Delphi
+`forward_zones` entry and `addNTA()` have to go too, or Delphi keeps
+forwarding a zone Pythia no longer serves and those names fail outright
+instead of falling back to the public answer. `ansible/README.md`, "Managing a
+zone on the bind backend", has the ordered procedure for both directions.
 
 ## Invariants — do not "simplify" these away
 

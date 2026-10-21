@@ -236,7 +236,8 @@ subnet and nothing else changes.
 
 ## Adding an internal name
 
-Add it to `forward_zone` in `ansible/group_vars/all.yml`, then:
+Add it to the `home` zone's `sections` in the `zones` list in
+`ansible/group_vars/all.yml`, then:
 
 ```sh
 cd ansible && ansible-playbook zones.yml
@@ -334,8 +335,9 @@ address.
 
 It takes **three** changes, and it is broken until all three are in place:
 
-1. An entry in `override_zones` in `ansible/group_vars/all.yml`, which renders
-   the zone file and the `bindbackend.conf` block.
+1. An entry in `zones` in `ansible/group_vars/all.yml` with `kind: override`
+   and `backend: bind`, which renders the zone file and the
+   `bindbackend.conf` block.
 2. A `forward_zones` entry on Delphi in `recursor.yml`, `recurse: false`.
 3. An `addNTA()` in `delphi/etc/powerdns/recursor.lua`.
 
@@ -345,6 +347,10 @@ Then `cd ansible && ansible-playbook zones.yml` for the first, and
 The playbook **refuses to render** a zone that is missing step 2 or 3, and
 refuses a name with fewer than three labels. It cannot stop you writing them
 wrong, but it will not let you forget them.
+
+`ansible/README.md`, "Managing a zone on the bind backend", is the full
+procedure — including what removing a zone takes, which is more than deleting
+its entry.
 
 **Make the zone the exact name you are overriding, never its parent.** A zone
 for `peetvandesande.com` would shadow mail, www and everything else in the
