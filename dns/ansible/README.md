@@ -236,6 +236,10 @@ it will not do:
 
 So the split is: this repo owns the skeleton, the lab owns its own records.
 
+To add, change or delete one of those records yourself, you talk to the API,
+not to this playbook. `../README.md`, "Managing a record in a lab zone by
+hand", has the commands to paste.
+
 **One thing to check on the lab side.** The playbook now creates these zones if
 they are absent, which means a lab's bootstrap may find `openstack.home`
 already there and get `409 Conflict` from its own `POST /zones`. If the

@@ -314,6 +314,97 @@ While no lab is running, reverse lookups in `192.168.32.0/21` return
 SERVFAIL, because Delphi forwards them to a zone that doesn't exist. That is
 expected.
 
+### Managing a record in a lab zone by hand
+
+Records in these zones are **not** in `group_vars/all.yml` and the playbook will
+not touch them — see above. You change them over the API, and the examples below
+are the whole procedure. `acme.example` is the worked example; substitute any
+other api zone.
+
+Everything is one `PATCH` against the zone, with an `rrsets` list. Three things
+to keep in mind before pasting:
+
+- **Every name is fully qualified, with the trailing dot** — `www.acme.example.`,
+  not `www`. The zone in the URL is dotted too. The apex is the zone's own name.
+- **An rrset is one name plus one type, and `REPLACE` replaces all of it.** So
+  adding and changing are the same command: you send the complete desired set of
+  records for that name and type, not a delta.
+- **The serial and the reload are PowerDNS's problem.** The zone is
+  `soa_edit_api: DEFAULT`, so the serial moves by itself, and gsqlite3 is read
+  live — there is nothing to deploy and no `pdns_control` to run.
+
+A successful PATCH is `204 No Content`: **no output means it worked.** Anything
+printed is an error.
+
+#### Add or change `www.acme.example`
+
+```sh
+ssh root@192.168.8.52 'curl -sS -X PATCH \
+  -H "X-API-Key: $(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf)" \
+  -H "Content-Type: application/json" \
+  http://127.0.0.1:8181/api/v1/servers/localhost/zones/acme.example. \
+  -d @- <<JSON
+{"rrsets": [{"name": "www.acme.example.", "type": "A", "ttl": 300,
+             "changetype": "REPLACE",
+             "records": [{"content": "192.168.32.10", "disabled": false}]}]}
+JSON'
+```
+
+To **change** the address, run the same command with the new one. To give the
+name two addresses, list both — one `records` entry each, in the one rrset:
+
+```sh
+  "records": [{"content": "192.168.32.10", "disabled": false},
+              {"content": "192.168.32.11", "disabled": false}]
+```
+
+A record of another type is the same shape with `"type"` and `"content"`
+changed — `"type": "CNAME", "content": "web.openstack.home."`, or
+`"type": "TXT"` whose content carries its own quotes:
+`"content": "\"v=spf1 -all\""`.
+
+#### Delete `www.acme.example`
+
+`DELETE` takes no `records`, and removes the whole rrset for that name and type:
+
+```sh
+ssh root@192.168.8.52 'curl -sS -X PATCH \
+  -H "X-API-Key: $(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf)" \
+  -H "Content-Type: application/json" \
+  http://127.0.0.1:8181/api/v1/servers/localhost/zones/acme.example. \
+  -d @- <<JSON
+{"rrsets": [{"name": "www.acme.example.", "type": "A",
+             "changetype": "DELETE"}]}
+JSON'
+```
+
+Deleting a name that holds several types takes one entry per type; there is no
+"delete everything at this name".
+
+#### Check it
+
+Ask Pythia directly, not Themis — a stale answer cached on Delphi for up to the
+record's TTL is not a failure:
+
+```sh
+dig +short @192.168.8.52 www.acme.example A
+ssh root@192.168.8.52 pdnsutil list-zone acme.example
+```
+
+The zone as the API sees it, which is also how to read back a record's exact
+content before changing it:
+
+```sh
+ssh root@192.168.8.52 'curl -sS \
+  -H "X-API-Key: $(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf)" \
+  http://127.0.0.1:8181/api/v1/servers/localhost/zones/acme.example.' |
+  python3 -m json.tool
+```
+
+Scripting this from a lab rather than by hand goes through nginx instead:
+`https://192.168.8.52:8081/api/v1/...` is open to lenora, with `AUTH_API_KEY`
+from `secrets.env` as the key. The paths and payloads are identical.
+
 ## Overriding a public name internally (split-horizon)
 
 `ca.peetvandesande.com` is the worked example: publicly a CNAME to an OVH VPS,
