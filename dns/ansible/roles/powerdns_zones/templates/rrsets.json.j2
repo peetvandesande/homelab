@@ -16,7 +16,7 @@
 {%     for section in fwd.sections | default([]) %}
 {%       for r in section.records %}
 {%         if (r.type | default('A')) == 'A' and r.data.startswith(zone.prefix ~ '.') and (r.ptr | default(true)) %}
-{%           set _ = ns.flat.append({'name': r.data.split('.')[3] ~ '.' ~ zone.name ~ '.', 'type': 'PTR', 'content': r.name ~ '.' ~ fwd.name ~ '.'}) %}
+{%           set _ = ns.flat.append({'name': r.data.split('.')[3] ~ '.' ~ zone.name ~ '.', 'type': 'PTR', 'content': (fwd.name ~ '.') if r.name == '@' else (r.name ~ '.' ~ fwd.name ~ '.')}) %}
 {%         endif %}
 {%       endfor %}
 {%     endfor %}
@@ -24,7 +24,7 @@
 {% elif zone.kind == 'forward' %}
 {%   for section in zone.sections | default([]) %}
 {%     for r in section.records %}
-{%       set _ = ns.flat.append({'name': r.name ~ '.' ~ zone.name ~ '.', 'type': r.type | default('A'), 'content': r.data}) %}
+{%       set _ = ns.flat.append({'name': (zone.name ~ '.') if r.name == '@' else (r.name ~ '.' ~ zone.name ~ '.'), 'type': r.type | default('A'), 'content': r.data}) %}
 {%     endfor %}
 {%   endfor %}
 {% else %}

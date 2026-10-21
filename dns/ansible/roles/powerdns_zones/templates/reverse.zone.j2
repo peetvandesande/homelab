@@ -11,7 +11,7 @@
 {% if r.ptr_note is defined %}
 ; {{ r.ptr_note }}
 {% endif %}
-{{ '%-7s' | format(r.data.split('.')[3]) }} IN  PTR {{ r.name }}.{{ fwd.name }}.
+{{ '%-7s' | format(r.data.split('.')[3]) }} IN  PTR {{ fwd.name ~ '.' if r.name == '@' else r.name ~ '.' ~ fwd.name ~ '.' }}
 {% endif %}
 {% endfor %}
 {% endfor %}
