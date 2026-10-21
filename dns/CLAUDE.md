@@ -45,6 +45,28 @@ end-to-end smoke test that exits non-zero on failure. Run it after any change.
 Secrets are in `secrets.env` (git-ignored, mode 600) and substituted into
 `@@PLACEHOLDER@@` slots at push time, so no key is committed.
 
+**Pythia's zone files and `bindbackend.conf` are generated**, by
+`ansible/zones.yml` from `ansible/group_vars/all.yml`. They are still committed
+and `deploy.sh` still pushes them, so nothing downstream changed - but edit the
+YAML, not the zone file, or the next render reverts you. The playbook generates
+every PTR from the forward zone's A records and bumps a serial only when that
+zone's contents actually changed, so "keep both zones in step and bump both
+serials" is no longer a step you can get wrong. It also refuses to render an
+override zone whose Delphi half is missing (invariant 5) or a zone name short
+enough to be a parent domain. It does not touch the gsqlite3 lab zones, Delphi
+or Themis.
+
+Zones that must be dynamic are declared there too, as `backend: api`, and
+reconciled through Pythia's API into the gsqlite3 backend instead of being
+rendered to a file - the labs' `openstack.home` and the eight
+`192.168.32.0/21` reverse zones. For those the playbook owns only the
+skeleton: it creates the zone if it is absent, never deletes one, never
+manages the SOA after creation, and only ever REPLACEs rrsets the YAML
+declares, so the records a lab registers at runtime are never touched. The
+bind backend could not hold them in any case - the API implements no zone
+creation against it, which is why that second backend exists at all.
+See `ansible/README.md`.
+
 ## Invariants — do not "simplify" these away
 
 Each of these looks like redundancy and is not. The first four were found the

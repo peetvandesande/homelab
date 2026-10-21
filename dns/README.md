@@ -236,8 +236,21 @@ subnet and nothing else changes.
 
 ## Adding an internal name
 
-Edit `pythia/var/lib/powerdns/zones/home.zone` (and the reverse zone), **bump
-the serial in both**, then `./scripts/deploy.sh`.
+Add it to `forward_zone` in `ansible/group_vars/all.yml`, then:
+
+```sh
+cd ansible && ansible-playbook zones.yml
+```
+
+That renders the zone files into `pythia/`, generates the PTR, bumps only the
+serials of the zones that actually changed, pushes them to Pythia and reloads
+just those zones. `ansible/README.md` has the detail.
+
+The zone files are still in the repo and `scripts/deploy.sh` still pushes them,
+so nothing else changes — but they are now **generated**, and editing one by
+hand will be overwritten on the next render. The old way, for reference: edit
+`pythia/var/lib/powerdns/zones/home.zone` and the reverse zone, **bump the
+serial in both**, then `./scripts/deploy.sh`.
 
 `home.` is unsigned and does not exist at the root, so Delphi carries an
 `addNTA("home.")` in `recursor.lua`. Without it, DNSSEC validation proves the
@@ -255,8 +268,18 @@ and its teardown deletes them.
 These zones live in a second backend on Pythia, **gsqlite3**
 (`/var/lib/powerdns/labs.sqlite3`), not in this repo. They change every time
 a lab is built or removed, and the bind backend can't be written through the
-API. Pythia answers from whichever backend has the most specific zone, so
-`openstack.home` works inside `home.` without a delegation.
+API — PowerDNS implements no zone creation or record writes against it, which
+is the only reason the second backend exists. Pythia answers from whichever
+backend has the most specific zone, so `openstack.home` works inside `home.`
+without a delegation.
+
+`ansible/` declares the zones themselves (`backend: api` in
+`group_vars/all.yml`) so the skeleton is guaranteed to exist with the right SOA
+and NS, and reconciles it over the API. It deliberately does **not** manage the
+records a lab writes: it only ever REPLACEs rrsets the YAML declares, never
+deletes a zone, and patches only what differs. The lab's own names are left
+alone. One consequence to be aware of: a lab's bootstrap may now find its zone
+already present and get `409 Conflict` from its own `POST /zones`.
 
 The fixed pieces are in this repo:
 
@@ -311,12 +334,17 @@ address.
 
 It takes **three** changes, and it is broken until all three are in place:
 
-1. A zone file in `pythia/var/lib/powerdns/zones/` and a matching block in
-   `pythia/etc/powerdns/bindbackend.conf`.
+1. An entry in `override_zones` in `ansible/group_vars/all.yml`, which renders
+   the zone file and the `bindbackend.conf` block.
 2. A `forward_zones` entry on Delphi in `recursor.yml`, `recurse: false`.
 3. An `addNTA()` in `delphi/etc/powerdns/recursor.lua`.
 
-Then `./scripts/deploy.sh`.
+Then `cd ansible && ansible-playbook zones.yml` for the first, and
+`./scripts/deploy.sh` for the other two.
+
+The playbook **refuses to render** a zone that is missing step 2 or 3, and
+refuses a name with fewer than three labels. It cannot stop you writing them
+wrong, but it will not let you forget them.
 
 **Make the zone the exact name you are overriding, never its parent.** A zone
 for `peetvandesande.com` would shadow mail, www and everything else in the
@@ -388,6 +416,7 @@ real access control is the `allow`/`deny` in the vhost.
 | `scripts/bootstrap.sh`| Proxmox host | creates the three CTs; skips existing ones |
 | `scripts/deploy.sh`   | workstation  | pushes config, validates, enables services |
 | `scripts/verify.sh`   | workstation  | end-to-end smoke test; exits non-zero on failure |
+| `ansible/zones.yml`   | workstation  | renders, pushes and reloads Pythia's zones |
 | `vpn-domain-sync`     | themis (hourly) | pulls the VPN domain policy from the router |
 
 `deploy.sh` copies files one at a time and writes them atomically as

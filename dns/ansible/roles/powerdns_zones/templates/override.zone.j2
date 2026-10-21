@@ -1,0 +1,5 @@
+{% include 'header.j2' %}
+{% include '_soa.j2' %}
+{% for r in zone.records %}
+{{ '%-7s' | format(r.name) }} IN  {{ '%-7s' | format(r.type) }} {{ ('%-24s' | format(r.data)) if r.comment is defined else r.data }}{{ (' ; ' ~ r.comment) if r.comment is defined else '' }}
+{% endfor %}

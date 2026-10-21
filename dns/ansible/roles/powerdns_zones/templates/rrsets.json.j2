@@ -1,0 +1,55 @@
+{#- The rrsets of one `backend: api` zone, as a PATCH body, reduced to only
+    those that differ from what the server already holds.
+
+    Two things this must not do. It must not emit an rrset for a name the zone
+    data does not declare - those belong to the lab, and REPLACE on a name we
+    do not own would delete its records. And it must not touch the SOA: with
+    soa_edit_api the serial moves on every change, so a managed SOA would
+    differ on every run and bump the serial forever.
+
+    Expects `zone` and `zone_existing` (the server's current rrsets).         -#}
+{% set ns = namespace(flat=[], rrsets=[], out=[]) %}
+{% if zone.kind == 'reverse' %}
+{%   for fwd in zones | selectattr('kind', 'eq', 'forward') | list %}
+{%     for section in fwd.sections | default([]) %}
+{%       for r in section.records %}
+{%         if (r.type | default('A')) == 'A' and r.data.startswith(zone.prefix ~ '.') and (r.ptr | default(true)) %}
+{%           set _ = ns.flat.append({'name': r.data.split('.')[3] ~ '.' ~ zone.name ~ '.', 'type': 'PTR', 'content': r.name ~ '.' ~ fwd.name ~ '.'}) %}
+{%         endif %}
+{%       endfor %}
+{%     endfor %}
+{%   endfor %}
+{% elif zone.kind == 'forward' %}
+{%   for section in zone.sections | default([]) %}
+{%     for r in section.records %}
+{%       set _ = ns.flat.append({'name': r.name ~ '.' ~ zone.name ~ '.', 'type': r.type | default('A'), 'content': r.data}) %}
+{%     endfor %}
+{%   endfor %}
+{% else %}
+{%   for r in zone.records | default([]) %}
+{%     set _ = ns.flat.append({'name': (zone.name ~ '.') if r.name == '@' else (r.name ~ '.' ~ zone.name ~ '.'), 'type': r.type, 'content': r.data}) %}
+{%   endfor %}
+{% endif %}
+{#- group into one rrset per name and type: two A records on one name are one
+    rrset with two records, not two rrsets. -#}
+{% for name, by_name in ns.flat | groupby('name') %}
+{%   for rtype, by_type in by_name | groupby('type') %}
+{%     if rtype != 'SOA' %}
+{%       set recs = [] %}
+{%       for r in by_type %}
+{%         set _ = recs.append({'content': r.content, 'disabled': false}) %}
+{%       endfor %}
+{%       set _ = ns.rrsets.append({'name': name, 'type': rtype, 'ttl': dns_ttl, 'changetype': 'REPLACE', 'records': recs}) %}
+{%     endif %}
+{%   endfor %}
+{% endfor %}
+{#- and keep only what actually differs, so the serial moves only on a change -#}
+{% for rr in ns.rrsets %}
+{%   set match = zone_existing | selectattr('name', 'eq', rr.name) | selectattr('type', 'eq', rr.type) | list %}
+{%   if not match
+        or (match[0].ttl | int) != rr.ttl
+        or (match[0].records | map(attribute='content') | sort | list) != (rr.records | map(attribute='content') | sort | list) %}
+{%     set _ = ns.out.append(rr) %}
+{%   endif %}
+{% endfor %}
+{{ ns.out | to_json }}

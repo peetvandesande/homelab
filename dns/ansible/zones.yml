@@ -1,0 +1,28 @@
+---
+# Manage the zones Pythia serves from its bind backend.
+#
+#   ansible-playbook zones.yml                  # render, push, reload
+#   ansible-playbook zones.yml --check --diff    # preview; touches nothing
+#   ansible-playbook zones.yml --tags render     # rewrite the repo files only
+#
+# Zone data lives in group_vars/all.yml. The playbook renders it into
+# dns/pythia/ - which stays what scripts/deploy.sh pushes - bumps each serial
+# only if that zone's contents changed, then pushes and reloads just those
+# zones.
+
+- name: Render the zones into the repo
+  hosts: renderers
+  gather_facts: true
+  tags: render
+  roles:
+    - powerdns_zones
+
+- name: Push the zones to Pythia and reload them
+  hosts: powerdns_auth
+  gather_facts: false
+  tags: push
+  tasks:
+    - name: Push and reload
+      ansible.builtin.include_role:
+        name: powerdns_zones
+        tasks_from: push

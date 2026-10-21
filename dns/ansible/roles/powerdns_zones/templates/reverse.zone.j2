@@ -1,0 +1,18 @@
+{% include 'header.j2' %}
+{% include '_soa.j2' %}
+{# One PTR per A record inside this zone's prefix, taken from every forward
+   zone in the list and emitted in declaration order. This is what retires
+   "keep the reverse zone in step and bump both serials" as a manual step.
+   `ptr: false` on a record opts out. #}
+{% for fwd in zones | selectattr('kind', 'eq', 'forward') | list %}
+{% for section in fwd.sections %}
+{% for r in section.records %}
+{% if (r.type | default('A')) == 'A' and r.data.startswith(zone.prefix ~ '.') and (r.ptr | default(true)) %}
+{% if r.ptr_note is defined %}
+; {{ r.ptr_note }}
+{% endif %}
+{{ '%-7s' | format(r.data.split('.')[3]) }} IN  PTR {{ r.name }}.{{ fwd.name }}.
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endfor %}

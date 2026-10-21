@@ -1,0 +1,45 @@
+---
+# Render one zone and decide its serial.
+#
+# The serial must NOT change when nothing else did: a rewritten serial means a
+# zone reload on every run. So the template emits @@SERIAL@@, the rendered body
+# is compared against the file on disk with its serial masked out the same way,
+# and the serial only moves when the bodies actually differ.
+#
+# Expects `zone`, one entry from the `zones` list.
+
+- name: "{{ zone.name }} | render the body"
+  ansible.builtin.set_fact:
+    zone_new: "{{ lookup('template', zone.kind ~ '.zone.j2') | regex_replace('\\s+$', '') }}"
+    zone_path: "{{ zone_src_dir }}/{{ zone.name }}.zone"
+
+- name: "{{ zone.name }} | look for the existing file"
+  ansible.builtin.stat:
+    path: "{{ zone_path }}"
+  register: zone_stat
+
+- name: "{{ zone.name }} | read the existing file"
+  ansible.builtin.set_fact:
+    zone_old: "{{ lookup('file', zone_path) if zone_stat.stat.exists else '' }}"
+
+# lookup('file') strips the trailing newline, so both sides are compared
+# rstripped or no zone ever looks unchanged and every run bumps every serial.
+- name: "{{ zone.name }} | mask the old serial and pick the new one"
+  ansible.builtin.set_fact:
+    zone_old_masked: "{{ zone_old | regex_replace('(?m)^(\\s*)\\d{10}(\\s*; serial)$', '\\1@@SERIAL@@\\2') | regex_replace('\\s+$', '') }}"
+    zone_old_serial: "{{ zone_old | regex_search('\\d{10}(?=\\s*; serial)') | default('0', true) }}"
+
+# YYYYMMDDnn, and never backwards: a second change on the same day increments
+# the counter, and a serial already dated today or later is simply bumped.
+- name: "{{ zone.name }} | settle the serial"
+  ansible.builtin.set_fact:
+    zone_serial: >-
+      {{ zone_old_serial if (zone_old_masked == zone_new)
+         else ([zone_old_serial | int + 1,
+                (ansible_facts.date_time.date | regex_replace('-', '') ~ '00') | int + 1] | max) }}
+
+- name: "{{ zone.name }} | write it into the repo"
+  ansible.builtin.copy:
+    content: "{{ zone_new | regex_replace('@@SERIAL@@', zone_serial | string) }}\n"
+    dest: "{{ zone_path }}"
+    mode: "0644"

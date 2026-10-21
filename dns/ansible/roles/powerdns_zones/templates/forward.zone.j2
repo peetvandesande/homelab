@@ -1,0 +1,14 @@
+{% include 'header.j2' %}
+{% include '_soa.j2' %}
+{% for section in zone.sections %}
+{% if not loop.first %}
+
+{% endif %}
+; --- {{ section.title }} {{ '-' * (63 - (section.title | length)) }}
+{% for r in section.records %}
+{% if r.ptr_note is defined %}
+; {{ r.ptr_note }}
+{% endif %}
+{{ '%-11s' | format(r.name) }} IN  {{ '%-3s' | format(r.type | default('A')) }} {{ ('%-16s' | format(r.data)) if r.comment is defined else r.data }}{{ (' ; ' ~ r.comment) if r.comment is defined else '' }}
+{% endfor %}
+{% endfor %}

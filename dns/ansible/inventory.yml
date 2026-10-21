@@ -1,0 +1,17 @@
+# Addressed by IP, as the rest of this repo is: a container resolves its own
+# FQDN to 127.0.1.1, so names are not safe to address hosts by from inside one.
+all:
+  children:
+    powerdns_auth:
+      hosts:
+        pythia:
+          ansible_host: 192.168.8.52
+    # Explicit, rather than the implicit localhost, so group_vars/all.yml
+    # applies to the render pass as well as the push.
+    renderers:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  vars:
+    ansible_user: root

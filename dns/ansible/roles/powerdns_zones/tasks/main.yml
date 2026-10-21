@@ -1,0 +1,114 @@
+---
+# Runs on localhost. Renders every zone in `zones` into the repo mirror under
+# dns/pythia/, which stays the source of truth scripts/deploy.sh pushes.
+# Nothing here touches a host, so `--check --diff` is a safe preview.
+
+- name: Check the zone list is well formed
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.kind in ['forward', 'reverse', 'override']
+      - item.backend in ['bind', 'api']
+      - item.kind != 'reverse' or item.prefix is defined
+      - item.kind != 'forward' or item.sections is defined
+      - item.kind != 'override' or item.records is defined
+    fail_msg: >-
+      Zone entry {{ item.name | default(item) }} is not usable: it needs a
+      name, a kind of forward/reverse/override, a backend of bind/api, and the
+      fields that kind requires (reverse needs prefix, forward needs sections,
+      override needs records - an empty list is fine for an api zone whose
+      records the lab writes itself).
+    quiet: true
+  loop: "{{ zones }}"
+  loop_control:
+    label: "{{ item.name | default('?') }}"
+
+- name: Refuse an override zone that would shadow a whole public domain
+  ansible.builtin.assert:
+    that:
+      - item.name.split('.') | length >= 3
+    fail_msg: >-
+      '{{ item.name }}' looks like a parent domain. A split-horizon zone must be
+      the exact name being overridden - a zone for the parent shadows mail, www
+      and everything else in the domain with an empty internal zone, for the
+      whole LAN. See dns/CLAUDE.md invariant 5.
+    quiet: true
+  loop: "{{ zones | selectattr('kind', 'eq', 'override') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# Two entries with one name would render one file and quietly drop the other.
+- name: Refuse two zones with the same name
+  ansible.builtin.assert:
+    that:
+      - all_zone_names | length == all_zone_names | unique | length
+    fail_msg: >-
+      Duplicate zone name in `zones`:
+      {{ all_zone_names | difference(all_zone_names | unique) | unique | join(', ') }}
+    quiet: true
+
+# Invariant 5: a zone on Pythia is one of three pieces, and on its own it
+# SERVFAILs. Both others live in delphi/, which this playbook does not write,
+# so assert them rather than render a zone that cannot answer.
+- name: Read Delphi's recursor config out of the repo
+  ansible.builtin.set_fact:
+    delphi_yml: "{{ lookup('file', repo_root ~ '/delphi/etc/powerdns/recursor.yml') }}"
+    delphi_lua: "{{ lookup('file', repo_root ~ '/delphi/etc/powerdns/recursor.lua') }}"
+
+- name: Collect what Delphi forwards and the anchors it installs literally
+  ansible.builtin.set_fact:
+    delphi_forwards: "{{ delphi_yml | regex_findall('zone:\\s*(\\S+)') | map('regex_replace', '\\.$', '') | list }}"
+    delphi_ntas: "{{ delphi_lua | regex_findall('addNTA\\(\"([^\"]+)\"') | map('regex_replace', '\\.$', '') | list }}"
+    delphi_nta_loops: "{{ delphi_lua | regex_findall('for\\s+\\w+\\s*=\\s*(\\d+),\\s*(\\d+)\\s+do\\s*\\n\\s*addNTA\\(\\w+\\s*\\.\\.\\s*\"([^\"]+)\"') }}"
+
+# The lab reverse zones are not written out one by one - recursor.lua installs
+# them with `for i = 32, 39 do addNTA(i .. ".168.192.in-addr.arpa.")`. Expand
+# that, or every lab zone fails the check below despite being wired up.
+- name: Expand the addNTA() loops in recursor.lua
+  ansible.builtin.set_fact:
+    # One line and double-quoted on purpose: a folded `>-` scalar renders the
+    # list to a string, and the next task would then iterate its characters.
+    delphi_ntas: "{{ delphi_ntas + (range(item.0 | int, item.1 | int + 1) | map('string') | map('regex_replace', '^(.*)$', '\\1' ~ item.2) | map('regex_replace', '\\.$', '') | list) }}"
+
+  loop: "{{ delphi_nta_loops }}"
+  loop_control:
+    label: "{{ item.0 }}-{{ item.1 }}{{ item.2 }}"
+
+# A forward and an anchor both cover everything beneath them, so openstack.home
+# is wired up by home. and needs nothing of its own. Match the zone or any of
+# its ancestors rather than the name alone.
+- name: Build the coverage patterns
+  ansible.builtin.set_fact:
+    delphi_forward_re: "(^|[.])({{ delphi_forwards | map('regex_escape') | join('|') }})$"
+    delphi_nta_re: "(^|[.])({{ delphi_ntas | map('regex_escape') | join('|') }})$"
+
+- name: Assert every zone is forwarded from Delphi and has its negative trust anchor
+  ansible.builtin.assert:
+    that:
+      - item | regex_search(delphi_forward_re) is not none
+      - item | regex_search(delphi_nta_re) is not none
+    fail_msg: >-
+      {{ item }} is not wired up on Delphi. A zone here needs a forward_zones
+      entry in delphi/etc/powerdns/recursor.yml (recurse: false, forwarder
+      192.168.8.52) AND a negative trust anchor in
+      delphi/etc/powerdns/recursor.lua - for {{ item }}. itself, or on an
+      ancestor zone, which covers everything beneath it. Without the forward
+      Delphi recurses to the internet; without the anchor every lookup
+      SERVFAILs. dns/CLAUDE.md invariants 4 and 5.
+    quiet: true
+  loop: "{{ all_zone_names }}"
+
+# api zones are not rendered: they have no file, and their serial is
+# PowerDNS's to manage. They are reconciled over the API in push.yml.
+- name: Render the bind zones
+  ansible.builtin.include_tasks: zone.yml
+  loop: "{{ bind_zones }}"
+  loop_control:
+    loop_var: zone
+    label: "{{ zone.name }} ({{ zone.kind }})"
+
+- name: Render bindbackend.conf
+  ansible.builtin.template:
+    src: bindbackend.conf.j2
+    dest: "{{ bindbackend_src }}"
+    mode: "0644"

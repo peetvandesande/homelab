@@ -1,0 +1,80 @@
+---
+# Runs on Pythia. Pushes the bind zones the render pass wrote into the repo,
+# reloads only the ones whose file changed, then reconciles the api zones.
+
+- name: Push the zone files
+  ansible.builtin.copy:
+    src: "{{ zone_src_dir }}/{{ item }}.zone"
+    dest: "{{ zone_dir }}/{{ item }}.zone"
+    owner: pdns
+    group: pdns
+    mode: "0644"
+  loop: "{{ bind_zones | map(attribute='name') | list }}"
+  register: pushed_zones
+
+# Pushed after the zone files, so a newly added zone's file is already there
+# when the server goes looking for it.
+- name: Push bindbackend.conf
+  ansible.builtin.copy:
+    src: "{{ bindbackend_src }}"
+    dest: /etc/powerdns/bindbackend.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: pushed_bindbackend
+
+- name: Rediscover zones (one was added or removed)
+  ansible.builtin.command: pdns_control rediscover
+  when: pushed_bindbackend is changed
+  changed_when: true
+
+- name: Reload the zones that changed
+  ansible.builtin.command: "pdns_control bind-reload-now {{ item.item }}"
+  loop: "{{ pushed_zones.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item is changed
+  changed_when: true
+
+# ------------------------------------------------------------ api zones -----
+# The key comes from pdns.conf on the host rather than from secrets.env, so it
+# is by definition the one the running server is using and no secret passes
+# through this repo.
+- name: Read Pythia's API key out of its own config
+  ansible.builtin.slurp:
+    src: /etc/powerdns/pdns.conf
+  register: pdns_conf
+  no_log: true
+  when: api_zones | length > 0
+
+- name: Keep the API key
+  ansible.builtin.set_fact:
+    pythia_api_key: "{{ pdns_conf.content | b64decode | regex_search('(?m)^api-key=(.*)$', '\\1') | first }}"
+  no_log: true
+  when: api_zones | length > 0
+
+- name: Assert the API key has been substituted
+  ansible.builtin.assert:
+    that:
+      - pythia_api_key is defined
+      - not pythia_api_key.startswith('@@')
+    fail_msg: >-
+      /etc/powerdns/pdns.conf still carries the @@AUTH_API_KEY@@ placeholder,
+      so the API is unusable. Run dns/scripts/deploy.sh first - it substitutes
+      secrets.env into the config.
+    quiet: true
+  when: api_zones | length > 0
+
+- name: Reconcile the api zones
+  ansible.builtin.include_tasks: api_zone.yml
+  loop: "{{ api_zones }}"
+  loop_control:
+    loop_var: zone
+    label: "{{ zone.name }} ({{ zone.kind }})"
+
+# Cheap, and the only thing that proves the server parsed what we just sent -
+# a zone that fails to load otherwise just stops answering.
+- name: Check every zone the server now holds
+  ansible.builtin.command: "pdnsutil check-zone {{ item }}"
+  loop: "{{ all_zone_names }}"
+  changed_when: false

@@ -1,0 +1,15 @@
+{#- SOA block, identical in every zone. @@SERIAL@@ is substituted after the
+    render decides whether anything actually changed. -#}
+$TTL {{ dns_ttl }}
+$ORIGIN {{ zone.name }}.
+
+@       IN  SOA {{ soa.primary }} {{ soa.hostmaster }} (
+                @@SERIAL@@  ; serial
+                {{ '%-11s' | format(soa.refresh) }} ; refresh
+                {{ '%-11s' | format(soa.retry) }} ; retry
+                {{ '%-11s' | format(soa.expire) }} ; expire
+                {{ soa.negative_ttl }} )      ; negative TTL
+
+@       IN  NS      {{ soa.primary }}
+
+

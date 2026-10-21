@@ -1,0 +1,69 @@
+---
+# Ensure one `backend: api` zone exists in gsqlite3 and holds the records this
+# repo declares for it. Runs on Pythia, against the loopback API.
+#
+# Deliberately never deletes a zone and never replaces an rrset it does not
+# declare: a lab registers and removes its own names at runtime, and those are
+# not ours to tidy up.
+#
+# Expects `zone`, one entry from `zones` with backend == 'api'.
+
+- name: "{{ zone.name }} | does it exist?"
+  ansible.builtin.uri:
+    url: "{{ pythia_api }}/zones/{{ zone.name }}."
+    headers:
+      X-API-Key: "{{ pythia_api_key }}"
+    status_code: [200, 404]
+  register: zone_get
+  no_log: true
+  changed_when: false
+
+- name: "{{ zone.name }} | create it in gsqlite3"
+  ansible.builtin.uri:
+    url: "{{ pythia_api }}/zones"
+    method: POST
+    headers:
+      X-API-Key: "{{ pythia_api_key }}"
+    body_format: json
+    # soa_edit_api hands the serial to PowerDNS, which is what a zone written
+    # at runtime needs. kind Native: nothing transfers these, Delphi forwards.
+    body:
+      name: "{{ zone.name }}."
+      kind: Native
+      soa_edit_api: DEFAULT
+      nameservers: []
+      rrsets:
+        - name: "{{ zone.name }}."
+          type: SOA
+          ttl: "{{ dns_ttl }}"
+          records:
+            - content: "{{ soa.primary }} {{ soa.hostmaster }} 1 {{ soa.refresh }} {{ soa.retry }} {{ soa.expire }} {{ soa.negative_ttl }}"
+              disabled: false
+        - name: "{{ zone.name }}."
+          type: NS
+          ttl: "{{ dns_ttl }}"
+          records:
+            - content: "{{ soa.primary }}"
+              disabled: false
+    status_code: [201]
+  no_log: true
+  when: zone_get.status == 404
+
+- name: "{{ zone.name }} | work out which declared records differ"
+  ansible.builtin.set_fact:
+    zone_rrsets: "{{ lookup('template', 'rrsets.json.j2') | from_json }}"
+  vars:
+    zone_existing: "{{ (zone_get.json | default({})).rrsets | default([]) }}"
+
+- name: "{{ zone.name }} | patch them in"
+  ansible.builtin.uri:
+    url: "{{ pythia_api }}/zones/{{ zone.name }}."
+    method: PATCH
+    headers:
+      X-API-Key: "{{ pythia_api_key }}"
+    body_format: json
+    body:
+      rrsets: "{{ zone_rrsets }}"
+    status_code: [204]
+  no_log: true
+  when: zone_rrsets | length > 0

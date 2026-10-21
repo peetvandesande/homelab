@@ -1,0 +1,202 @@
+---
+# The source of truth for every zone Pythia serves from its *bind* backend.
+#
+# One list, `zones`. Each entry has a `kind`:
+#
+#   forward   named records, grouped into commented sections
+#   reverse   PTRs, generated from the A records of every forward zone that
+#             falls inside its `prefix`
+#   override  a split-horizon override of a single public name
+#
+# ... and a `backend`, which decides how it is managed:
+#
+#   bind      rendered to a zone file in this repo, pushed, reloaded. The
+#             serial is managed here. Static zones belong here.
+#   api       created and patched through Pythia's HTTP API into the gsqlite3
+#             backend. The serial is PowerDNS's to manage (soa_edit_api), and
+#             the playbook only ever REPLACEs the records it declares - so a
+#             lab is free to add and remove its own at runtime, which is the
+#             whole reason that backend exists. See "Lab zones" in README.md.
+#
+# Add as many of each as you like. Every zone here needs a matching
+# forward_zones entry and negative trust anchor on Delphi - the playbook
+# asserts both before it writes anything. See dns/CLAUDE.md invariant 5.
+
+# Where the rendered zone files land in this repo. The playbook writes them
+# here first, so `git diff` is the review step, and scripts/deploy.sh keeps
+# pushing the same files it always has.
+repo_root:       "{{ playbook_dir }}/.."
+zone_src_dir:    "{{ repo_root }}/pythia/var/lib/powerdns/zones"
+bindbackend_src: "{{ repo_root }}/pythia/etc/powerdns/bindbackend.conf"
+
+# ... and where they live on Pythia.
+zone_dir: /var/lib/powerdns/zones
+
+all_zone_names: "{{ zones | map(attribute='name') | list }}"
+bind_zones: "{{ zones | selectattr('backend', 'eq', 'bind') | list }}"
+api_zones: "{{ zones | selectattr('backend', 'eq', 'api') | list }}"
+
+# Pythia's API, reached over loopback from the host itself: the webserver binds
+# 127.0.0.1 only and nginx fronts it, so there is no TLS or ACL to negotiate.
+pythia_api: http://127.0.0.1:8181/api/v1/servers/localhost
+
+dns_ttl: 3600
+soa:
+  primary:      pythia.home.
+  hostmaster:   hostmaster.home.
+  refresh:      3600
+  retry:        900
+  expire:       604800
+  negative_ttl: 3600
+
+zones:
+
+  # ------------------------------------------------------------- home. -----
+  - name: home
+    kind: forward
+    backend: bind
+    comment: Forward zone for the lab.
+    sections:
+      - title: infrastructure
+        records:
+          - { name: gw,         data: 192.168.8.1 }
+          - { name: lenora,     data: 192.168.8.21, comment: 'Proxmox host' }
+          - { name: themis,     data: 192.168.8.50, comment: 'dnsdist - the LAN''s resolver' }
+          - { name: delphi,     data: 192.168.8.51, comment: 'recursor + filtering' }
+          - { name: pythia,     data: 192.168.8.52, comment: 'this server' }
+          - { name: prometheus, data: 192.168.8.53 }
+          - { name: grafana,    data: 192.168.8.54 }
+          - { name: pistis,     data: 192.168.8.55, comment: 'step-ca private CA' }
+          - { name: loki,       data: 192.168.8.56, comment: 'log store' }
+          - { name: hermes,     data: 192.168.8.57, comment: 'mailcow VM 109 - mail for the labs' }
+          - { name: moby,       data: 192.168.8.27, comment: 'Docker host - outside the .50-.59 range' }
+          - { name: nextcloud,  data: 192.168.8.73, comment: 'on moby, published on its own address',
+              ptr_note: '.73 and .74 are extra addresses on moby, one per published stack.' }
+          - { name: traefik,    data: 192.168.8.74, comment: 'on moby, published on its own address' }
+      - title: production
+        records:
+          - { name: jellyfin,      data: 192.168.8.60 }
+          - { name: navidrome,     data: 192.168.8.61 }
+          - { name: homeassistant, data: 192.168.8.90, comment: 'HAOS VM 302 - outside the .60-.69 range' }
+      - title: non-production
+        records:
+          - { name: lexie, data: 192.168.8.24 }
+      - title: aliases
+        records:
+          - { name: dns, type: CNAME, data: themis.home. }
+          - { name: ca,  type: CNAME, data: pistis.home. }
+          - { name: pve, type: CNAME, data: lenora.home. }
+
+  # ----------------------------------------------------------- reverse -----
+  # One entry per /24. `prefix` is what selects the A records that become PTRs,
+  # from every forward zone above - so a lab's forward zone and its reverse
+  # zones stay in step with each other for free.
+  - name: 8.168.192.in-addr.arpa
+    kind: reverse
+    backend: bind
+    prefix: 192.168.8
+    comment: |
+      Reverse zone for 192.168.8.0/24.
+      Every PTR here is generated from the A records in the forward zones -
+      there is nothing to keep in step by hand.
+
+  # --------------------------------------------------------- overrides -----
+  # Split-horizon overrides of single public names. Each one needs TWO MORE
+  # pieces on Delphi that this playbook does not write - a forward_zones entry
+  # in recursor.yml and an addNTA() in recursor.lua. The playbook asserts both
+  # are present and refuses to run without them.
+  - name: ca.peetvandesande.com
+    kind: override
+    backend: bind
+    comment: |
+      Split-horizon zone for ca.peetvandesande.com.
+
+      This name exists publicly as a CNAME to an OVH VPS. Inside the lab it must
+      resolve to pistis instead, because that is what serves the CRL and AIA files
+      named in the G3 intermediate certificate - see homelab/ca.
+
+      The zone is deliberately the SINGLE NAME, not peetvandesande.com. Taking the
+      whole domain would shadow mail, www and everything else in it with an empty
+      internal zone, and break them for the entire LAN.
+
+      peetvandesande.com is DNSSEC-signed, so this override needs a matching
+      addNTA() on Delphi or every lookup here SERVFAILs. See delphi's recursor.lua.
+    records:
+      - { name: "@", type: A, data: 192.168.8.55, comment: 'pistis - serves /g3/ over plain HTTP' }
+
+  - name: mail.peetvandesande.com
+    kind: override
+    backend: bind
+    comment: |
+      Split-horizon zone for mail.peetvandesande.com.
+
+      This name exists publicly as a CNAME to an OVH VPS (ruby,
+      vps-5ca50660.vps.ovh.net, 145.239.73.18). Ruby only serves mail on its
+      WireGuard address: 993 answers on 192.168.254.254 and times out on the
+      public address, so a client that resolves the public name simply hangs.
+
+      Both of ruby's dummy0 addresses are reachable from the LAN over wgclient1:
+      192.168.254.254 via dst_net4399 and the router's 19000 rules, and
+      fd33:5692:1834:254::254 via the 19000 rules and table 1001's route6 entries -
+      see router/README.md. Nothing here routes; this only names them.
+
+      The AAAA was left out until 2026-10-16, because the v6 address did not answer
+      from the LAN before the 19000 rules went in on 2026-10-11. Checked from ruby,
+      sourced from 254::254: the router's LAN ULA answers ping and HTTP. Both
+      addresses offer the same mail services - 993, 4190 and 25 - and neither has
+      submission (465/587), which ruby binds only on its wg0 addresses.
+
+      The zone is deliberately the SINGLE NAME, not peetvandesande.com - a zone for
+      the parent would shadow www and everything else in the domain with an empty
+      internal zone. peetvandesande.com is DNSSEC-signed, so this override needs a
+      matching addNTA() on Delphi or every lookup here SERVFAILs.
+    records:
+      - { name: "@", type: A,    data: 192.168.254.254,           comment: 'ruby, over wgclient1' }
+      - { name: "@", type: AAAA, data: "fd33:5692:1834:254::254", comment: 'ruby''s dummy0, over wgclient1' }
+
+  - name: ruby.peetvandesande.com
+    kind: override
+    backend: bind
+    comment: |
+      Split-horizon zone for ruby.peetvandesande.com.
+
+      Publicly a CNAME to ruby's OVH hostname (vps-5ca50660.vps.ovh.net,
+      145.239.73.18). nginx there admits its admin pages - postfixadmin, rspamd,
+      webchat, reports - only from home and VPN ranges, and a LAN client that
+      resolves the public name arrives over the internet from Orange's IPv6 prefix
+      and is refused. Pointing it at ruby's tunnel addresses sends it over
+      wgclient1 instead, from its 192.168.8.x or fd33:5692:1834:1000::/64 address.
+
+      Same addresses and routing as mail.peetvandesande.com, whose zone has the
+      detail and the date the IPv6 path was checked.
+
+      The zone is deliberately the SINGLE NAME, not peetvandesande.com, and needs a
+      matching addNTA() on Delphi or every lookup here SERVFAILs.
+    records:
+      - { name: "@", type: A,    data: 192.168.254.254,           comment: 'ruby, over wgclient1' }
+      - { name: "@", type: AAAA, data: "fd33:5692:1834:254::254", comment: 'ruby''s dummy0, over wgclient1' }
+
+  # ------------------------------------------------------- lab zones -----
+  # The Proxmox labs share 192.168.32.0/21 and only one runs at a time. Their
+  # contents are dynamic - a lab registers its own names on bootstrap and
+  # removes them on teardown - so these are `backend: api` and live in
+  # gsqlite3. What the playbook guarantees is that the zone exists with the
+  # right SOA and NS; the records below, if any, are the static skeleton, and
+  # everything the lab adds beside them is left alone.
+  #
+  # Delphi already forwards all of these and carries their trust anchors,
+  # permanently, whether a lab is running or not.
+  - name: openstack.home
+    kind: forward
+    backend: api
+    comment: Forward zone for the OpenStack lab, 192.168.32.0/21.
+    sections: []
+
+  - { name: 32.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.32, comment: 'Reverse zone for 192.168.32.0/24 - Proxmox lab.' }
+  - { name: 33.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.33, comment: 'Reverse zone for 192.168.33.0/24 - Proxmox lab.' }
+  - { name: 34.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.34, comment: 'Reverse zone for 192.168.34.0/24 - Proxmox lab.' }
+  - { name: 35.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.35, comment: 'Reverse zone for 192.168.35.0/24 - Proxmox lab.' }
+  - { name: 36.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.36, comment: 'Reverse zone for 192.168.36.0/24 - Proxmox lab.' }
+  - { name: 37.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.37, comment: 'Reverse zone for 192.168.37.0/24 - Proxmox lab.' }
+  - { name: 38.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.38, comment: 'Reverse zone for 192.168.38.0/24 - Proxmox lab.' }
+  - { name: 39.168.192.in-addr.arpa, kind: reverse, backend: api, prefix: 192.168.39, comment: 'Reverse zone for 192.168.39.0/24 - Proxmox lab.' }
