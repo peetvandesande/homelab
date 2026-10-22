@@ -316,3 +316,60 @@ groups:
                   evaluator:
                     type: lt
                     params: [1]
+      # The only rule here on a log line rather than a metric, because this
+      # fault has no metric: the MLO station table leaks inside the driver and
+      # nothing counts it. See the description, and grafana/CLAUDE.md
+      # invariant 11 for why the threshold is what it is.
+      - uid: wifi-sta-table-stale
+        title: "Wi-Fi station table has stale entries"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A radio's station table holds entries the driver cannot find"
+          description: >-
+            hostapd lists a station the mt7990 driver has no record of, so that client's link is half-registered and may pass no traffic while still looking associated. One leaked entry is about 1 error per minute, since router-metrics polls get_clients once a minute and each stale entry fails once per poll; the band is the BN index in the line, BN1 being 5GHz. It leaks on an MLO teardown - look for 'INVALID setup_link_id' around the onset. Clear it with `wifi reload` on the router, which restarts the radios without taking the WAN and the ONT down; a reboot also works but costs the line. Caused an evening of unusable Wi-Fi on 21 October 2026, undetected for 9.5 hours.
+        noDataState: OK
+        execErrState: OK
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@LOKI_DS_UID@@"
+            model:
+              datasource:
+                type: loki
+                uid: "@@LOKI_DS_UID@@"
+              editorMode: code
+              expr: 'sum(count_over_time({host="router"} |= "sta not found" [10m]))'
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [5]

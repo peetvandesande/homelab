@@ -87,28 +87,42 @@ for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-emp
            internet-unreachable tunnel-down dns-resolution-failing lab-tls-failing lab-cert-expiring \
            ha-vm-down ha-vm-agent-down ha-vm-disk-low ha-vm-memory-low ha-vm-metrics-stale \
            ont-not-operational ont-rx-power-low ont-hot ont-unreachable router-metrics-stale \
-           ipv6-prefix-missing; do
+           ipv6-prefix-missing wifi-sta-table-stale; do
   if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done
 
 # The rules carry the datasource uid, substituted at push time. If Grafana ever
-# regenerates the datasource the rules would still name the old one and would
-# silently never evaluate, so check they agree.
-live=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
-import sqlite3
-c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
-r=c.execute(\"select uid from data_source where type=:t and name=:n\",
-            {\"t\":\"prometheus\",\"n\":\"Prometheus\"}).fetchone()
-print(r[0] if r else \"\")"' 2>/dev/null)
+# regenerates a datasource the rules would still name the old one and would
+# silently never evaluate, so check they agree. Two datasources are substituted
+# now - Prometheus for almost everything, Loki for wifi-sta-table-stale - so
+# each is checked by name rather than by taking the first uid in the files.
 inrules=$(ssh -o BatchMode=yes root@$HOST \
   'grep -ho "datasourceUid: \"[A-Za-z0-9_-]*\"" /etc/grafana/provisioning/alerting/*.yaml \
-   | sed "s/.*\"\(.*\)\"/\1/" | sort -u | head -1' 2>/dev/null)
-if [[ -n "$live" && "$live" == "$inrules" ]]; then
-  pass "alert rules point at the live Prometheus datasource ($live)"
+   | sed "s/.*\"\(.*\)\"/\1/" | sort -u' 2>/dev/null)
+for ds in prometheus:Prometheus loki:Loki; do
+  live=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
+import sqlite3, sys
+c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
+r=c.execute(\"select uid from data_source where type=:t and name=:n\",
+            {\"t\":sys.argv[1],\"n\":sys.argv[2]}).fetchone()
+print(r[0] if r else \"\")" '"${ds%%:*} ${ds##*:}" 2>/dev/null)
+  if [[ -n "$live" ]] && grep -qxF "$live" <<<"$inrules"; then
+    pass "alert rules point at the live ${ds##*:} datasource ($live)"
+  else
+    bad "alert rules point at the live ${ds##*:} datasource" \
+        "Grafana has '${live:-none}', not among the rules' uids - re-run deploy.sh"
+  fi
+done
+
+# A placeholder left unsubstituted is the failure mode both of the above would
+# miss on a first install: the rule loads, names a uid that does not exist and
+# never evaluates.
+if ssh -o BatchMode=yes root@$HOST \
+     'grep -l "@@[A-Z_]*_DS_UID@@" /etc/grafana/provisioning/alerting/*.yaml' >/dev/null 2>&1; then
+  bad "no unsubstituted datasource placeholders" "a rule still carries @@..._DS_UID@@ - re-run deploy.sh"
 else
-  bad "alert rules point at the live Prometheus datasource" \
-      "rules say '${inrules:-none}', Grafana has '${live:-none}' - re-run deploy.sh"
+  pass "no unsubstituted datasource placeholders"
 fi
 
 echo "== alert delivery"

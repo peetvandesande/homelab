@@ -110,22 +110,26 @@ each other's public side (`outside/CLAUDE.md`), and the `probes` group in
 end, and lab certificates. `homeassistant-vm.yaml` covers the Home Assistant
 VM's host metrics, collected by lenora over the guest agent
 (`homeassistant/CLAUDE.md`, "VM metrics"). `router.yaml` covers the ONT
-(PLOAM state, receive power, temperature), the IPv6 prefix and whether
-`router-metrics/` is collecting at all; tunnels are already in `probes`. Its
-ONT alerts travel over the line they report on, so a dead line reaches the
-phone only afterwards – the heartbeat is what reports it live.
+(PLOAM state, receive power, temperature), the IPv6 prefix, whether
+`router-metrics/` is collecting at all, and the Wi-Fi station table; tunnels
+are already in `probes`. Its ONT alerts travel over the line they report on, so
+a dead line reaches the phone only afterwards – the heartbeat is what reports
+it live.
 
-7. **Alert rules carry the Prometheus datasource uid, substituted at deploy
-   time.** A rule needs `datasourceUid`, and the provisioned datasource has no
-   pinned uid — invariant 4 says why one must never be added to a live one. So
-   the file carries `@@PROM_DS_UID@@` and `scripts/deploy.sh` reads the uid
-   Grafana actually generated out of `grafana.db` and substitutes it, the same
-   way `homelab/dns` substitutes secrets at push time. Nothing is hardcoded and
-   a rebuild needs no edit.
+7. **Alert rules carry the datasource uid, substituted at deploy time.** A rule
+   needs `datasourceUid`, and the provisioned datasources have no pinned uid —
+   invariant 4 says why one must never be added to a live one. So the files
+   carry `@@PROM_DS_UID@@` and `@@LOKI_DS_UID@@`, and `scripts/deploy.sh` reads
+   the uids Grafana actually generated out of `grafana.db` and substitutes both,
+   the same way `homelab/dns` substitutes secrets at push time. Nothing is
+   hardcoded and a rebuild needs no edit.
 
    A rule naming a uid that no longer exists does not error — it simply never
-   evaluates, silently. `verify.sh` therefore asserts the uid in the pushed
-   rules still matches the one Grafana holds.
+   evaluates, silently. `verify.sh` therefore asserts, per datasource and by
+   name, that the uid Grafana holds appears in the pushed rules, and separately
+   that no `@@..._DS_UID@@` placeholder survived. It checks each by name rather
+   than taking the first uid it finds, which was correct only while Prometheus
+   was the sole datasource in the rules.
 
 8. **Queries threshold a gauge rather than filtering with `== 0`.** `up{job="dns"}`
    with a `lt 1` threshold keeps a series present when things are healthy, so
@@ -147,6 +151,27 @@ phone only afterwards – the heartbeat is what reports it live.
    ignore all of them. Fix the exporter or delete the job; do not "fix" it by
    widening the rule.
 
+11. **`wifi-sta-table-stale` is the one rule that queries Loki, because the
+    fault it watches has no metric.** The mt7990 driver leaks station entries on
+    an MLO teardown: `hostapd` keeps listing a client the driver cannot find, so
+    the link is half-registered and may carry no traffic while still looking
+    associated. Nothing counts that — the only evidence is the driver's `sta not
+    found` line, so the rule counts log lines instead of thresholding a gauge,
+    which is the documented exception to invariant 8.
+
+    The threshold is 5 per 10 minutes, `for: 15m`. `router-metrics` polls
+    `get_clients` once a minute and each stale entry fails once per poll, so one
+    leaked entry is ~10 lines per 10 minutes and a healthy radio is **0** —
+    tolerating transients without needing a second leak to fire. Do not raise
+    it to silence a leak: one entry is already a client that cannot use that
+    band. `execErrState` is `OK` so a Loki outage alerts as a Loki problem via
+    its own rules rather than as a Wi-Fi one.
+
+    This was written after 21 October 2026, when a leak at 12:20 went unnoticed
+    for 9.5 hours and cost an evening of unusable Wi-Fi; the lab had no signal
+    for it at all. `wifi reload` on the router clears it without taking the WAN
+    and the ONT down, which a reboot does.
+
 ### Delivery: Home Assistant, then the phone
 
 `root/etc/grafana/provisioning/alerting/notifications.yaml` provisions one
@@ -161,7 +186,7 @@ The policy groups by folder and alert name, sends after 30 s (criticals 10 s)
 and repeats every 12 h (criticals 4 h). Provisioning it replaces the policy
 tree set in the UI.
 
-11. **The webhook id is a secret, substituted at deploy time.** It is the only
+12. **The webhook id is a secret, substituted at deploy time.** It is the only
     credential an HA webhook has, so the file carries `@@HA_WEBHOOK_ID@@` and
     `deploy.sh` fills it from `secrets.env` (git-ignored, mode 600:
     `HA_WEBHOOK_ID=...`, plus `HEALTHCHECKS_PING_URL` below), sending the
@@ -169,7 +194,7 @@ tree set in the UI.
     pasted into HA's UI by hand; the automation also sets `local_only`.
     `deploy.sh` refuses to run without `secrets.env`.
 
-12. **This path cannot report a home outage.** HA reaches the phone through the
+13. **This path cannot report a home outage.** HA reaches the phone through the
     companion app's push relay, over the home internet connection, and Grafana,
     Prometheus and HA all run at home. An outage of the line, lenora or
     Grafana itself is silent here by construction; detecting it needs
@@ -200,7 +225,7 @@ the pings stop - the line, lenora, Prometheus, rule evaluation or Grafana's
 notifier, whichever broke. Healthchecks.io's own notifications are configured
 there, not here.
 
-13. **Everything other than a healthy answer must stop the pings.** So the
+14. **Everything other than a healthy answer must stop the pings.** So the
     query asks Prometheus rather than using `vector(1)`, `noDataState` and
     `execErrState` are `OK`, and the contact point has `disableResolveMessage:
     true` - a resolve is a POST as well, and Healthchecks.io would take it as

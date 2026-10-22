@@ -29,29 +29,33 @@ sed -e "s|@@HA_WEBHOOK_ID@@|${HA_WEBHOOK_ID}|g" \
   && chmod 0640 '/$NOTIFY.deploytmp' && mv -f '/$NOTIFY.deploytmp' '/$NOTIFY'"
 echo "   $NOTIFY (0640 root:grafana, HA webhook id and ping URL substituted)"
 
-# Alert rules need the datasource's uid, and the provisioned Prometheus
-# datasource has none pinned - invariant 4 says why one must never be added to a
-# live datasource. So the uid Grafana generated is read back out of its own
+# Alert rules need the datasource's uid, and neither provisioned datasource has
+# one pinned - invariant 4 says why one must never be added to a live
+# datasource. So the uids Grafana generated are read back out of its own
 # database and substituted into the pushed rules, the same way homelab/dns
 # substitutes secrets at push time. A rebuilt Grafana therefore needs no edit
-# here; verify.sh asserts the substituted value still matches.
+# here; verify.sh asserts the substituted values still match.
+# Most rules query Prometheus; wifi-sta-table-stale queries Loki, because the
+# fault it watches has no metric.
 $SSH "root@$HOST" '
   set -e
-  uid=$(python3 -c "
-import sqlite3
+  dsuid() { python3 -c "
+import sqlite3, sys
 c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
 r=c.execute(\"select uid from data_source where type=:t and name=:n\",
-            {\"t\":\"prometheus\",\"n\":\"Prometheus\"}).fetchone()
-print(r[0] if r else \"\")")
-  if [ -z "$uid" ]; then
-    echo "!! no provisioned Prometheus datasource yet - alert rules will not load."
+            {\"t\":sys.argv[1],\"n\":sys.argv[2]}).fetchone()
+print(r[0] if r else \"\")" "$1" "$2"; }
+  uid=$(dsuid prometheus Prometheus)
+  loki_uid=$(dsuid loki Loki)
+  if [ -z "$uid" ] || [ -z "$loki_uid" ]; then
+    echo "!! no provisioned Prometheus/Loki datasource yet - alert rules will not load."
     echo "   This is expected on a first install: deploy once more once Grafana"
     echo "   has created it."
   else
     for f in /etc/grafana/provisioning/alerting/*.yaml; do
-      sed -i "s|@@PROM_DS_UID@@|$uid|g" "$f"
+      sed -i -e "s|@@PROM_DS_UID@@|$uid|g" -e "s|@@LOKI_DS_UID@@|$loki_uid|g" "$f"
     done
-    echo "   alert rules bound to Prometheus datasource $uid"
+    echo "   alert rules bound to Prometheus datasource $uid, Loki $loki_uid"
   fi
   usermod -aG tlscert grafana
   chmod +x /etc/homelab-tls/post-renew.d/20-grafana
