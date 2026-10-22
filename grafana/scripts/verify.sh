@@ -81,16 +81,64 @@ import sqlite3
 c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
 print(*[r[0] for r in c.execute(\"select uid from alert_rule\")], sep=\" \")"' 2>/dev/null)
 fi
-for uid in dns-component-down dnsdist-delphi-down vpn-sync-failing vpn-shunt-empty \
-           rpz-feed-stale host-down disk-low systemd-unit-failed heartbeat \
-           outside-probe-failing outside-vantage-down outside-cert-expiring \
-           internet-unreachable tunnel-down dns-resolution-failing lab-tls-failing lab-cert-expiring \
-           ha-vm-down ha-vm-agent-down ha-vm-disk-low ha-vm-memory-low ha-vm-metrics-stale \
-           ont-not-operational ont-rx-power-low ont-hot ont-unreachable router-metrics-stale \
-           ipv6-prefix-missing wifi-sta-table-stale; do
-  if [[ "$rules" == *"$uid"* ]]; then pass "alert rule '$uid' provisioned"
+# Normalise either source to one uid per line: the API answers JSON, the
+# database fallback a space-separated list. The match below is then exact, which
+# matters - a substring match passes 'disk-low' on 'ha-vm-disk-low' alone, and
+# 'memory-low' on 'ha-vm-memory-low'.
+if [[ "$rules" == *'"uid"'* ]]; then
+  rule_uids=$(grep -oE '"uid"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]+"' <<<"$rules" \
+              | sed 's/.*"\([A-Za-z0-9_-]*\)"$/\1/')
+else
+  rule_uids=$(tr ' ' '\n' <<<"$rules" | sed '/^$/d')
+fi
+
+# One group per line, in the order of the files in
+# root/etc/grafana/provisioning/alerting/. A rule missing from this list is not
+# checked at all, which is how four of them went unasserted until October 2026
+# - the coverage check below now keeps the list honest.
+RULE_UIDS=(
+  # homelab.yaml, group dns
+  alerting-evaluation-failing dns-component-down dnsdist-delphi-down
+  dnsdist-dropping-clients dnsdist-vpn-resolver-down recursor-servfail-high
+  rpz-feed-failing rpz-feed-stale vpn-shunt-empty vpn-shunt-pool-empty
+  vpn-sync-failing vpn-sync-stale
+  # homelab.yaml, group fleet
+  disk-low host-down mailcow-container-down memory-low service-target-down
+  systemd-unit-failed textfile-collector-error
+  # heartbeat.yaml
+  heartbeat
+  # homeassistant-vm.yaml
+  ha-vm-agent-down ha-vm-disk-low ha-vm-down ha-vm-memory-low ha-vm-metrics-stale
+  # outside.yaml
+  outside-cert-expiring outside-probe-failing outside-vantage-down
+  # probes.yaml
+  dns-resolution-failing internet-unreachable lab-cert-expiring lab-tls-failing
+  tunnel-down
+  # router.yaml
+  ipv6-prefix-missing ont-hot ont-not-operational ont-rx-power-low
+  ont-unreachable router-metrics-stale wifi-sta-table-stale
+)
+for uid in ${RULE_UIDS[@]+"${RULE_UIDS[@]}"}; do
+  if grep -qxF "$uid" <<<"$rule_uids"; then pass "alert rule '$uid' provisioned"
   else bad "alert rule '$uid' provisioned" "not loaded - journalctl -u grafana-server | grep -i provisioning"; fi
 done
+
+# RULE_UIDS is hand-maintained, so assert it covers every rule in the
+# provisioned files - otherwise adding a rule and forgetting the list leaves it
+# unchecked and a later provisioning error silently drops it. notifications.yaml
+# is excluded: its uids are contact points, not rules.
+infiles=$(ssh -o BatchMode=yes root@$HOST '
+  for f in /etc/grafana/provisioning/alerting/*.yaml; do
+    [ "${f##*/}" = notifications.yaml ] && continue
+    sed -n "s/^      - uid: *//p" "$f"
+  done | sort -u' 2>/dev/null)
+uncovered=$(comm -23 <(echo "$infiles") <(printf '%s\n' "${RULE_UIDS[@]}" | sort -u))
+if [[ -z "$uncovered" ]]; then
+  pass "RULE_UIDS covers every rule in the provisioned files (${#RULE_UIDS[@]} rules)"
+else
+  bad "RULE_UIDS covers every rule in the provisioned files" \
+      "not listed: $(tr '\n' ' ' <<<"$uncovered")- add them to RULE_UIDS in verify.sh"
+fi
 
 # The rules carry the datasource uid, substituted at push time. If Grafana ever
 # regenerates a datasource the rules would still name the old one and would

@@ -102,7 +102,7 @@ Grafana does the alerting in this lab — Prometheus has `rule_files` commented
 out and no Alertmanager running — so the rules are Grafana unified-alerting
 rules, provisioned from
 `root/etc/grafana/provisioning/alerting/homelab.yaml` into the same `Homelab`
-folder and read-only in the UI. Eighteen rules in two groups, `dns` and
+folder and read-only in the UI. Nineteen rules in two groups, `dns` and
 `fleet`, plus the heartbeat in `heartbeat.yaml` (see "Heartbeat" below) and
 the `outside` group in `outside.yaml`, which alerts on ruby and jennie probing
 each other's public side (`outside/CLAUDE.md`), and the `probes` group in
@@ -115,6 +115,16 @@ VM's host metrics, collected by lenora over the guest agent
 are already in `probes`. Its ONT alerts travel over the line they report on, so
 a dead line reaches the phone only afterwards – the heartbeat is what reports
 it live.
+
+Forty rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
+from the list is not asserted, so a provisioning error would drop it silently.
+`verify.sh` cross-checks the list against the uids in the provisioned files, so
+forgetting now fails the run rather than going unnoticed — four rules
+(`textfile-collector-error`, `alerting-evaluation-failing`,
+`recursor-servfail-high`, `rpz-feed-failing`) and seven others had gone
+unasserted that way until October 2026. It also matches uids exactly; the older
+substring match passed `disk-low` on `ha-vm-disk-low` alone.
 
 7. **Alert rules carry the datasource uid, substituted at deploy time.** A rule
    needs `datasourceUid`, and the provisioned datasources have no pinned uid —
