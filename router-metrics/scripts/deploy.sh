@@ -33,12 +33,18 @@ ONT_PUB=$($SSH "root@$ROUTER" '
   [ -f $k ] || dropbearkey -t ed25519 -f $k >/dev/null
   grep -qxF $k /etc/sysupgrade.conf || echo $k >> /etc/sysupgrade.conf
   dropbearkey -y -f $k | grep ^ssh- | cut -d" " -f1,2')
+# Written *through* the symlink, not over it. /etc/dropbear is a link to
+# /ptconf/8311/dropbear, and authorized_keys inside it is itself a link to
+# /ptconf/8311/.ssh/authorized_keys. `mv` onto that path replaces the link with
+# a regular file, which works until the stick reboots: _8311-sysinit.sh runs
+# `ln -fs` on every boot, restores the link, and the key silently goes with the
+# file it discards. So truncate and rewrite the target instead.
 $SSH -J "root@$ROUTER" "root@$ONT" "
   set -e
   f=/etc/dropbear/authorized_keys
   grep -v ' router-metrics@router\$' \$f > \$f.tmp || true
   echo 'command=\"$ONT_CMD\",$RESTRICT $ONT_PUB router-metrics@router' >> \$f.tmp
-  chmod 600 \$f.tmp && mv -f \$f.tmp \$f"
+  cat \$f.tmp > \$f && chmod 600 \$f && rm -f \$f.tmp"
 echo "   authorised on the ONT, forced to the pon readings"
 
 echo "== lenora -> router key"

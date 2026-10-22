@@ -30,7 +30,8 @@ lenora --ssh, key forced to router-metrics--> router --dbclient, key forced to p
 2. **The router's key** (`/etc/dropbear/ont_metrics_key`, comment
    `router-metrics@router`) is authorised on the ONT with a forced command
    that prints the `pon` readings, one line per command. The ONT's
-   `/etc/dropbear` is a link into `/ptconf`, which survives its reboots.
+   `/etc/dropbear` is a link into `/ptconf`, which survives its reboots — but
+   see invariant 6 for the part of that which is not true of the file.
 
 `deploy.sh` creates both keys once and replaces their `authorized_keys` lines
 by comment, so it is safe to rerun – and it is what to run after a router
@@ -66,3 +67,17 @@ JSON in busybox ash is where scripts like this rot.
 
 5. **The ONT counters are since the stick booted**, not since the link came
    up, and reset with it. Use `increase()`; the absolute values say little.
+
+6. **The ONT's `authorized_keys` must be written through, never replaced.**
+   `/etc/dropbear` is a link to `/ptconf/8311/dropbear`, and `authorized_keys`
+   inside it is a second link, to `/ptconf/8311/.ssh/authorized_keys`. A `mv`
+   onto that path replaces the link with a regular file — which collects fine
+   until the stick next reboots, because `_8311-sysinit.sh` runs `ln -fs` on
+   every boot and the key goes with the file it discards. The stick reboots
+   whenever the router does, the SFP cage being powered by it, so the two
+   always fail together and the loss looks like the reboot's fault. `deploy.sh`
+   truncates and rewrites the target; keep it that way. This cost an outage
+   post-mortem on 22 October 2026: the key was deployed on 16 October, survived
+   five days because nothing rebooted the stick, and vanished on the first
+   reboot that happened — leaving `homelab_ont_up` at 0 and the "ONT not
+   answering" alert firing, with the PON itself entirely healthy.
