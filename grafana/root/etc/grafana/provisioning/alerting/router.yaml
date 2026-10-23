@@ -373,3 +373,175 @@ groups:
                   evaluator:
                     type: gt
                     params: [5]
+      # The rule that would have caught 23 October 2026, when the WAN kept its
+      # address, its route and PLOAM 51 while receiving nothing for 75 minutes.
+      # Every other signal looked healthy, which is why this one thresholds
+      # arriving bytes instead: a live WAN always receives something, so zero
+      # over five minutes is wrong whatever the cause. router/ORANGE.md,
+      # "A dead session behind a live interface".
+      - uid: wan-receiving-nothing
+        title: "WAN receiving nothing"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nothing has arrived on the WAN for five minutes, though the interface is up"
+          description: >-
+            The router still holds its lease, its default route and an operational PON, and is transmitting - but nothing is coming back. This is the one-way dead session that follows a PON re-registration: netifd sees no ifdown, because eth1.832 never loses carrier, so udhcpc never rebinds and the lease stays valid for days. wan-watchdog should already have forced an ifup; if this is still firing, check `logread | grep wan-watchdog` on the router and run `ifup wan` by hand. This alert travels over the line it reports on, so it reaches the phone only once the line is back - the Healthchecks.io heartbeat is what reports it live.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'increase(homelab_router_wan_bytes_total{direction="rx"}[5m])'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      # A LODS recovers on its own in under a minute and leaves PLOAM back at
+      # 51, so 'ONT not operational' (for: 2m) never sees it. It is still worth
+      # knowing about, because one of these is what killed the session on
+      # 23 October 2026 - it is the warning that the line flapped, not that it
+      # is down. The uptime term suppresses the one every reboot causes: the
+      # stick is powered by the router's SFP cage, so it resyncs whenever the
+      # router restarts, and its counters reset with it
+      # (router-metrics/CLAUDE.md invariant 5).
+      - uid: ont-downstream-sync-lost
+        title: "ONT lost downstream sync"
+        condition: B
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The ONT logged a loss of downstream sync - the PON flapped"
+          description: >-
+            The stick lost downstream synchronisation and re-ranged. It normally returns to PLOAM 51 within a minute, so the line looks fine again by the time you read this - but the Orange session may not have survived it. Check that the WAN is still receiving ('WAN receiving nothing' is the rule for that) and look at Rx power on the Router and ONT dashboard: a marginal upstream loops this way, assigning an ONU-ID and never ranging. router/ORANGE.md, 'Diagnosing the PON'.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'increase(homelab_ont_lods_events_total[15m]) * (homelab_router_uptime_seconds > bool 900)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      # The second rule here on a log line rather than a metric, for the same
+      # reason as wifi-sta-table-stale: the router cannot run node-exporter, so
+      # a script on it has no textfile collector to publish to. Without this,
+      # a watchdog that fixes the fault in two minutes fixes it silently and
+      # nobody learns the line flapped. See wan-watchdog/CLAUDE.md.
+      - uid: wan-watchdog-acting
+        title: "WAN watchdog forced a restart"
+        condition: B
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "wan-watchdog found the WAN dead and forced a fresh DHCP exchange"
+          description: >-
+            The watchdog on the router probed out of the WAN device, got nothing for three consecutive sweeps while netifd still reported the interface up, and ran `ifup wan wan6`. If connectivity came back, this is the dead-session failure being repaired automatically - note it and look for a LODS at the same time. If it keeps firing, the ifup is not fixing it: the backoff doubles to 30 minutes, so repeated firings mean a genuinely broken line rather than a stale session. `logread | grep wan-watchdog` on the router has the sequence.
+        noDataState: OK
+        execErrState: OK
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: "@@LOKI_DS_UID@@"
+            model:
+              datasource:
+                type: loki
+                uid: "@@LOKI_DS_UID@@"
+              editorMode: code
+              expr: 'sum(count_over_time({host="router", identifier="wan-watchdog"} |= "forcing" [30m]))'
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]

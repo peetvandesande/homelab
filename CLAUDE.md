@@ -50,6 +50,12 @@ than fought.
   added NIC and keeps a removed one until it restarts; and the guest keeps the
   NetworkManager profile after the NIC goes, which is what lets a restored NIC
   come straight back up.
+- **A watchdog keeps the WAN honest.** A PON re-registration can leave the
+  Orange session dead one way while the router still holds a valid lease and
+  reports the interface up – it cost 88 minutes on 23 October 2026. Nothing in
+  the router's own view says so, because the SFP port never loses carrier, so
+  `wan-watchdog/` probes out of the WAN device and runs `ifup` when it is up
+  but dead. `router/ORANGE.md`, "A dead session behind a live interface".
 - **`router/` documents it; it holds no config.** The device's settings live in
   `uci`, written by the GL.iNet web UI, so a mirror here would be a second
   source of truth that always loses. What `router/` records is the part

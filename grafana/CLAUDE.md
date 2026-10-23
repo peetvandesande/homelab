@@ -110,13 +110,13 @@ each other's public side (`outside/CLAUDE.md`), and the `probes` group in
 end, and lab certificates. `homeassistant-vm.yaml` covers the Home Assistant
 VM's host metrics, collected by lenora over the guest agent
 (`homeassistant/CLAUDE.md`, "VM metrics"). `router.yaml` covers the ONT
-(PLOAM state, receive power, temperature), the IPv6 prefix, whether
-`router-metrics/` is collecting at all, and the Wi-Fi station table; tunnels
-are already in `probes`. Its ONT alerts travel over the line they report on, so
+(PLOAM state, receive power, temperature, loss of downstream sync), the WAN
+itself, the IPv6 prefix, whether `router-metrics/` is collecting at all, and
+the Wi-Fi station table; tunnels are already in `probes`. Its ONT alerts travel over the line they report on, so
 a dead line reaches the phone only afterwards – the heartbeat is what reports
 it live.
 
-Forty rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+Forty-three rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so
@@ -161,8 +161,14 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
    ignore all of them. Fix the exporter or delete the job; do not "fix" it by
    widening the rule.
 
-11. **`wifi-sta-table-stale` is the one rule that queries Loki, because the
-    fault it watches has no metric.** The mt7990 driver leaks station entries on
+11. **Two rules query Loki rather than a metric, because the router cannot
+    publish one.** It has no node-exporter and so no textfile collector, so a
+    fault or a script that lives only on the router has nothing to export to
+    and its log line is the only evidence. `wan-watchdog-acting` is the second
+    (`wan-watchdog/CLAUDE.md`); the first is this one.
+
+    **`wifi-sta-table-stale` queries Loki because the fault it watches has no
+    metric at all.** The mt7990 driver leaks station entries on
     an MLO teardown: `hostapd` keeps listing a client the driver cannot find, so
     the link is half-registered and may carry no traffic while still looking
     associated. Nothing counts that — the only evidence is the driver's `sta not

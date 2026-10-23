@@ -137,6 +137,71 @@ one-click cleaner or 99%+ IPA and lint-free wipes, not 70% IPA and cotton.
 It was not thermal, not a DHCP or BNG lockout (nothing matters below O5), and
 not the stick's management dying.
 
+## A dead session behind a live interface
+
+**The worst WAN failure here is the one where everything reports healthy.** A
+PON re-registration can leave the Orange session dead one way while netifd
+still holds a valid lease, and nothing in the router's own view says so.
+
+This happened on **23 October 2026**, 15:46 to 17:15 – 88 minutes, ended by a
+reboot. What the lab recorded:
+
+| Signal | During the outage |
+|---|---|
+| `homelab_ont_lods_events_total` | 3 → 4 at ~15:47 – one loss of downstream sync |
+| PLOAM state | 51 → 11 → 51, back inside a minute; `ploam_state_seconds` reset |
+| Rx power | −19.3 dBm throughout, unchanged |
+| `wan` ifstatus | `up: true`, address and default route still installed |
+| `homelab_router_ipv6_prefix_delegated` | 1 – the /56 was still configured |
+| **WAN RX bytes** | **exactly 0 for 75 minutes** |
+| WAN TX bytes | 450–550 B/s, the router's own retries |
+| `udhcpc` | **not one line between 13:53 and 17:13** |
+
+The ONT recovered on its own and the line was fine from 15:48. The *session*
+was not, and the router never found out.
+
+**Why it cannot notice.** `eth1.832` never loses carrier – the YT92xx forces
+the 10G path on the SFP port whatever the PON is doing, which is the same fact
+that makes "`link:up 10gbase` proves nothing" true above. No carrier loss means
+no `ifdown`, which means udhcpc is never prodded into rebinding, and the lease
+had 2.5 days left to run. So the router sat on an address the BNG had stopped
+honouring and routed into a black hole.
+
+**Only a fresh DHCP exchange recovers it.** After the reboot:
+
+```
+17:13:55 udhcpc: broadcasting discover
+17:14:23 udhcpc: lease of 92.150.126.102 obtained from 80.15.225.105, lease time 259200
+```
+
+The *same* address, 28 seconds after asking. Swapping the Livebox in first
+proved nothing about the Livebox: plugging in any device forces that exchange.
+A reboot of this router does the same, and so does `ifup wan`, far more cheaply.
+
+**GL's own tracker knew.** `kmwan` pings 1.1.1.1, 8.8.8.8 and both OpenDNS
+addresses with `track_mode=force`, and logged `interface wan offline` at
+**15:45:13** – two minutes before the ONT logged the LODS that caused it. On a
+single-WAN box it has nothing to fail over to, so it logged the line, cycled
+the Wi-Fi and the WireGuard tunnels every two minutes for an hour and a half,
+and never touched the WAN. That event is now the early trigger for
+`wan-watchdog/`, which probes out of the WAN device and runs `ifup` – see that
+directory. It would have ended this in about three minutes.
+
+**If you are in it,** the one-line fix is `ifup wan; ifup wan6` on the router.
+To confirm the diagnosis rather than guess, these are the three readings that
+separate it from a line that is genuinely down:
+
+```sh
+ifstatus wan | jsonfilter -e '@.up' -e '@["ipv4-address"][0].address'  # up, with an address
+ssh -J root@192.168.8.1 root@192.168.11.1 pon psg                      # ploam state 51
+logread | grep udhcpc | tail                                           # silent = never rebound
+```
+
+A live WAN with zero RX bytes is the signature, and `wan-receiving-nothing` in
+`grafana/` alerts on exactly that. `ont-downstream-sync-lost` catches the LODS
+that precedes it, which the `for: 2m` on "ONT not operational" is too slow to
+see.
+
 ## Tooling traps on this hardware
 
 - **Verify sent options on the wire** with `tcpdump -XX`, not by reading `uci`.

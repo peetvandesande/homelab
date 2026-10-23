@@ -1,0 +1,114 @@
+#!/bin/sh
+# wan-watchdog - force a fresh DHCP exchange when the WAN is up but dead.
+#
+# The failure this exists for: a PON re-registration leaves the Orange session
+# dead one way while netifd still holds a perfectly valid lease. eth1.832 never
+# loses carrier - the YT92xx forces the 10G SFP path - so there is no ifdown,
+# udhcpc never rebinds, and the router routes into a black hole on a lease with
+# days left to run. Only a fresh DHCP exchange recovers it. See
+# homelab/router/ORANGE.md, "A dead session behind a live interface".
+#
+# Read-only until it decides to act, and the only thing it ever does is run
+# `ifup`. State lives in /tmp: a reboot starts it clean, which is right,
+# because a reboot is itself the fix.
+set -u
+
+TARGETS="1.1.1.1 8.8.8.8"   # kmwan's own first two trackers, and the blackbox
+                            # exporter's - see wan-watchdog/CLAUDE.md
+IFACES="wan wan6"           # both sit on eth1.832; v6 does not recover on its own
+FAIL_THRESHOLD=3            # consecutive dead sweeps before acting - minutes, on the 1-minute cron
+BACKOFF_FIRST=120           # seconds to wait after acting before probing counts again
+BACKOFF_MAX=1800            # cap, so a genuinely cut line is not ifup'd every minute for hours
+PING_WAIT=2
+
+STATE=/tmp/wan-watchdog.state
+LOCK=/tmp/wan-watchdog.lock
+
+log()  { logger -t wan-watchdog -p daemon.notice "$1"; }
+warn() { logger -t wan-watchdog -p daemon.warn   "$1"; }
+
+# One run at a time. The cron tick and the kmwan hotplug hook both call this,
+# and an `ifup` takes long enough for them to overlap. flock exits non-zero
+# without running anything if the lock is held, which is the behaviour we want:
+# the other run is already doing this sweep.
+if [ "${WAN_WATCHDOG_LOCKED:-}" != 1 ]; then
+  export WAN_WATCHDOG_LOCKED=1
+  exec flock -n "$LOCK" "$0" "$@"
+fi
+
+# Three integers, one per line: failed sweeps, when we last acted, how long to
+# wait before acting again. Parsed rather than sourced - it is a file in a
+# world-writable directory, and sourcing it would be an execution path.
+fails=0; last_action=0; backoff=$BACKOFF_FIRST
+if [ -r "$STATE" ]; then
+  _f=$(sed -n 1p "$STATE"); _l=$(sed -n 2p "$STATE"); _b=$(sed -n 3p "$STATE")
+  case "${_f}.${_l}.${_b}" in
+    *[!0-9.]*|*..*|.*|*.) ;;                              # malformed - keep the defaults
+    *) fails=$_f; last_action=$_l; backoff=$_b ;;
+  esac
+fi
+save() { printf '%s\n%s\n%s\n' "$fails" "$last_action" "$backoff" > "$STATE"; }
+
+# netifd's own view. If it already knows the interface is down it is retrying,
+# and an ifup from here would only fight it; the failure this watchdog exists
+# for reports itself as up.
+if [ "$(ifstatus wan 2>/dev/null | jsonfilter -q -e '@.up')" != true ]; then
+  if [ "$fails" -ne 0 ]; then fails=0; save; fi
+  exit 0
+fi
+
+dev=$(ifstatus wan 2>/dev/null | jsonfilter -q -e '@.l3_device')
+if [ -z "$dev" ]; then
+  warn "wan is up but has no l3_device - not probing"
+  exit 0
+fi
+
+# Bound to the WAN device, so this tests the WAN path itself and not whatever
+# the VPN policy routing would have chosen for these addresses. A bad device
+# name fails the same way an unreachable target does, which is why the check
+# above matters.
+probe() {
+  for t in $TARGETS; do
+    ping -c 1 -W "$PING_WAIT" -I "$dev" "$t" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+now=$(date +%s)
+
+if probe; then
+  # Only say anything if this is a recovery - a healthy sweep is silent, and
+  # leaves no state file behind.
+  if [ "$fails" -ne 0 ] || [ "$backoff" -ne "$BACKOFF_FIRST" ]; then
+    log "wan reachable again via $dev after $fails dead sweep(s)"
+    rm -f "$STATE"
+  fi
+  exit 0
+fi
+
+fails=$((fails + 1))
+if [ "$fails" -lt "$FAIL_THRESHOLD" ]; then
+  save
+  log "wan unreachable via $dev ($TARGETS), sweep $fails/$FAIL_THRESHOLD"
+  exit 0
+fi
+
+# Acted recently - let the backoff run out before trying again, so a line that
+# is really down gets an ifup every BACKOFF_MAX at worst rather than every
+# minute. The counter is left where it is; the next sweep re-tests.
+if [ "$last_action" -ne 0 ] && [ $((now - last_action)) -lt "$backoff" ]; then
+  save
+  exit 0
+fi
+
+warn "forcing ifup $IFACES: $TARGETS unreachable via $dev for $fails sweeps while wan is up"
+for i in $IFACES; do
+  ifup "$i" || warn "ifup $i failed"
+done
+
+last_action=$now
+fails=0
+backoff=$((backoff * 2))
+[ "$backoff" -gt "$BACKOFF_MAX" ] && backoff=$BACKOFF_MAX
+save
+exit 0

@@ -1,0 +1,23 @@
+#!/bin/sh
+# kmwan declares the WAN offline well before anything else notices - on
+# 23 October 2026 it did so at 15:45:13, two minutes before the ONT logged the
+# LODS that caused it. On a single-WAN box it then has nothing to fail over to,
+# so the event is the only thing it produces. Turn it into a probe.
+#
+# This only wakes the watchdog early; it does not authorise anything. The
+# watchdog applies its own threshold and backoff, so a flapping tracker cannot
+# force an ifup on its own, and the sweep this triggers is just one of the
+# three it needs.
+[ "$STATUS" = offline ] || exit 0
+
+case "$INTERFACE" in
+  wan|wan6) ;;
+  *) exit 0 ;;
+esac
+
+[ -x /usr/local/bin/wan-watchdog ] || exit 0
+
+# Backgrounded: hotplug runs these serially and the probe can take 4 seconds.
+/usr/local/bin/wan-watchdog &
+
+exit 0

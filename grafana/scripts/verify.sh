@@ -115,8 +115,9 @@ RULE_UIDS=(
   dns-resolution-failing internet-unreachable lab-cert-expiring lab-tls-failing
   tunnel-down
   # router.yaml
-  ipv6-prefix-missing ont-hot ont-not-operational ont-rx-power-low
-  ont-unreachable router-metrics-stale wifi-sta-table-stale
+  ipv6-prefix-missing ont-downstream-sync-lost ont-hot ont-not-operational
+  ont-rx-power-low ont-unreachable router-metrics-stale wan-receiving-nothing
+  wan-watchdog-acting wifi-sta-table-stale
 )
 for uid in ${RULE_UIDS[@]+"${RULE_UIDS[@]}"}; do
   if grep -qxF "$uid" <<<"$rule_uids"; then pass "alert rule '$uid' provisioned"
