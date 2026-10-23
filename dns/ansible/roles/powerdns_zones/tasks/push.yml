@@ -75,7 +75,23 @@
 # Cheap, and the only thing that proves the server parsed what we just sent -
 # a zone that fails to load otherwise just stops answering. Only the zones
 # that exist: a declared lab zone the lab has not created yet is not an error.
+#
+# One error is tolerated, and only this one: the bind backend reports the NS
+# records of a referral as auth=0, and says to run rectify-zone, which cannot
+# clear it - the flag is recomputed from the zone file on every parse, and for
+# an unsigned zone it is correct that a delegation is not authoritative.
+# PowerDNS/pdns#8184. home. delegates openstack.home to this same server, so
+# the alternative is no delegation at all, and then check-zone fails on the
+# child instead ("No delegation for zone 'openstack.home' in parent 'home'").
+# Every other error still fails the play.
 - name: Check every zone the server now holds
-  ansible.builtin.command: "pdnsutil check-zone {{ item }}"
+  ansible.builtin.shell: |
+    set -u
+    out=$(pdnsutil check-zone {{ item | quote }} 2>&1) || true
+    printf '%s\n' "$out"
+    if printf '%s\n' "$out" | grep '^\[Error\]' |
+         grep -qv 'auth=0, run pdnsutil rectify-zone?: .* IN NS '; then
+      exit 1
+    fi
   loop: "{{ (bind_zones | map(attribute='name') | list) + (api_zones_present | default([])) }}"
   changed_when: false

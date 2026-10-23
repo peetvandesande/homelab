@@ -9,7 +9,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026102106  ; serial
+                2026102301  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -45,3 +45,6 @@ lexie       IN  A   192.168.8.24
 dns         IN  CNAME themis.home.
 ca          IN  CNAME pistis.home.
 pve         IN  CNAME lenora.home.
+
+; --- delegations ----------------------------------------------------
+openstack   IN  NS  pythia.home.     ; openstack.home - the Proxmox lab, api backend

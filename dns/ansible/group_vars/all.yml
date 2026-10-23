@@ -86,6 +86,18 @@ zones:
           - { name: dns, type: CNAME, data: themis.home. }
           - { name: ca,  type: CNAME, data: pistis.home. }
           - { name: pve, type: CNAME, data: lenora.home. }
+      # The lab zones below are children of home., served by this same server
+      # out of the gsqlite3 backend. The delegation is what makes that a real
+      # cut in the tree: without it `pdnsutil check-zone openstack.home` errors
+      # with "No delegation for zone 'openstack.home' in parent 'home'", and
+      # that check is the playbook's only proof the server parsed what it was
+      # just sent. The NS matches the child's own (soa.primary), and the glue
+      # is in-zone, so nothing else is needed. Resolution does not depend on
+      # it - Delphi forwards openstack.home straight here - which is why it
+      # was missing and nothing broke.
+      - title: delegations
+        records:
+          - { name: openstack, type: NS, data: pythia.home., comment: 'openstack.home - the Proxmox lab, api backend' }
 
   # ----------------------------------------------------------- reverse -----
   # One entry per /24. `prefix` is what selects the A records that become PTRs,

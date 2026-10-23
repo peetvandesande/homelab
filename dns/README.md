@@ -271,8 +271,14 @@ These zones live in a second backend on Pythia, **gsqlite3**
 a lab is built or removed, and the bind backend can't be written through the
 API — PowerDNS implements no zone creation or record writes against it, which
 is the only reason the second backend exists. Pythia answers from whichever
-backend has the most specific zone, so `openstack.home` works inside `home.`
-without a delegation.
+backend has the most specific zone, so `openstack.home` resolves inside `home.`
+whether or not the parent delegates it - it had no delegation at all until
+23 October 2026, and nothing but `pdnsutil check-zone` minded. `home.` now
+carries `openstack IN NS pythia.home.`, which is a real cut in the tree and
+what that check wants to see. The cost is a second, cosmetic complaint from the
+same check: the bind backend reports a referral's NS as `auth=0` and no
+`rectify-zone` clears it (PowerDNS/pdns#8184), so `ansible/` tolerates that one
+error and nothing else.
 
 `ansible/` declares the zones themselves (`backend: api` in
 `group_vars/all.yml`) so the skeleton is guaranteed to exist with the right SOA

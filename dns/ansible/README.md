@@ -83,7 +83,12 @@ step with each other for free.
   accidentally overrides `peetvandesande.com` and shadows the whole domain, and
   refuses two zones sharing a name.
 - **Every zone is parsed by the server afterwards**, with `pdnsutil check-zone`
-  — a zone that fails to load otherwise just quietly stops answering.
+  — a zone that fails to load otherwise just quietly stops answering. Exactly
+  one error is tolerated: the bind backend reports the NS of a referral as
+  `auth=0` and tells you to run `rectify-zone`, which cannot clear it
+  (PowerDNS/pdns#8184). That is `home.`'s delegation of `openstack.home`, which
+  this same server also serves from gsqlite3; without the delegation the check
+  fails on the child instead. Any other error still fails the play.
 
 ## Adding a name
 

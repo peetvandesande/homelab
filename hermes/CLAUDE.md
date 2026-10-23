@@ -55,12 +55,18 @@ generated on the VM and stays there.
 
 2. **Going out via ruby is a per-domain exception.** Add a mailcow transport
    map (Configuration → Routing → Transport maps): destination domain, next
-   hop ruby's submission port on `192.168.254.254`, with credentials. Transport
-   maps are consulted before `default_transport`, so that domain, and nothing
-   else, goes out. `192.168.254.254` is reachable from the LAN through the
-   Main VPN policy (`router/README.md`). Do not set a mailcow relayhost
-   instead: that applies per *sender* domain, and a lab's whole domain would
-   start leaving.
+   hop ruby's submission port on `192.168.204.254` — ruby's **wg0** address, or
+   `mail.peetvandesande.com`, which the lab's DNS resolves to it — with
+   credentials. Transport maps are consulted before `default_transport`, so
+   that domain, and nothing else, goes out. Not ruby's dummy0 address
+   `192.168.254.254`, which this said until 23 October 2026: Postfix there
+   binds 587/465 on the wg0 addresses alone, so dummy0 refuses the connection.
+   Checked from inside the postfix container that day: `192.168.204.254:587`
+   connects and its certificate validates, over the Main VPN policy
+   (`router/README.md`). No transport map is configured today, so nothing was
+   broken by the wrong address — it would have been on first use. Do not set a
+   mailcow relayhost instead: that applies per *sender* domain, and a lab's
+   whole domain would start leaving.
 
 3. **mynetworks is the only authorisation the labs need, and it is narrow.**
    `192.168.32.0/21` plus `192.168.8.21/32`, because an SDN zone that SNATs
