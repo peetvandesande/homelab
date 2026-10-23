@@ -133,19 +133,22 @@ the rest came out of putting the stack behind the lab CA.
    whichever host serves the files — today pistis, 192.168.8.55.
 
    `mail.peetvandesande.com` is the same mechanism for a different reason:
-   ruby serves IMAP only on its WireGuard address, so the public answer
-   (145.239.73.18) times out from the LAN while ruby's dummy0 answers. It
-   carries both of dummy0's addresses, `192.168.254.254` and
-   `fd33:5692:1834:254::254`. **Every address here must reach ruby over the
+   ruby serves mail only on its WireGuard addresses, so the public answer
+   (145.239.73.18) times out from the LAN. It carries ruby's **wg0** addresses,
+   `192.168.204.254` and `fd33:5692:1834:204::254`, not the dummy0 pair: ruby
+   binds submission (587/465) on wg0 alone, so a client pointed at dummy0 can
+   fetch mail and not send it. It answered dummy0 until 23 October 2026, and
+   that is exactly how it failed. **Every address here must reach ruby over the
    tunnel** — an AAAA that does not answer would be tried first by some
    clients and hang them, which is why there was none until 16 October 2026.
-   The router's 19000 rules (11 October) are what made the v6 one answer; the
-   A is reachable via `dst_net4399` as well. Nothing in `dns/` routes either.
+   Both wg0 addresses are in wgclient1's allowed IPs and answer 993, 4190, 587
+   and 465 from the LAN. Nothing in `dns/` routes either.
 
-   `ruby.peetvandesande.com` points at the same two addresses. Its nginx admits
-   the admin pages (postfixadmin, rspamd, webchat) only from home and VPN
-   ranges, and a LAN client that resolved the public name arrived over the
-   internet from Orange's IPv6 prefix and was refused.
+   `ruby.peetvandesande.com` stays on the dummy0 pair, `192.168.254.254` and
+   `fd33:5692:1834:254::254`, which nginx listens on. It admits the admin pages
+   (postfixadmin, rspamd, webchat) only from home and VPN ranges, and a LAN
+   client that resolved the public name arrived over the internet from Orange's
+   IPv6 prefix and was refused.
 
 6. **No PowerDNS component here can serve TLS on its own webserver, so nginx
    fronts all three.** The authoritative server and the recursor have no

@@ -412,17 +412,21 @@ internally an A record for pistis (192.168.8.55), because that is where the
 CA's CRL and AIA files live. See `homelab/ca`.
 
 `mail.peetvandesande.com` is the second one, and overridden for a different
-reason: ruby, the mail server, serves IMAP only on its WireGuard address.
-Internally the name is ruby's dummy0: A `192.168.254.254` and AAAA
-`fd33:5692:1834:254::254`, both routed into wgclient1 by the router's
-site-to-site rules — see `router/README.md`. The AAAA arrived on 16 October
-2026; before the router's 19000 rules, the v6 address did not answer from the
-LAN, and an AAAA that does not answer hangs any client that tries it first.
+reason: ruby, the mail server, serves mail only on its WireGuard addresses.
+Internally the name is ruby's wg0 pair: A `192.168.204.254` and AAAA
+`fd33:5692:1834:204::254`, both reached over wgclient1 — see `router/README.md`
+and `wireguard/README.md`. It named ruby's dummy0 addresses until 23 October
+2026, which worked for IMAP and not for sending: Postfix binds 587/465 on wg0
+only, so Mail on the LAN reported "unable to connect using SSL on the default
+ports". An AAAA that does not answer hangs any client that tries it first, so
+check a new one from the LAN before adding it.
 
-`ruby.peetvandesande.com` is the third, pointing at the same two addresses:
-ruby's nginx admits its admin pages only from home and VPN ranges, and a LAN
-client resolving the public name arrives over the internet from its ISP IPv6
-address.
+`ruby.peetvandesande.com` is the third, and stays on ruby's dummy0 addresses
+`192.168.254.254` and `fd33:5692:1834:254::254`: ruby's nginx admits its admin
+pages only from home and VPN ranges, and a LAN client resolving the public name
+arrives over the internet from its ISP IPv6 address. The AAAA arrived on
+16 October 2026; before the router's 19000 rules, the v6 address did not answer
+from the LAN.
 
 It takes **three** changes, and it is broken until all three are in place:
 

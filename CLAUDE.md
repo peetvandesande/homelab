@@ -186,12 +186,15 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   (192.168.8.55), because the CA's certificates name it. Split-horizon on a
   DNSSEC-signed domain needs three coordinated pieces — read `dns/CLAUDE.md`
   invariant 5 before touching it.
-- **`mail.peetvandesande.com` is overridden internally too**, to ruby's
-  WireGuard addresses 192.168.254.254 and `fd33:5692:1834:254::254`, because
-  ruby serves IMAP only there. Same three pieces, same invariant 5. An AAAA
-  here must answer over the tunnel or it hangs clients; check before changing it.
-  **`ruby.peetvandesande.com`** is overridden to the same addresses, so the LAN
-  reaches ruby's nginx admin pages over the tunnel, where they are allowed.
+- **`mail.peetvandesande.com` is overridden internally too**, to ruby's wg0
+  addresses 192.168.204.254 and `fd33:5692:1834:204::254`, because ruby serves
+  mail only over the tunnel — and submission (587/465) only on wg0, so the
+  dummy0 addresses this named until 23 October 2026 fetch mail and refuse to
+  send it. Same three pieces, same invariant 5. An AAAA here must answer over
+  the tunnel or it hangs clients; check before changing it.
+  **`ruby.peetvandesande.com`** is overridden to ruby's dummy0 addresses
+  192.168.254.254 and `fd33:5692:1834:254::254`, so the LAN reaches ruby's
+  nginx admin pages over the tunnel, where they are allowed.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.

@@ -7,8 +7,13 @@
 ; and is refused. Pointing it at ruby's tunnel addresses sends it over
 ; wgclient1 instead, from its 192.168.8.x or fd33:5692:1834:1000::/64 address.
 ;
-; Same addresses and routing as mail.peetvandesande.com, whose zone has the
-; detail and the date the IPv6 path was checked.
+; It stays on ruby's dummy0 addresses - nginx listens on all of them, and
+; unlike mail this name needs nothing that is bound to wg0 only. Both are
+; reachable from the LAN over wgclient1: 192.168.254.254 via dst_net4399 and
+; the router's 19000 rules, and fd33:5692:1834:254::254 via the 19000 rules
+; and table 1001's route6 entries - see router/README.md. The AAAA was left
+; out until 2026-10-16, because the v6 address did not answer from the LAN
+; before the 19000 rules went in on 2026-10-11.
 ;
 ; The zone is deliberately the SINGLE NAME, not peetvandesande.com, and needs a
 ; matching addNTA() on Delphi or every lookup here SERVFAILs.
@@ -22,7 +27,7 @@ $TTL 3600
 $ORIGIN ruby.peetvandesande.com.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026102105  ; serial
+                2026102301  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire

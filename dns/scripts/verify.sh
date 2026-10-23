@@ -34,10 +34,12 @@ check_eq "internal name never leaks"    "NXDOMAIN" "$(status nosuchhost.home A)"
 echo "== split-horizon override of a public name"
 check_eq "ca.peetvandesande.com answers with pistis, not the VPS" \
   "192.168.8.55" "$($DIG ca.peetvandesande.com A +short)"
-check_eq "mail.peetvandesande.com answers with ruby's tunnel address" \
-  "192.168.254.254" "$($DIG mail.peetvandesande.com A +short)"
-check_eq "mail.peetvandesande.com answers with ruby's tunnel ULA" \
-  "fd33:5692:1834:254::254" "$($DIG mail.peetvandesande.com AAAA +short)"
+# mail must name ruby's wg0 addresses, not dummy0: submission (587/465) is
+# bound on wg0 only, so a dummy0 answer fetches mail and cannot send it.
+check_eq "mail.peetvandesande.com answers with ruby's wg0 address" \
+  "192.168.204.254" "$($DIG mail.peetvandesande.com A +short)"
+check_eq "mail.peetvandesande.com answers with ruby's wg0 ULA" \
+  "fd33:5692:1834:204::254" "$($DIG mail.peetvandesande.com AAAA +short)"
 check_eq "ruby.peetvandesande.com answers with ruby's tunnel address" \
   "192.168.254.254" "$($DIG ruby.peetvandesande.com A +short)"
 check_eq "ruby.peetvandesande.com answers with ruby's tunnel ULA" \

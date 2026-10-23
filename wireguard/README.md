@@ -354,7 +354,7 @@ jennie's own lookups of lab names don't go through its BIND. wg3's `nameservers`
 
 ### Split horizon
 
-The `wireguard` view's `mail.peetvandesande.com` answers `192.168.204.254` and `fd33:5692:1834:204::254`, so VPN clients reach mail over either family, preferring IPv6. That's separate from the home LAN's override in `dns/`, which answers ruby's dummy0 addresses `192.168.254.254` and `fd33:5692:1834:254::254`, reached over wg1; `ruby.peetvandesande.com` gets the same override there.
+The `wireguard` view's `mail.peetvandesande.com` answers `192.168.204.254` and `fd33:5692:1834:204::254`, so VPN clients reach mail over either family, preferring IPv6. The home LAN's override in `dns/` answers the same two wg0 addresses, since 23 October 2026 — it named ruby's dummy0 addresses before that, and submission is not bound there, so LAN clients could fetch mail and not send it. `ruby.peetvandesande.com` is overridden there to dummy0 (`192.168.254.254`, `fd33:5692:1834:254::254`), which is all nginx needs.
 
 ### Reverse zones
 
