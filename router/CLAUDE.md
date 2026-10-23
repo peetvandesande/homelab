@@ -131,6 +131,61 @@ of them is obvious from the router's own UI.
     stay :443-only — the blackbox `internet` probe on .53 pings 1.1.1.1 and
     8.8.8.8, and an all-ports block would make it report the internet down.
 
+11. **Never run `apk upgrade` on this device.** `/etc/apk/repositories.d/
+    distfeeds.list` points at GL's **v25.12.5** feeds, while the installed
+    firmware is 4.11.0 / **25.12-SNAPSHOT r32295+914**. The feeds are not built
+    for the firmware, and the hostapd packages are the ones that matter: GL pins
+    `wpad-openssl`, `hostapd-common`, `hostapd-utils` and `wpa-cli` at
+    **2022.07.29~b704dc72-r1**, patched for the MediaTek `mt_wifi` vendor
+    driver. The feed carries plain upstream **2025.08.26~ca266cc2-r1** and
+    nothing MTK-shaped – `apk list "wpad*"` offers no vendor variant – so an
+    upgrade silently takes the lab's wireless apart.
+
+    It is not only the 2.3 MB binary being swapped for a 1.9 MB one. The
+    upgrade **deletes GL's whole hostapd integration**: all twenty
+    `/etc/wpad/template/hostapd_*.conf` band-and-encryption templates,
+    `/usr/bin/hostapd_conf_generate.sh`, `/lib/netifd/hostapd.sh` (50 KB of it),
+    and GL's `/etc/init.d/wpad`, which reads `/etc/config/wpad`. The generic
+    upstream init script replaces it.
+
+    **The damage only shows on the next reboot.** The running hostapd keeps
+    serving from configs already generated, so wifi looks fine for as long as
+    the box stays up – here, two days. After the reboot the radios still beacon,
+    because the driver does that, and SAE even reaches the driver, so "the wifi
+    is up" is not evidence. What fails is key derivation: `alg=3` commit and
+    confirm complete, then `wappd: ptk size <= 0` and `association error.
+    StatusCode: 15`, per client, forever.
+
+    To recover without reflashing, delete the overlay's copies so the squashfs
+    originals show through again – **in `/overlay/upper`, not through `/`**,
+    where `rm` would write a fresh whiteout instead:
+
+    ```sh
+    for p in etc/capabilities/wpad.json etc/init.d/wpad etc/rc.button/wps \
+             etc/wpad lib/netifd/dhcp-get-server.sh lib/netifd/hostapd.sh \
+             usr/bin/hostapd_conf_generate.sh usr/share/acl.d/wpad_acl.json \
+             usr/sbin/hostapd usr/sbin/hostapd-radius usr/sbin/hostapd_cli \
+             usr/sbin/wpa_cli usr/sbin/wpa_supplicant usr/sbin/wpad; do
+      rm -rf "/overlay/upper/$p"
+    done
+    sync; reboot
+    ```
+
+    Keep `/etc/config/wpad` – it is live config, and the overlay copy is the
+    real one. The reboot is not optional: overlayfs caches the negative
+    dentries. Afterwards `/usr/sbin/wpad` is 2292663 bytes again, and
+    `logread | grep -c "pairwise key handshake completed"` climbs.
+
+    `apk`'s database still claims 2025.08.26 is installed, which is harmless and
+    mildly protective – an `apk upgrade` now sees nothing to do – but `apk fix`
+    would undo the repair. Done on 23 October 2026; the removed files and the
+    pre-change `installed` database are on the device in
+    `/root/apk-upgrade-rollback-2026-10-23/`. The same upgrade also pulled
+    `curl`, `libcurl4`, `ubus`/`ubusd`, `libubus`, `libid3tag`, `netifyd` and a
+    full `luci` forward, all left in place and none of them implicated. A
+    firmware reflash with Keep Settings is the way to get back to one coherent
+    package set when that is worth a maintenance window.
+
 ## Backups
 
 The device keeps `/etc/config/<name>.bak-<date>-<reason>` files from previous
