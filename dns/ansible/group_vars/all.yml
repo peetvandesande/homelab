@@ -59,28 +59,36 @@ zones:
     sections:
       - title: infrastructure
         records:
-          - { name: gw,         data: 192.168.8.1 }
-          - { name: lenora,     data: 192.168.8.21, comment: 'Proxmox host' }
-          - { name: themis,     data: 192.168.8.50, comment: 'dnsdist - the LAN''s resolver' }
-          - { name: delphi,     data: 192.168.8.51, comment: 'recursor + filtering' }
-          - { name: pythia,     data: 192.168.8.52, comment: 'this server' }
-          - { name: prometheus, data: 192.168.8.53 }
-          - { name: grafana,    data: 192.168.8.54 }
-          - { name: pistis,     data: 192.168.8.55, comment: 'step-ca private CA' }
-          - { name: loki,       data: 192.168.8.56, comment: 'log store' }
-          - { name: hermes,     data: 192.168.8.57, comment: 'mailcow VM 109 - mail for the labs' }
-          - { name: moby,       data: 192.168.8.27, comment: 'Docker host - outside the .50-.59 range' }
+          - { name: gw,         data: 192.168.8.1,  data6: 'fd33:5692:1834:1000:0000:0000:0000:0001' }
+          - { name: lenora,     data: 192.168.8.21, data6: 'fd33:5692:1834:1000:0000:0000:0000:0021', comment: 'Proxmox host' }
+          - { name: themis,     data: 192.168.8.50, data6: 'fd33:5692:1834:1000:be24:11ff:feda:9b4b', comment: 'dnsdist - the LAN''s resolver' }
+          - { name: delphi,     data: 192.168.8.51, data6: 'fd33:5692:1834:1000:be24:11ff:fe7d:3b06', comment: 'recursor + filtering' }
+          - { name: pythia,     data: 192.168.8.52, data6: 'fd33:5692:1834:1000:be24:11ff:fe06:d987', comment: 'this server' }
+          - { name: prometheus, data: 192.168.8.53, data6: 'fd33:5692:1834:1000:be24:11ff:fe65:ad6b' }
+          - { name: grafana,    data: 192.168.8.54, data6: 'fd33:5692:1834:1000:be24:11ff:fe8f:a8c9' }
+          - { name: pistis,     data: 192.168.8.55, data6: 'fd33:5692:1834:1000:be24:11ff:fe04:f703', comment: 'step-ca private CA' }
+          - { name: loki,       data: 192.168.8.56, data6: 'fd33:5692:1834:1000:be24:11ff:fe5e:a645', comment: 'log store' }
+          - { name: hermes,     data: 192.168.8.57, data6: 'fd33:5692:1834:1000:be24:11ff:fe1b:5d14', comment: 'mailcow VM 109 - mail for the labs' }
+          - { name: moby,       data: 192.168.8.27, data6: 'fd33:5692:1834:1000:be24:11ff:fe13:54b8', comment: 'Docker host - outside the .50-.59 range' }
+          # No data6 on these two: .73 and .74 are extra IPv4 addresses on
+          # moby's eth0, applied by a unit because Proxmox rewrites interface
+          # config on every start (moby/CLAUDE.md). There is no ULA twin of
+          # either yet, and the stacks bind the v4 address literally.
           - { name: nextcloud,  data: 192.168.8.73, comment: 'on moby, published on its own address',
               ptr_note: '.73 and .74 are extra addresses on moby, one per published stack.' }
           - { name: traefik,    data: 192.168.8.74, comment: 'on moby, published on its own address' }
       - title: production
         records:
-          - { name: jellyfin,      data: 192.168.8.60 }
-          - { name: navidrome,     data: 192.168.8.61 }
+          - { name: jellyfin,      data: 192.168.8.60, data6: 'fd33:5692:1834:1000:be24:11ff:fee5:b13b' }
+          - { name: navidrome,     data: 192.168.8.61, data6: 'fd33:5692:1834:1000:be24:11ff:fed8:d621' }
+          # No data6: HAOS has no global IPv6 at all. Its address is set inside
+          # the appliance with `ha network update`, not by Proxmox, and nothing
+          # answers on the ULA its MAC would produce
+          # (fd33:5692:1834:1000:be24:11ff:fea3:34ea) - checked 2026-10-24.
           - { name: homeassistant, data: 192.168.8.90, comment: 'HAOS VM 302 - outside the .60-.69 range' }
       - title: non-production
         records:
-          - { name: lexie, data: 192.168.8.24 }
+          - { name: lexie, data: 192.168.8.24, data6: 'fd33:5692:1834:1000:be24:11ff:fe35:8257' }
       - title: aliases
         records:
           - { name: dns, type: CNAME, data: themis.home. }
@@ -111,6 +119,34 @@ zones:
       Reverse zone for 192.168.8.0/24.
       Every PTR here is generated from the A records in the forward zones -
       there is nothing to keep in step by hand.
+
+  # ---------------------------------------------------------- reverse6 -----
+  # The IPv6 twin of the zone above, for the lab's ULA /64. PTRs are generated
+  # from the `data6` key on the same forward records, so the two reverse zones
+  # and the forward zone cannot fall out of step with each other.
+  #
+  # ULA, not the ISP's prefix, and that is the whole reason this zone can exist
+  # at all: 2a01:cb1c:d:3500::/64 is delegated and renumbers with the lease,
+  # while fd33:5692:1834:1000::/64 is ours and stable. Hosts hold both - RFC
+  # 6724 picks the ULA for fd33: destinations across the VPN and the ISP
+  # address for the internet. See wireguard/README.md, "Home LANs and the
+  # ISP's IPv6".
+  #
+  # Only a /64 is supported by the template, which is all the lab has. The
+  # guest and iot LANs are 1001::/64 and 1002::/64 and have no zone, exactly as
+  # they have no IPv4 reverse zone.
+  - name: 0.0.0.1.4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa
+    kind: reverse6
+    backend: bind
+    prefix6: fd33:5692:1834:1000
+    comment: |
+      Reverse zone for fd33:5692:1834:1000::/64, the lab LAN's ULA.
+      Every PTR here is generated from the data6 keys in the forward zones -
+      there is nothing to keep in step by hand.
+
+      The addresses are SLAAC, derived from each host's MAC (EUI-64), so they
+      are as stable as the DHCP reservations keyed on the same MAC - and go
+      stale the same way if a container is rebuilt with a new MAC.
 
   # --------------------------------------------------------- overrides -----
   # Split-horizon overrides of single public names. Each one needs TWO MORE

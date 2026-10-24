@@ -33,10 +33,13 @@ on pistis**, edit `pistis/` here and run `scripts/deploy.sh`.
 | `scripts/make-intermediate.sh` | workstation | Mints the G3 key and CSR, signs it with the root, regenerates the root CRL. **Prompts for the root passphrase.** |
 | `scripts/root-crl.sh` | workstation | Regenerates the root CRL on its own. Run after any `openssl ca -revoke`. |
 | `scripts/deploy.sh` | workstation | Pushes `pistis/`, installs CA material, brings step-ca and nginx up. Idempotent. |
+| `scripts/install-ruby.sh` | **ruby**, from `~/homelab` | Installs the public `ca.peetvandesande.com` vhost that proxies `/g2/` and `/g3/` back to pistis. Idempotent. |
 | `scripts/verify.sh` | workstation | End-to-end smoke test, including a real certificate issuance. Exits non-zero on failure. |
 
 Order from nothing: `bootstrap.sh` → `make-intermediate.sh` → `deploy.sh` →
-`verify.sh`.
+`verify.sh`. `install-ruby.sh` is separate because it runs on a host outside
+the lab and only has to be re-run when its own vhost changes — it serves
+whatever pistis is publishing at the time.
 
 ## What holds a certificate today
 
@@ -103,6 +106,71 @@ step ca bootstrap --ca-url https://pistis.home:8443 --fingerprint <root fingerpr
 `deploy.sh` prints the fingerprint when it finishes. Without step-cli, fetch
 <http://pistis.home/g3/root.crt> and add it to the system store by hand.
 
+## Where the published files are served
+
+`/g2/` and `/g3/` are reachable at `ca.peetvandesande.com` from both sides of
+the lab's edge:
+
+| From | Resolves to | `/g3/` | `/g2/` |
+|------|-------------|--------|--------|
+| the LAN | `192.168.8.55` | pistis, directly | **not served** |
+| the internet | `145.239.73.18` | ruby, proxying to pistis over wg1 | ruby, statically |
+
+**The two generations are served differently on purpose.** `/g3/` belongs to
+the live issuing CA, so ruby reverse-proxies it and pistis stays the single
+origin — `scripts/deploy.sh` publishes there and nothing has to be synced
+outward, so the inside and outside views cannot drift. `/g2/` belongs to a
+hierarchy that is not live: its one file changes only when something is
+revoked off the root, and pistis is a G3 host that holds no `/g2/` at all, so
+there is nothing there to proxy to. ruby serves it from `/var/www/ca.g2`.
+
+The vhost is `ruby/etc/nginx/sites-available/ca.peetvandesande.com`, installed
+by `scripts/install-ruby.sh` run from ruby's own clone:
+
+```
+ssh ruby 'cd ~/homelab && git pull && sudo ca/scripts/install-ruby.sh'
+```
+
+**`/g2/` holds exactly one file: `root.crl`.** All three certificates the root
+signed before G3 carry `crlDistributionPoints =
+http://ca.peetvandesande.com/g2/root.crl` and **no `authorityInfoAccess` at
+all**, so there is no AIA object to publish. They are `rootca/index.txt`
+serials 1000–1002 — the G2 intermediate, expiring December 2026, and two squid
+certificates running to November 2029 and June 2035 — so the path has to answer
+for another nine years. `rootca/openssl.cnf` names `/g2/intermediate.crl` and
+`/g2/intermediate.crt` in sections that were never applied to anything; nothing
+fetches them and a 404 there is the honest answer.
+
+It is the same object as `/g3/root.crl` — one root, one CRL — but a local copy
+rather than a proxy, so the two *can* drift. `install-ruby.sh` installs it from
+`rootca/crl/root.crl` in the clone, so it exists once in git, and asserts it
+still matches what pistis is serving. **Re-run it after any `root-crl.sh`**:
+`deploy.sh` reaches pistis, nothing reaches ruby. `verify.sh` checks the same
+equality from the workstation, so a forgotten update fails the smoke test.
+
+Three things in ruby's config are load-bearing and easy to undo by accident:
+
+- **`/g3/` is proxied through a variable, not a literal.** `proxy_pass
+  http://$pistis$request_uri` with a `resolver` forces nginx to resolve
+  `pistis.home` per request. A literal name is resolved once, at config load,
+  and a failure there is fatal — `host not found in upstream` and nginx does
+  not start, taking sogode.com and webmail with it, because they share that
+  nginx. wg1 or `named` being slow at boot is enough. Through a variable the
+  same failure is a 502 on `/g3/` alone, which the cache absorbs.
+- **The resolver is `127.0.0.1` with `ipv6=off`.** ruby's own `named` has a
+  `home` static-stub pointing at Pythia — in the **internal** view as well as
+  the wireguard one, which is a change this needed
+  (`wireguard/ruby/services/etc/bind/named.conf.local`). `ipv6=off` reflects
+  what is published rather than what exists: pistis's ULA is routed over wg1
+  and its nginx listens on `[::]:80`, so a ULA AAAA would work, but `home.`
+  carries no AAAA for any host and step-ca binds `192.168.8.55:8443` alone.
+  Adding the record in `dns/` is the prerequisite for flipping it.
+- **No HTTPS and no redirect to it.** The URLs frozen into the certificates are
+  `http://`, many CRL and AIA fetchers speak no TLS, and to those a 301 is
+  indistinguishable from a failure. The `http_ca` blackbox module in `outside/`
+  asserts a bare 200 with redirects unfollowed, so adding one breaks a probe
+  rather than quietly breaking clients.
+
 ## Revocation
 
 Two separate mechanisms, and it matters which one you need.
@@ -161,20 +229,6 @@ regenerates and redeploys by hand.
 - **No backup of the G3 key.** `/etc/step-ca/secrets/intermediate_ca_key` on
   pistis and nowhere else. It is recoverable — re-run `make-intermediate.sh`
   and re-issue — but that is a rebuild, not a restore.
-- **`/g3/` is only served on the inside.** `ca.peetvandesande.com` is
-  split-horizon: Pythia is authoritative for that one name and answers
-  `192.168.8.55`, so pistis serves the CRL and AIA at exactly the URL the
-  certificate names. Publicly the name is still a CNAME to an OVH VPS
-  (145.239.73.18) that this repo does not manage, where `/g3/` returns 404 — as
-  does `/g2/`, dangling since 2016. Two consequences:
-  - **No client benefits yet**, because nothing on the LAN uses Themis. The
-    router still hands out the gateway, so every host resolves the name to the
-    VPS and gets a 404 — revocation checking and AIA chain-building are still
-    broken in practice. `verify.sh` reports this as WARN rather than FAIL so
-    the smoke test stays a usable gate.
-  - **Anything off the LAN can never check revocation**, split-horizon or not.
-    If that matters, publish the four files from pistis's `/var/www/g3` on the
-    VPS as well; the two would then agree.
 - **`ca.home` is a CNAME to `pistis.home`**, and works for TLS only because
   `ca.json` lists it in `dnsNames`. If you add another alias, add it there too
   or TLS to that name fails.

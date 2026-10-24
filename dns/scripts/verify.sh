@@ -8,7 +8,9 @@
 # wherever this was invoked.
 cd "$(dirname "$0")/.."
 THEMIS=192.168.8.50
+THEMIS6=fd33:5692:1834:1000:be24:11ff:feda:9b4b
 DIG="dig +time=3 +tries=1 @$THEMIS"
+DIG6="dig +time=3 +tries=1 @$THEMIS6"
 # Our own root. Defined up here because the sync check needs it too, not just
 # the TLS section further down.
 CA=../ca/rootca/certs/root.crt
@@ -23,6 +25,8 @@ check_eq() { # check_eq <label> <expected> <actual>
   [[ "$3" == "$2" ]] && pass "$1" || bad "$1 (expected '$2')" "$3"
 }
 status() { $DIG "$@" 2>/dev/null | sed -n 's/.*status: \([A-Z]*\).*/\1/p' | head -1; }
+# The same, asking Themis over its ULA rather than its IPv4 address.
+status6() { $DIG6 "$@" 2>/dev/null | sed -n 's/.*status: \([A-Z]*\).*/\1/p' | head -1; }
 
 echo "== internal zones (Pythia, via Delphi's forward-zone)"
 check_eq "grafana.home resolves"        "192.168.8.54" "$($DIG grafana.home A +short)"
@@ -30,6 +34,26 @@ check_eq "lenora.home resolves"         "192.168.8.21" "$($DIG lenora.home A +sh
 check_eq "dns.home is a CNAME to themis" "themis.home." "$($DIG dns.home CNAME +short)"
 check_eq "reverse of .54"               "grafana.home." "$($DIG -x 192.168.8.54 +short)"
 check_eq "internal name never leaks"    "NXDOMAIN" "$(status nosuchhost.home A)"
+
+echo "== IPv6: the same answers, and the same resolver, over the ULA"
+# The AAAA half of the forward zone and the reverse6 zone, both generated from
+# the data6 keys in ansible/group_vars/all.yml.
+check_eq "grafana.home has its ULA" \
+  "fd33:5692:1834:1000:be24:11ff:fe8f:a8c9" "$($DIG grafana.home AAAA +short)"
+check_eq "lenora.home has its static ULA" \
+  "fd33:5692:1834:1000::21" "$($DIG lenora.home AAAA +short)"
+check_eq "reverse of grafana's ULA" "grafana.home." \
+  "$($DIG -x fd33:5692:1834:1000:be24:11ff:fe8f:a8c9 +short)"
+# The reverse6 zone needs its own addNTA() on Delphi: ip6.arpa is signed and
+# d.f.ip6.arpa is not delegated, so without it this SERVFAILs rather than
+# answering - dns/CLAUDE.md invariant 4's cause.
+check_eq "a ULA PTR is not SERVFAIL" "NOERROR" \
+  "$(status 9.c.8.a.f.8.e.f.f.f.1.1.4.2.e.b.0.0.0.1.4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa PTR)"
+# Themis itself over IPv6. A client reaching it this way is the point of the
+# RA's RDNSS option - router/CLAUDE.md invariant 12.
+check_eq "Themis answers on its own ULA" \
+  "192.168.8.54" "$($DIG6 grafana.home A +short)"
+check_eq "Themis still filters over IPv6" "NXDOMAIN" "$(status6 nosuchhost.home A)"
 
 echo "== split-horizon override of a public name"
 check_eq "ca.peetvandesande.com answers with pistis, not the VPS" \

@@ -14,4 +14,10 @@
 # Containers on lenora do NOT use this: an unprivileged LXC cannot mount NFS,
 # so they get /hddpool/media through the mp0 bind mount instead. This export is
 # for machines that are not containers on this host.
+# One line per address family - exports(5) has no syntax for "this host by
+# either", and a client mounting over IPv6 is matched only by the IPv6 entry.
+# The ULA, not the ISP prefix: the ULA is ours and stable, while
+# 2a01:cb1c:d:3500::/64 renumbers with the lease and would silently stop
+# matching. See wireguard/README.md, "Home LANs and the ISP's IPv6".
 /hddpool/media	192.168.8.0/24(rw,sync,all_squash,anonuid=65534,anongid=65534,no_subtree_check)
+/hddpool/media	fd33:5692:1834:1000::/64(rw,sync,all_squash,anonuid=65534,anongid=65534,no_subtree_check)

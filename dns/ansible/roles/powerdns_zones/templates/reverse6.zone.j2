@@ -1,0 +1,28 @@
+{% include 'header.j2' %}
+{% include '_soa.j2' %}
+{# One PTR per data6 address inside this zone's prefix6, taken from every
+   forward zone in the list and emitted in declaration order - the IPv6 twin of
+   reverse.zone.j2, and for the same reason: the reverse zone is not a second
+   list to keep in step by hand. `ptr: false` on a record opts out.
+
+   The owner name is the low 64 bits as 16 reversed nibbles. Only a /64 is
+   supported, which is what the lab has; main.yml asserts the prefix is one and
+   that every data6 address is in full eight-group form, because a `::` run
+   would expand to the wrong nibbles here and be silently wrong rather than an
+   error. #}
+{% for fwd in zones | selectattr('kind', 'eq', 'forward') | list %}
+{% for section in fwd.sections %}
+{% for r in section.records %}
+{% if r.data6 is defined and r.data6.startswith(zone.prefix6 ~ ':') and (r.ptr | default(true)) %}
+{% if r.ptr_note is defined %}
+; {{ r.ptr_note }}
+{% endif %}
+{% set ns = namespace(nib='') %}
+{% for g in r.data6.split(':')[4:8] %}
+{% set ns.nib = ns.nib ~ ('%04x' | format(g | int(base=16))) %}
+{% endfor %}
+{{ '%-31s' | format(ns.nib | reverse | join('.')) }} IN  PTR {{ fwd.name ~ '.' if r.name == '@' else r.name ~ '.' ~ fwd.name ~ '.' }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endfor %}

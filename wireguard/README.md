@@ -396,7 +396,7 @@ Every private key and PSK in these files is a `<placeholder>`. The real keys, PS
 | `ruby/wg-docker-user.service` | ruby | `/etc/systemd/system/` | IPv4/IPv6 `DOCKER-USER` accepts for WireGuard forwarding |
 | `ruby/services/etc/…` | ruby | same path under `/etc` | BIND, Postfix and Dovecot configs with IPv6 listeners, plus systemd start-order drop-ins |
 | `ruby/nftables.conf.orig`, `ruby/nftables.conf.diff`, `ruby/current-nft-ruleset` | none | none | ruby's firewall before the WireGuard work (2026-10-08), the diff against it, and the live ruleset then |
-| `ruby/services/orig/etc/…`, `ruby/services/services.diff` | none | none | The service configs before the WireGuard work (2026-10-09), and the diff against them |
+| `ruby/services/orig/etc/…`, `ruby/services/services.diff` | none | none | The service configs before the WireGuard work (2026-10-09), and the diff against them. The diff covers that rollout only — `named.conf.local` gained a `home` static-stub in the internal view afterwards, for `ca/ruby/` |
 | `jennie/70-dummy0.yaml` | jennie | `/etc/netplan/` | dummy0 with `192.168.254.2`, `fd33:5692:1834:254::2` |
 | `jennie/80-wireguard-wg0.yaml` | jennie | `/etc/netplan/` | wg0, clients |
 | `jennie/82-wireguard-wg2.yaml` | jennie | `/etc/netplan/` | wg2, to ruby |

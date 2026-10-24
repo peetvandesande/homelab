@@ -22,6 +22,10 @@
 -------------------------------------------------------------------------------
 addNTA("home.", "internal zone, unsigned by design")
 addNTA("8.168.192.in-addr.arpa.", "internal reverse zone, unsigned by design")
+-- The same, for the lab LAN's ULA /64. ip6.arpa is signed and d.f.ip6.arpa has
+-- no delegation, so without this every lab PTR over IPv6 SERVFAILs - invariant
+-- 4's cause, not invariant 5's: there is nothing to forge, only nothing to find.
+addNTA("0.0.0.1.4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa.", "internal reverse zone, unsigned by design")
 
 -- The mail domains of a lab's customers, under the reserved example. TLD. The
 -- root proves there is no such delegation, so without this the forward to

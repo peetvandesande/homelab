@@ -186,6 +186,19 @@ of them is obvious from the router's own UI.
     firmware reflash with Keep Settings is the way to get back to one coherent
     package set when that is worth a maintenance window.
 
+12. **`dhcp.lan.ra_dns` and `dhcp.lan.dns` are one setting in two halves.**
+    The RA advertises Themis's ULA as the recursive DNS server, which is what
+    puts IPv6 clients behind the same filtering as the DHCPv4 option
+    `6,192.168.8.50`. Set `ra_dns='1'` and leave `dhcp.lan.dns` empty and
+    odhcpd advertises **the router itself** instead - every IPv6-capable client
+    then resolves at the router, around Themis, and nothing looks broken. If
+    Themis is ever renumbered or rebuilt with a new MAC its ULA changes, and
+    this list has to change with it; the symptom is IPv6 DNS timing out while
+    IPv4 still works, because the egress rules reject the fallback. Setting
+    `ra_dns` back to `0` is the safe direction: clients fall back to the
+    DHCPv4 option, which is Themis anyway. `README.md` "Themis is advertised
+    over IPv6 too".
+
 ## Backups
 
 The device keeps `/etc/config/<name>.bak-<date>-<reason>` files from previous

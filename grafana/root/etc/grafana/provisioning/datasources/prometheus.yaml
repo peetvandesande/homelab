@@ -4,15 +4,20 @@
 # against the system trust store, into which ca/scripts/enrol.sh installed the
 # G2 root - so tlsSkipVerify stays false and this is a real check, not theatre.
 #
-# The URL is an IP, not prometheus.home. .home resolves since the DHCP cutover
-# to Themis, and the certificate carries a DNS SAN beside its IP SAN, so the
-# name would verify too - the IP is a choice now, not a constraint.
+# The URL is prometheus.home, not an IP, since the IPv6 rollout - the point of
+# naming things is that this is the layer that gets to stop knowing addresses.
+# Verification is by name against the DNS SAN the certificate already carried.
+#
+# The name resolves to both an A and a ULA AAAA, and RFC 6724 ranks a ULA below
+# IPv4, so Grafana will in practice still connect over IPv4. That is fine and
+# is not a reason to hard-code either family: whichever one answers, the
+# certificate verifies, and the day the ULA is preferred nothing here changes.
 apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: https://192.168.8.53:9090
+    url: https://prometheus.home:9090
     isDefault: true
     jsonData:
       tlsSkipVerify: false

@@ -51,10 +51,14 @@ address drifts. That is why the LAN pool alone was narrowed from 150: at
 dynamic allocator. Narrow guest or iot the same way before reserving anything
 above .239 there.
 
-**No resolver is advertised over IPv6**, deliberately: `ra_dns=0`, DHCPv6
-disabled on the LAN, `ra_flags=none`. dnsdist listens on IPv4 only, so an IPv6
-resolver could only be a silent bypass of Themis. Addressing is still SLAAC from
-RA, which is all `ip6=auto` on a container needs.
+**Themis is advertised over IPv6**, since the IPv6 rollout: `ra_dns=1` with
+`dhcp.lan.dns` naming Themis's ULA. It was `ra_dns=0` before, on the grounds
+that dnsdist listened on IPv4 only and so an IPv6 resolver could only be a
+bypass of Themis — the thing that would have been advertised was the *router*,
+not a second resolver, and the fix was to advertise Themis instead of nothing.
+See "Themis is advertised over IPv6 too" below. DHCPv6 stays disabled on the
+LAN and `ra_flags` stays `none`; addressing is SLAAC from RA, which is all
+`ip6=auto` on a container needs.
 
 ## DNS
 
@@ -73,6 +77,34 @@ stack is down.
 
 See `CLAUDE.md` invariants 1-4 for the settings that must not change.
 
+### Themis is advertised over IPv6 too (RDNSS)
+
+Since the IPv6 rollout the RA carries Themis's ULA as a recursive DNS server,
+so a client that prefers IPv6 for DNS reaches the same filtered resolver as one
+using the DHCPv4 option. Before it, `ra_dns` was `0` and nothing was advertised
+over IPv6 at all - deliberately, because the only thing that *could* have been
+advertised was the router.
+
+```sh
+cp /etc/config/dhcp /etc/config/dhcp.bak-2026-10-24-ra-dns
+uci add_list dhcp.lan.dns='fd33:5692:1834:1000:be24:11ff:feda:9b4b'   # themis
+uci set dhcp.lan.ra_dns='1'
+uci commit dhcp && /etc/init.d/odhcpd restart
+```
+
+Check it from a LAN client with `rdisc6 -1 br-lan` (or `ndisc6`), or just
+`dig @fd33:5692:1834:1000:be24:11ff:feda:9b4b home.` to prove Themis answers
+over IPv6 at all.
+
+**Both lines go together, and the order matters more than it looks.** With
+`ra_dns='1'` and `dhcp.lan.dns` unset, odhcpd falls back to advertising *the
+router's own address* as RDNSS - which is a silent bypass of Themis's
+filtering for every IPv6-capable client, arrived at by setting one option and
+forgetting the other. See `CLAUDE.md` invariant 12.
+
+The ULA, not the ISP prefix: `2a01:cb1c:d:3500::/64` renumbers with the lease,
+and a resolver address that changes under the clients is worse than none.
+
 ### Outgoing DNS that is not Themis is rejected
 
 Since 17 October 2026 the firewall rejects every way a LAN client could resolve
@@ -87,7 +119,11 @@ pre-change config is `/etc/config/firewall.bak-2026-10-17-dns-egress`.
 | `dns_egress_<zone>_doh4` / `_doh6` | tcp/udp 443 to set `doh_resolvers4` / `doh_resolvers6` | DoH to a hard-coded resolver address |
 
 One of each for `lan`, `iot` and `guest`, with `dest '*'` so traffic bound for
-the WireGuard zones is covered as well as `wan`. Target is `REJECT`, not
+the WireGuard zones is covered as well as `wan`. **The :53 and :853 rules are
+family-agnostic and the DoH sets come in a v6 pair**, so enabling IPv6 DNS on
+the LAN added no bypass to close - the rules caught v6 from the day they were
+written, and the MAC exemptions work at the link layer and so exempt delphi
+and hermes over either family. Target is `REJECT`, not
 `DROP`: a client gets a TCP reset or ICMP unreachable at once and falls back to
 the system resolver instead of hanging on a timeout. The rules sit at the top
 of `forward_<zone>`, before the zone's accept jumps, so they cannot be undone
@@ -358,7 +394,8 @@ ip route show table 9910 | grep 192.168.32
 ip route get 192.168.33.1 from 192.168.8.150 iif br-lan mark 0x1000  # via 192.168.8.21, not wgclient1
 ```
 
-IPv4 only. There is no IPv6 equivalent.
+IPv4 only: the Proxmox SDN behind lenora has no IPv6 prefix at all, so there is
+no equivalent rule to write. Unrelated to the LAN, which is dual-stack.
 
 ## Wi-Fi: clients that stop hearing multicast
 

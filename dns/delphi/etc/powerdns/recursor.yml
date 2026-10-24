@@ -13,6 +13,9 @@
 incoming:
   listen:
     - 192.168.8.51
+    # The ULA twin, published as delphi.home's AAAA. The wait-for-address
+    # drop-in waits for it, DAD included.
+    - 'fd33:5692:1834:1000:be24:11ff:fe7d:3b06'
   port: 53
   # Themis is the only thing that talks to us directly, but once the PROXY
   # header is decoded allow_from is matched against the *real* client, so this
@@ -21,8 +24,18 @@ incoming:
     - 192.168.8.0/24
     - 192.168.32.0/21  # Proxmox lab networks, routed by lenora
     - 127.0.0.0/8
+    # The IPv6 twin of the first entry, and for the same reason as the comment
+    # above: this is matched against the real client out of the PROXY header,
+    # so it is the client's own ULA, never Themis's. The labs have no IPv6.
+    - 'fd33:5692:1834:1000::/64'
+    - '::1/128'
   proxy_protocol_from:
     - 192.168.8.50/32
+    # Themis's ULA. A query that arrives over IPv6 carries a PROXY header from
+    # Themis's v6 address, and a source missing here has its header ignored -
+    # so allow_from would then match Themis instead of the client and refuse
+    # every one of them.
+    - 'fd33:5692:1834:1000:be24:11ff:feda:9b4b/128'
 
 recursor:
   threads: 2
@@ -36,6 +49,16 @@ recursor:
       forwarders:
         - 192.168.8.52
     - zone: 8.168.192.in-addr.arpa.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    # The lab LAN's ULA reverse zone, fd33:5692:1834:1000::/64. Pythia
+    # generates its PTRs from the same forward records as the IPv4 zone above
+    # (dns/ansible/group_vars/all.yml). Needs the addNTA() in recursor.lua for
+    # the same reason every zone here does: ip6.arpa IS signed, and d.f.ip6.arpa
+    # is not delegated, so validation finds a good proof that this zone does not
+    # exist and SERVFAILs before Pythia's answer is considered.
+    - zone: 0.0.0.1.4.3.8.1.2.9.6.5.3.3.d.f.ip6.arpa.
       recurse: false
       forwarders:
         - 192.168.8.52

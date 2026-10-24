@@ -76,13 +76,19 @@ loki.relabel "journal" {
   }
 }
 
-// The IP, not loki.home. .home resolves since the DHCP cutover to Themis and
-// Loki's certificate carries a DNS SAN too, so the IP is a choice. Verified
-// against the lab root explicitly rather than the system store, so a push can
-// never silently trust some unrelated public CA.
+// loki.home, not the IP, since the IPv6 rollout. Verified against the lab root
+// explicitly rather than the system store, so a push can never silently trust
+// some unrelated public CA - and by name against the DNS SAN the certificate
+// already carried.
+//
+// This file is byte-identical on all twelve hosts (invariant 5), Loki itself
+// included. On Loki the name resolves to 127.0.1.1, because Proxmox points a
+// DHCP container's own FQDN at loopback - but Loki listens on the wildcard, so
+// it answers there, and TLS verifies on the name rather than on whatever
+// address it resolved to. Do not "fix" this by special-casing that host.
 loki.write "loki" {
   endpoint {
-    url = "https://192.168.8.56:3100/loki/api/v1/push"
+    url = "https://loki.home:3100/loki/api/v1/push"
 
     tls_config {
       ca_file = "/etc/homelab-tls/root_ca.crt"

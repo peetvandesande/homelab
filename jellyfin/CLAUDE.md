@@ -40,3 +40,10 @@ here.
 5. **`CertificatePassword` is empty on purpose.** Jellyfin stores it in
    cleartext in `network.xml`, so a password protects the bundle from nobody
    while adding a second thing to keep in sync.
+
+6. **`EnableIPv6` is on**, since the lab's IPv6 rollout. Kestrel then binds
+   `::` as well as `0.0.0.0` on both ports, so `jellyfin.home` answers over
+   either family. It changes nothing above: 8096 is still plain HTTP over IPv6
+   too, and 8920 still exists only for Prometheus, which now scrapes it by
+   name. Jellyfin rewrites `network.xml` from its own UI, so this is one of the
+   settings the warning at the top is about.

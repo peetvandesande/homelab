@@ -1,6 +1,6 @@
 # alloy
 
-Grafana Alloy shipping the systemd journal to Loki (192.168.8.56:3100) from
+Grafana Alloy shipping the systemd journal to Loki (`loki.home:3100`) from
 **all twelve enrolled hosts** — the ten containers, the hermes VM and lenora
 — and serving its own metrics over TLS on `:12345`.
 

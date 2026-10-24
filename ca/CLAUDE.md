@@ -87,9 +87,13 @@ The existing root CA files are in `rootca/`.
    This applies to strings frozen into certificates, and **only** those. The CA
    API URL is not one of them; see below.
 
-Also worth knowing: step-ca binds `192.168.8.55:8443` explicitly, so it needs
-the `wait-for-address` drop-in like the DNS containers. nginx listens on the
-wildcard and deliberately does not.
+Also worth knowing: step-ca now binds the **wildcard**, `[::]:8443`, and so
+has no `wait-for-address` drop-in — the file is gone. It bound
+`192.168.8.55:8443` and needed one until the IPv6 rollout; `address` takes a
+single value, so a wildcard is the only way to serve both families, and it is
+how nginx on the same host has always worked. `net.ipv6.bindv6only` is 0, so
+one `[::]` socket covers IPv4 as well. The CA's own certificate gains the ULA
+through `dnsNames`, which is where step-ca reads its SANs from.
 
 ## URLs and paths that are baked into certificates
 
@@ -105,22 +109,77 @@ deliberately a hostname. Invariant 7 governs strings frozen into certificates;
 this one is a step-ca endpoint that is replaced along with step-ca. Binding it
 to the tool's host is honest — a settled decision, not an outstanding one.
 
-`ca.peetvandesande.com` is **split-horizon**. Publicly it is a CNAME to an OVH
-VPS (145.239.73.18) that this repo does not manage, where nothing is published
-under `/g3/` — nor under `/g2/`, dangling since 2016. Inside the lab, Pythia is
+`http://ca.peetvandesande.com/g2/root.crl` is on that list too — not in G3,
+but in all three certificates the root signed before it (`rootca/index.txt`
+serials 1000-1002, valid to December 2026, November 2029 and June 2035). It is
+the **only** `/g2/` object: none of the three has an `authorityInfoAccess` at
+all, and the `/g2/intermediate.crl` and `/g2/intermediate.crt` in
+`rootca/openssl.cnf` are in sections that were never applied to anything.
+
+**`/g2/` is served only on ruby, statically, and pistis holds none of it.**
+pistis is the G3 issuing CA; the pre-G3 hierarchy is not live and its one file
+changes only when something is revoked off the root. `install-ruby.sh` installs
+it into `/var/www/ca.g2` from `rootca/crl/root.crl` in ruby's clone, so it
+exists once in git. It is the same object as `/g3/root.crl` — one root, one CRL
+— but a copy rather than a proxy, so **re-run `install-ruby.sh` after any
+`root-crl.sh`**: `deploy.sh` reaches pistis and nothing reaches ruby. Both that
+script and `verify.sh` assert the two still match, so forgetting fails a check
+rather than leaving two CRLs for one root.
+
+`ca.peetvandesande.com` is **split-horizon**. Inside the lab, Pythia is
 authoritative for that single name and answers `192.168.8.55`, so pistis serves
-the files at exactly the URL the certificate names.
+`/g3/` at exactly the URL the certificate names. Publicly it is a CNAME to ruby
+(145.239.73.18), which **reverse-proxies `/g3/` to pistis over wg1** and serves
+`/g2/` from disk — `ca/ruby/`, installed by `scripts/install-ruby.sh` from
+ruby's own clone. For `/g3/` pistis is the single origin either way; nothing is
+synced outward, so those two views cannot drift.
 
 Three pieces make that work and **none of them works alone** — the zone on
 Pythia, the forward-zone on Delphi, and an `addNTA()` because
 `peetvandesande.com` is DNSSEC-signed. See `homelab/dns/CLAUDE.md`.
 
-Since the DHCP cutover this **works for real clients**: from a container,
-`ca.peetvandesande.com` resolves to pistis and the CRL returns 200, so
-revocation checking is no longer broken. `verify.sh` still has a third check
-for the real-client path, but it runs on **your workstation** — if that is on a
-VPN, or otherwise not using Themis, it resolves the name to the public VPS and
-the check WARNs. That is a fact about the workstation, not the lab.
+Four things about ruby's half of that are load-bearing:
+
+- **`/g3/` is proxied through a variable, not a literal.** `proxy_pass
+  http://$pistis$request_uri` plus a `resolver` makes nginx resolve
+  `pistis.home` per request. A literal — name or address — is resolved once at
+  config load, and for a name a failure there is fatal: `host not found in
+  upstream`, nginx does not start, and sogode.com and webmail go with it,
+  because they share that nginx. wg1 or `named` being slow at boot is enough.
+  Through a variable the same failure is a 502 on `/g3/` alone, which the cache
+  absorbs. `install-ruby.sh` asserts the variable is still there.
+
+  The resolver is `127.0.0.1` with `ipv6=off`. ruby's `named` needed a `home`
+  static-stub in its **internal** view, not only the wireguard one, for this to
+  resolve at all — `wireguard/ruby/services/etc/bind/named.conf.local`.
+  `ipv6=off` is about what is published, not what exists: pistis's **ULA**
+  (`fd33:5692:1834:1000::/64`) is in wg1's AllowedIPs and would be reachable,
+  and its nginx already listens on `[::]:80`. Its **GUA** is the unusable one —
+  deliberately outside wg1's AllowedIPs, and it renumbers with the ISP lease.
+  What is missing is the record: `home.` carries no AAAA for any host, and
+  step-ca binds `192.168.8.55:8443` alone, so pistis is not dual-stack, only
+  its nginx is. Turn this on by adding the AAAA in `dns/` first.
+
+- **Never proxy to `ca.peetvandesande.com` itself.** ruby's BIND has no local
+  copy of `peetvandesande.com`, so ruby resolves that name to the public CNAME
+  — itself — and `proxy_pass` to it loops into the same server block. The
+  upstream is `pistis.home`; the Host header is the public name.
+- **No HTTPS, and no redirect to it.** The frozen URLs are `http://`; a client
+  that needs these files in order to establish trust cannot be asked for TLS
+  first, and to a fetcher that speaks no TLS a 301 looks like a failure. The
+  `http_ca` module in `outside/` probes for a bare 200 with redirects
+  unfollowed, so adding one fails a probe.
+- **The nginx cache is not an optimisation.** ruby answers the only copy of
+  these URLs the internet can reach, and the origin is behind a home fibre
+  line. `proxy_cache_use_stale` plus `inactive=30d` is what stops an outage at
+  home becoming an outage of revocation checking.
+
+This **works for real clients**, and since ruby started proxying it works from
+either side: on the LAN the name resolves to pistis, off it to ruby, and the
+CRL returns 200 both ways. `verify.sh`'s third check uses the workstation's own
+resolver, so it no longer WARNs just because the workstation is on a VPN — a
+fourth check pins the name to ruby's public address and tests that path on
+purpose.
 
 Adding a DNS alias for the CA API means adding it to `dnsNames` in `ca.json`
 too, or TLS to that name fails.
@@ -178,14 +237,27 @@ Each of these was found by something breaking.
    node-exporter, and most run something else too. A single `post-renew` file
    would mean the two stacks overwriting each other's hook.
 
-5. **Certificates carry IP SANs, and consumers address hosts by IP.** This was
-   forced before the DHCP cutover to Themis, when nothing resolved `.home`. It
-   now holds by choice: names resolve, and each certificate carries a DNS SAN
-   beside its IP SAN, so Prometheus targets and Grafana's datasource URL could
-   become names and still verify. Two reasons not to bother — it buys nothing,
-   and a container resolves **its own** FQDN to 127.0.1.1 under DHCP, so
-   anything addressing itself by name breaks. `homelab-tls-renew` keeps the IP
-   deliberately: renewal should not depend on DNS being healthy.
+5. **Consumers address hosts by name; certificates carry IP SANs for both
+   families.** Addressing by IP was forced before the DHCP cutover to Themis,
+   when nothing resolved `.home`, and the IPv6 rollout retired it: Prometheus
+   targets, Grafana's two datasources and Alloy's push URL are `<name>.home`,
+   verified against the DNS SAN each certificate already carried.
+
+   **The ULA IP SAN is discovered, never tabulated.** `enrol.sh` reads it off
+   the target — it is SLAAC from the MAC, so a container rebuilt with a new MAC
+   gets a new one and a list in the script would go stale in silence. Only
+   `fd33:5692:1834:1000::/64`: the ISP prefix renumbers with the lease, and an
+   address frozen into a 30-day certificate that stops existing mid-life is
+   worse than no SAN. A host with no ULA simply gets IPv4 SANs.
+
+   The 127.0.1.1 trap turned out not to bite. A container does resolve its own
+   FQDN to loopback under DHCP, but the services this affects bind the wildcard
+   and answer there, and TLS verifies on the **name**, not on whichever address
+   it resolved to. It would bite a service bound to one specific non-loopback
+   address.
+
+   `homelab-tls-renew` keeps the IP deliberately: renewing every certificate in
+   the lab should not depend on DNS being healthy.
 
 ## When you add a container
 

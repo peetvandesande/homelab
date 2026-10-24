@@ -188,9 +188,18 @@ the rest came out of putting the stack behind the lab CA.
    only resolver down for a certificate rotation. The restart is a fallback for
    when the console is unreachable, not the normal path.
 
-10. **DoT and DoH bind the static address**, so the `wait-for-address` drop-in
-    protects them exactly as it does `:53`. Verified across a cold boot with
-    zero restarts.
+10. **DoT and DoH bind static addresses — now two each**, the IPv4 one and the
+    ULA, so the `wait-for-address` drop-in protects them exactly as it does
+    `:53`. Verified across a cold boot with zero restarts on IPv4.
+
+    The IPv6 wait is a second `ExecStartPre` rather than an extension of the
+    first, for two reasons. SLAAC runs on its own schedule after the first
+    Router Advertisement, routinely later than the DHCP lease, so it cannot
+    ride on the IPv4 check. And it passes `-tentative` to `ip`: an address
+    still running Duplicate Address Detection is listed by `ip addr` and cannot
+    be bound — `bind()` returns EADDRNOTAVAIL — so matching without that flag
+    reintroduces the very cold-boot race the drop-in exists to close, in a form
+    that looks like it is working.
 
 11. **The router's VPN policy domains are shunted to the router, and must not
     be cached here.** The router routes by destination IP: its dnsmasq adds the

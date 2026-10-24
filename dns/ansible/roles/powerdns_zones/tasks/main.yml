@@ -7,17 +7,18 @@
   ansible.builtin.assert:
     that:
       - item.name is defined
-      - item.kind in ['forward', 'reverse', 'override']
+      - item.kind in ['forward', 'reverse', 'reverse6', 'override']
       - item.backend in ['bind', 'api']
       - item.kind != 'reverse' or item.prefix is defined
+      - item.kind != 'reverse6' or item.prefix6 is defined
       - item.kind != 'forward' or item.sections is defined
       - item.kind != 'override' or item.records is defined
     fail_msg: >-
       Zone entry {{ item.name | default(item) }} is not usable: it needs a
       name, a kind of forward/reverse/override, a backend of bind/api, and the
-      fields that kind requires (reverse needs prefix, forward needs sections,
-      override needs records - an empty list is fine for an api zone whose
-      records the lab writes itself).
+      fields that kind requires (reverse needs prefix, reverse6 needs prefix6,
+      forward needs sections, override needs records - an empty list is fine
+      for an api zone whose records the lab writes itself).
     quiet: true
   loop: "{{ zones }}"
   loop_control:
@@ -36,6 +37,33 @@
   loop: "{{ zones | selectattr('kind', 'eq', 'override') | list }}"
   loop_control:
     label: "{{ item.name }}"
+
+# reverse6.zone.j2 turns the low 64 bits of each data6 address into 16 reversed
+# nibbles by slicing on ':'. A compressed `::` run or a short group would expand
+# to the wrong nibbles and emit a PTR for the wrong address - wrong, but still
+# valid zone syntax, so nothing downstream would complain. Reject the input
+# instead. Lowercase because the nibbles are emitted verbatim and PTR owner
+# names are conventionally lowercase.
+- name: Refuse a data6 address that is not in full, uncompressed, lowercase form
+  ansible.builtin.assert:
+    that:
+      - item.data6 is match('^[0-9a-f:]+$')
+      - '"::" not in item.data6'
+      - item.data6.split(':') | length == 8
+      - item.data6.split(':') | map('length') | min >= 1
+    fail_msg: >-
+      data6 '{{ item.data6 }}' on {{ item.name }} must be a full eight-group
+      lowercase IPv6 address with no '::' - write
+      fd33:5692:1834:1000:be24:11ff:fe04:f703, not fd33:5692:1834:1000::1.
+      `ip -6 addr show scope global` on the host prints it in that form.
+    quiet: true
+  loop: >-
+    {{ zones | selectattr('kind', 'eq', 'forward')
+             | map(attribute='sections') | flatten
+             | map(attribute='records') | flatten
+             | selectattr('data6', 'defined') | list }}
+  loop_control:
+    label: "{{ item.name }} {{ item.data6 }}"
 
 # Two entries with one name would render one file and quietly drop the other.
 - name: Refuse two zones with the same name

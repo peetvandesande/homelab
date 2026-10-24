@@ -24,10 +24,12 @@ so doing it first leaves every dashboard broken in between.
    this is a real check, and setting it true would make the whole migration
    decorative.
 
-3. **The datasource URL is an IP.** `.home` resolves since the DHCP cutover to
-   Themis, and the certificate carries a DNS SAN as well as an IP SAN, so a
-   name would verify. It stays an IP because it works — a choice now, not a
-   constraint.
+3. **The datasource URLs are names**, `prometheus.home` and `loki.home`, since
+   the IPv6 rollout. Verification is by name against the DNS SAN the
+   certificates already carried, so nothing about invariant 2 changed. Each
+   name resolves to an A and a ULA AAAA; RFC 6724 ranks a ULA below IPv4, so
+   Grafana still connects over IPv4 in practice — whichever family answers, the
+   certificate verifies.
 
 ## Verifying trust without credentials
 

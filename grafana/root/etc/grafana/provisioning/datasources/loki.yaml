@@ -1,9 +1,9 @@
 # Loki datasource. Managed from homelab/grafana.
 #
 # Same shape as prometheus.yaml: https off the lab CA, verified against the
-# system trust store (tlsSkipVerify false), and an IP rather than loki.home.
-# .home resolves since the DHCP cutover to Themis and the certificate carries
-# a DNS SAN too, so the IP is now a choice rather than a constraint.
+# system trust store (tlsSkipVerify false), and loki.home rather than an IP
+# since the IPv6 rollout. Verification is by name against the DNS SAN the
+# certificate already carried.
 #
 # Provisioned datasources are read-only in the UI. "Add data source" there
 # does not edit this one; it creates a second, empty "loki-1" beside it.
@@ -21,7 +21,7 @@ datasources:
   - name: Loki
     type: loki
     access: proxy
-    url: https://192.168.8.56:3100
+    url: https://loki.home:3100
     isDefault: false
     editable: false
     jsonData:

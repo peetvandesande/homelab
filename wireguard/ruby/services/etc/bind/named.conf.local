@@ -98,6 +98,25 @@ view "internal" {
         type static-stub;
         server-addresses { 192.168.8.52; };
     };
+
+    // The forward direction of the same thing, so processes ON this host can
+    // reach the lab by name and not only log it by name. nginx needs it:
+    // ca/ruby/ proxies ca.peetvandesande.com/g3/ to pistis.home, and
+    // 127.0.0.1 is the resolver it is given.
+    //
+    // This is not the split-horizon exception the view header warns about.
+    // That rule is about peetvandesande.com, where a private answer for a
+    // public domain gives you mail that works internally and fails outside.
+    // home. is a private TLD with no public existence to contradict - the
+    // reverse zone above has been here on the same reasoning all along.
+    //
+    // static-stub, not forward: Pythia is authoritative-only, so it is
+    // queried as the zone's server with RD=0. Not Themis or Delphi - their
+    // ACLs admit the home LAN and the Proxmox labs, not VPN sources.
+    zone "home" {
+        type static-stub;
+        server-addresses { 192.168.8.52; };
+    };
 };
 
 // ===========================================================================

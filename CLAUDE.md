@@ -228,10 +228,17 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   the zone. It did both for a while, and odhcpd was injecting AAAA records for
   addresses pythia had never heard of. The cost is that dynamic clients get no
   automatic `.home` name; give anything that needs one a record in `dns/`.
-- **No resolver is advertised over IPv6, deliberately.** dnsdist listens on
-  IPv4 only (`192.168.8.50:53`), so an IPv6 resolver could only ever be a
-  silent bypass of Themis. DHCPv6 is disabled on the LAN and `ra_flags` is
-  `none`; addressing is still SLAAC from RA, which is all `ip6=auto` needs.
+- **Themis is advertised over IPv6 too**, since the IPv6 rollout. dnsdist
+  listens on its ULA as well as `192.168.8.50` for :53, :853 and :443, and the
+  RA carries that ULA as RDNSS (`dhcp.lan.ra_dns='1'` plus `dhcp.lan.dns`).
+  This was IPv4-only until then, on the grounds that an IPv6 resolver could
+  only be a bypass of Themis — the bypass was the *router*, not the family, and
+  the fix was to advertise Themis rather than nothing. The router's outgoing-DNS
+  rejects were family-agnostic from the day they were written, so there was no
+  hole to close. **Both router options go together**: `ra_dns='1'` with
+  `dhcp.lan.dns` empty advertises the router itself —
+  `router/CLAUDE.md` invariant 12. DHCPv6 stays disabled and `ra_flags` stays
+  `none`; addressing is SLAAC from RA, which is all `ip6=auto` needs.
 
 ## Docker
 
@@ -343,15 +350,21 @@ the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
   trust anchors, mints a single-use token on pistis and has the target redeem
   it, so the private key is generated on the host and never moves. Renewal is
   a daily timer authenticated by the certificate itself.
-- **Certificates carry IP SANs, and consumers address hosts by IP.** This
-  began as a necessity — nothing resolved `.home` — and since the DHCP cutover
-  to Themis it is merely a choice: names do now resolve, from any host whose
-  resolver is Themis or the router. Moving a consumer to a name is therefore
-  possible but is not a comment change: the certificate already carries the
-  DNS SAN, but a container still resolves **its own** FQDN to `127.0.1.1` (see
-  Container defaults), so anything addressing itself by name breaks. One place
-  keeps the IP on purpose rather than by inertia: `homelab-tls-renew`, because
-  renewing every certificate in the lab should not depend on DNS being up.
+- **Consumers address hosts by name, and certificates carry IP SANs for both
+  families.** Addressing by IP began as a necessity — nothing resolved `.home`
+  — and the IPv6 rollout is what finally retired it: Prometheus targets,
+  Grafana's two datasources and Alloy's push URL are `<name>.home`, verified
+  against the DNS SAN the certificates already carried. `enrol.sh` also adds
+  each host's ULA as an IP SAN, discovered on the host rather than tabulated.
+
+  A container still resolves **its own** FQDN to `127.0.1.1` (see Container
+  defaults), and that turned out to be harmless where it happens — Loki and
+  node-exporter bind the wildcard, so they answer on loopback, and TLS verifies
+  on the name rather than on whichever address it resolved to. It would bite a
+  service bound to one specific non-loopback address.
+
+  One place keeps the IP on purpose: `homelab-tls-renew`, because renewing
+  every certificate in the lab should not depend on DNS being up.
 - **Per-service TLS config lives in that service's own top-level directory**
   (`grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`, `loki/`, `moby/`,
   `navidrome/`, `prometheus/`), one per container or VM. `node-exporter/` and

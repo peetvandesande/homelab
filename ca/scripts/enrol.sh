@@ -89,6 +89,31 @@ enrol_one() { # enrol_one <ip> <name> [extra sans...]
     update-ca-certificates >/dev/null
   ' < intermediate/certs/intermediate-g3.crt
 
+  # The host's ULA becomes an IP SAN, so TLS to a bare IPv6 address verifies
+  # the same way TLS to the IPv4 one does. DISCOVERED, never tabulated: these
+  # are SLAAC addresses derived from the MAC, so a container rebuilt with a new
+  # MAC gets a new one, and a list in this script would go stale without
+  # telling anyone.
+  #
+  # Only the lab's own fd33:5692:1834:1000::/64. The ISP prefix
+  # (2a01:cb1c:d:3500::/64) is deliberately excluded: it renumbers with the
+  # lease, and an address frozen into a 30-day certificate that stops existing
+  # mid-life is worse than no SAN at all.
+  #
+  # -tentative and -deprecated exclude addresses that cannot be bound or are
+  # being retired; `temporary` excludes the RFC 4941 privacy addresses, which
+  # rotate on their own schedule.
+  local ula
+  ula=$($SSH "root@$ip" "ip -6 addr show scope global -tentative -deprecated 2>/dev/null \
+          | grep -v ' temporary' \
+          | grep -oE 'fd33:5692:1834:1000:[0-9a-f:]+' | head -1" 2>/dev/null) || ula=""
+  if [[ -n $ula ]]; then
+    sans+=("$ula")
+    echo "   ULA $ula"
+  else
+    echo "   no ULA found - IPv4 SANs only (see dns/ansible for which hosts have one)"
+  fi
+
   # Mint a single-use token on pistis, scoped to exactly these names.
   local sanargs=() s
   for s in "${sans[@]}"; do sanargs+=(--san "$s"); done

@@ -45,7 +45,20 @@ evaluates no alerts.
    certificate, so this is a listed exception to the lab's TLS rule
    (`prometheus/CLAUDE.md` invariant 5).
 
-4. **A shared outage at OVH is reported, but less precisely.** Both servers
+4. **`http_ca` is the only module that must stay plain HTTP.** It probes the
+   lab CA's published files on ruby (`ca/ruby/`): `/g3/` reverse-proxied from
+   pistis over wg1, `/g2/` static. Those URLs are frozen into certificates as
+   `http://`
+   and cannot be changed; a client needs the files *in order to* establish
+   trust, so requiring TLS would be circular. The module asserts a bare 200
+   with redirects unfollowed, which is what catches an http-to-https redirect
+   being added on ruby. Unlike the other probes the `/g3/` targets depend on
+   the home line and wg1 — ruby serves from its nginx cache while they are
+   down, so a failure there means the outage has outlasted the cache, which is
+   also when a real client starts failing. The `/g2/` target does not: it is a
+   local file, so it failing is nginx or a missing install.
+
+5. **A shared outage at OVH is reported, but less precisely.** Both servers
    are OVH. If both drop, both probers are unreachable as well, so the alerts
    are `outside-vantage-down` for each rather than per-service failures.
 

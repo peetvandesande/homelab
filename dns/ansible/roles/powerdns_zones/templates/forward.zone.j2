@@ -10,5 +10,12 @@
 ; {{ r.ptr_note }}
 {% endif %}
 {{ '%-11s' | format(r.name) }} IN  {{ '%-3s' | format(r.type | default('A')) }} {{ ('%-16s' | format(r.data)) if r.comment is defined else r.data }}{{ (' ; ' ~ r.comment) if r.comment is defined else '' }}
+{# data6 is the host's ULA, emitted as an AAAA beside the A rather than as a
+   second record entry: one line per host keeps the pair obvious, and
+   reverse6.zone.j2 selects on the same key to build the PTRs. An explicit
+   `type: AAAA` record still works and is what the overrides use. #}
+{% if r.data6 is defined %}
+{{ '%-11s' | format(r.name) }} IN  AAAA {{ r.data6 }}{{ (' ; ' ~ r.comment) if r.comment is defined else '' }}
+{% endif %}
 {% endfor %}
 {% endfor %}

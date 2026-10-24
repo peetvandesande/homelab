@@ -52,29 +52,29 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.21:9100']
+      - targets: ['lenora.home:9100']
         labels: {role: pve-host }
-      - targets: ['192.168.8.27:9100']
+      - targets: ['moby.home:9100']
         labels: {role: moby }
-      - targets: ['192.168.8.50:9100']
+      - targets: ['themis.home:9100']
         labels: {role: themis }
-      - targets: ['192.168.8.51:9100']
+      - targets: ['delphi.home:9100']
         labels: {role: delphi }
-      - targets: ['192.168.8.52:9100']
+      - targets: ['pythia.home:9100']
         labels: {role: pythia }
-      - targets: ['192.168.8.53:9100']
+      - targets: ['prometheus.home:9100']
         labels: {role: prometheus }
-      - targets: ['192.168.8.54:9100']
+      - targets: ['grafana.home:9100']
         labels: {role: grafana }
-      - targets: ['192.168.8.55:9100']
+      - targets: ['pistis.home:9100']
         labels: {role: pistis }
-      - targets: ['192.168.8.56:9100']
+      - targets: ['loki.home:9100']
         labels: {role: loki }
-      - targets: ['192.168.8.57:9100']
+      - targets: ['hermes.home:9100']
         labels: {role: hermes }
-      - targets: ['192.168.8.60:9100']
+      - targets: ['jellyfin.home:9100']
         labels: {role: jellyfin }
-      - targets: ['192.168.8.61:9100']
+      - targets: ['navidrome.home:9100']
         labels: {role: navidrome }
 
   # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same twelve
@@ -85,29 +85,29 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.21:12345']
+      - targets: ['lenora.home:12345']
         labels: {role: pve-host }
-      - targets: ['192.168.8.27:12345']
+      - targets: ['moby.home:12345']
         labels: {role: moby }
-      - targets: ['192.168.8.50:12345']
+      - targets: ['themis.home:12345']
         labels: {role: themis }
-      - targets: ['192.168.8.51:12345']
+      - targets: ['delphi.home:12345']
         labels: {role: delphi }
-      - targets: ['192.168.8.52:12345']
+      - targets: ['pythia.home:12345']
         labels: {role: pythia }
-      - targets: ['192.168.8.53:12345']
+      - targets: ['prometheus.home:12345']
         labels: {role: prometheus }
-      - targets: ['192.168.8.54:12345']
+      - targets: ['grafana.home:12345']
         labels: {role: grafana }
-      - targets: ['192.168.8.55:12345']
+      - targets: ['pistis.home:12345']
         labels: {role: pistis }
-      - targets: ['192.168.8.56:12345']
+      - targets: ['loki.home:12345']
         labels: {role: loki }
-      - targets: ['192.168.8.57:12345']
+      - targets: ['hermes.home:12345']
         labels: {role: hermes }
-      - targets: ['192.168.8.60:12345']
+      - targets: ['jellyfin.home:12345']
         labels: {role: jellyfin }
-      - targets: ['192.168.8.61:12345']
+      - targets: ['navidrome.home:12345']
         labels: {role: navidrome }
 
   # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
@@ -119,7 +119,7 @@ scrape_configs:
       cluster: ['1']
       node: ['1']
     static_configs:
-      - targets: ['192.168.8.21']
+      - targets: ['lenora.home']
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -135,13 +135,13 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.60:8920']
+      - targets: ['jellyfin.home:8920']
 
   # Plain HTTP on purpose: Navidrome has one listener serving both the UI and
   # /metrics, and the UI is deliberately unencrypted (homelab/navidrome).
   - job_name: navidrome
     static_configs:
-      - targets: ['192.168.8.61:4533']
+      - targets: ['navidrome.home:4533']
 
   # The Docker Engine on moby. The engine serves /metrics as plain HTTP on
   # 127.0.0.1:9324 and cannot do TLS itself, so nginx on the container fronts
@@ -151,7 +151,7 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.27:9323']
+      - targets: ['moby.home:9323']
         labels: {role: moby }
 
   # Traefik, on moby's .74. Plain HTTP on purpose: the dashboard entrypoint
@@ -160,7 +160,7 @@ scrape_configs:
   # fronts. Put it behind nginx like the engine metrics if that changes.
   - job_name: traefik
     static_configs:
-      - targets: ['192.168.8.74:8080']
+      - targets: ['traefik.home:8080']
         labels: {role: moby }
 
   # Loki exposes its own metrics on the same TLS port as its API.
@@ -169,7 +169,7 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.56:3100']
+      - targets: ['loki.home:3100']
 
   # Grafana's own metrics. Not for pretty graphs: grafana_alerting_* is the only
   # thing that can tell you the alerting itself has stopped working, and a rule
@@ -180,7 +180,7 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.54:3000']
+      - targets: ['grafana.home:3000']
         labels: {role: grafana }
 
   # TLS, terminated by nginx on each DNS container. None of the three PowerDNS
@@ -193,11 +193,11 @@ scrape_configs:
     tls_config:
       ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['192.168.8.50:8083']
+      - targets: ['themis.home:8083']
         labels: {role: themis, component: dnsdist }
-      - targets: ['192.168.8.51:8082']
+      - targets: ['delphi.home:8082']
         labels: {role: delphi, component: recursor }
-      - targets: ['192.168.8.52:8081']
+      - targets: ['pythia.home:8081']
         labels: {role: pythia, component: auth }
 
   # Probes from inside the lab, by the blackbox exporter on this host
@@ -281,6 +281,18 @@ scrape_configs:
         labels: {vantage: jennie, subject: ruby, check: ruby.peetvandesande.com, __param_module: https_ruby }
       - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
         labels: {vantage: jennie, subject: ruby, check: peetvandesande.com, __param_module: https_peetvandesande }
+      # The CA's frozen URLs, from outside the LAN (homelab/ca/ruby). Probed
+      # from jennie because the point is the public path - probing from home
+      # would test neither the DNS nor the internet leg. ruby proxies /g3/ to
+      # pistis over wg1 and serves /g2/ from disk, so the g2 target is the one
+      # that stays up when home is down. /g3/root.crt is G3's AIA caIssuers;
+      # /g2/root.crl is the CDP of the three certificates signed before G3.
+      - targets: ['http://145.239.73.18/g3/root.crl', 'http://[2001:41d0:305:2100::1:3a0e]/g3/root.crl']
+        labels: {vantage: jennie, subject: ruby, check: ca-g3-crl, __param_module: http_ca }
+      - targets: ['http://145.239.73.18/g3/root.crt', 'http://[2001:41d0:305:2100::1:3a0e]/g3/root.crt']
+        labels: {vantage: jennie, subject: ruby, check: ca-g3-aia, __param_module: http_ca }
+      - targets: ['http://145.239.73.18/g2/root.crl', 'http://[2001:41d0:305:2100::1:3a0e]/g2/root.crl']
+        labels: {vantage: jennie, subject: ruby, check: ca-g2-crl, __param_module: http_ca }
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

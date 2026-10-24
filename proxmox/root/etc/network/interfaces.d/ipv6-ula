@@ -1,0 +1,35 @@
+# lenora's IPv6 on the LAN bridge. Managed from homelab/proxmox.
+#
+# WHY THIS IS STATIC WHEN EVERY OTHER HOST USES SLAAC
+#
+# lenora does not and cannot autoconfigure. `net.ipv6.conf.vmbr0.forwarding`
+# is 1 - Proxmox turns it on for the SDN zones - and with `accept_ra` at 1 the
+# kernel ignores Router Advertisements on a forwarding interface. So lenora had
+# no global IPv6 address at all while every container had two. Setting
+# accept_ra=2 would fix that, and would also pull in the ISP prefix and a
+# default route this host has no use for, and would make the Proxmox host's
+# addressing depend on the router being up. Static matches how its IPv4 is
+# already done, and for the same reason.
+#
+# A DROP-IN, NOT /etc/network/interfaces. Proxmox rewrites that file from the
+# web UI, so a copy of it here would be a second source of truth that always
+# loses - the same reasoning as router/. The main file ends with
+# `source /etc/network/interfaces.d/*` and the GUI does not touch this
+# directory. `auto vmbr0` there brings up both families; ifupdown takes the
+# inet and inet6 stanzas for one interface independently.
+#
+# The address mirrors the IPv4 last octet (.21 -> ::21) rather than being
+# EUI-64 like the SLAAC hosts, because nothing derives it from a MAC - so it
+# may as well be legible. It is published as lenora.home's AAAA from
+# dns/ansible/group_vars/all.yml.
+
+iface vmbr0 inet6 static
+    address fd33:5692:1834:1000::21/64
+
+    # The rest of the VPN ULA - road-warrior clients on ruby and jennie, and
+    # the sites' own service addresses - is off-link, and the router is the way
+    # to it. Not a default route: this host has no business reaching the IPv6
+    # internet, and the /64 it sits on is on-link and more specific than this.
+    # `replace` rather than `add` so a re-run is not an error.
+    post-up  ip -6 route replace fd33:5692:1834::/48 via fd33:5692:1834:1000::1 dev vmbr0
+    pre-down ip -6 route del fd33:5692:1834::/48 via fd33:5692:1834:1000::1 dev vmbr0 || true

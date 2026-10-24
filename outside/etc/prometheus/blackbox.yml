@@ -54,6 +54,25 @@ modules:
       no_follow_redirects: true
       valid_status_codes: [200]
 
+  # The lab CA's published files, as a client off the LAN sees them - ruby
+  # reverse-proxies them from pistis over wg1 (homelab/ca/ruby). Plain HTTP on
+  # purpose, and the probe asserts that: these URLs are frozen into
+  # certificates as http://, and no_follow_redirects plus a strict 200 is what
+  # catches somebody adding an http-to-https redirect on ruby and silently
+  # breaking every CRL fetcher that speaks no TLS.
+  #
+  # This probe fails when the home line or wg1 is down for longer than ruby's
+  # cache holds, which is the honest signal: that is exactly when an outside
+  # client cannot check revocation either.
+  http_ca:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: ca.peetvandesande.com
+      no_follow_redirects: true
+      valid_status_codes: [200]
+
   # No site at the root: nginx answers 404, and that is the healthy answer.
   # The probe is for reachability and the certificate.
   https_peetvandesande:

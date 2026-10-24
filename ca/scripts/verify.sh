@@ -78,19 +78,57 @@ for u in "$cdp" "$aia"; do
   fi
 done
 
-# 3. What this host gets with its own resolver. Since the DHCP cutover a LAN
-#    client using Themis resolves the name to pistis and gets the CRL - verify
-#    from a container to see that. This check runs on the workstation, which
-#    may be on a VPN and resolve the name to the public VPS instead.
+# 3. What this host gets with its own resolver, whatever that resolves to.
+#    Both answers now serve the files: Themis says pistis, and the public
+#    answer is ruby, which proxies back to pistis. So a failure here is this
+#    workstation's connectivity rather than the lab's config, which is why it
+#    stays a WARN - check 4 is the one that tests ruby on purpose.
 if curl -sS --max-time 10 -f -o /dev/null "$cdp" 2>/dev/null; then
   pass "$cdp reachable as this host actually resolves it"
 else
   warn "$cdp is NOT reachable as this host actually resolves it" \
-    "this workstation is not using Themis - check from a container instead"
+    "neither pistis nor ruby answered for the address this host resolved - a \
+fact about this workstation, not the lab"
 fi
+
+# 4. The public path, through ruby. ca.peetvandesande.com is a CNAME to ruby
+#    (145.239.73.18), which proxies /g3/ to pistis over wg1 and serves /g2/
+#    statically - ca/ruby/, installed by scripts/install-ruby.sh. --resolve
+#    pins the address so this tests ruby rather than whatever this
+#    workstation's resolver says; the lab answers the same name with pistis.
+#
+#    /g2/root.crl is only ever served here, pistis being a G3 host, so this is
+#    the only check that covers the CDP of serials 1000-1002 at all.
+RUBY=145.239.73.18
+for u in "$cdp" "$aia" "http://$host/g2/root.crl"; do
+  if curl -sS --max-time 15 -f -o /dev/null --resolve "$host:80:$RUBY" "$u" 2>/dev/null; then
+    pass "$u is served publicly by ruby"
+  else
+    bad "$u is served publicly by ruby" \
+      "http error - run ca/scripts/install-ruby.sh on ruby, or check wg1"
+  fi
+done
+
+# 5. ruby's /g2/root.crl is a static copy, not a proxy, so it is the one
+#    published file that can go stale. install-ruby.sh installs it from the
+#    clone's rootca/crl/root.crl, so compare against this repo's copy - a
+#    mismatch means root-crl.sh has run since ruby was last updated.
+check_eq "ruby's /g2/root.crl matches rootca/crl/root.crl" \
+  "$(shasum -a 256 < rootca/crl/root.crl | cut -d' ' -f1)" \
+  "$(curl -sS --max-time 15 --resolve "$host:80:$RUBY" "http://$host/g2/root.crl" \
+     2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
 
 echo "== step-ca"
 check_eq "health endpoint" '{"status":"ok"}' "$($CURL "$CA_URL/health" 2>/dev/null | tr -d '[:space:]')"
+# step-ca binds [::]:8443, so it answers over IPv6 as well - `address` takes
+# one value, and a wildcard is the only way to serve both families. Pinned to
+# the ULA so this tests the v6 listener rather than whichever family the
+# resolver happened to prefer; the name is still what the certificate is
+# verified against.
+PISTIS6=fd33:5692:1834:1000:be24:11ff:fe04:f703
+check_ok "step-ca answers on its ULA, with a certificate that verifies" \
+  "curl -sS --max-time 10 --cacert $ROOT --resolve 'pistis.home:8443:[$PISTIS6]' \
+     -f -o /dev/null '$CA_URL/health'"
 # Serving TLS off the G3 chain is the first real proof the key and cert match.
 check_ok "step-ca serves TLS that verifies against our own root" \
   "$CURL -o /dev/null '$CA_URL/health'"

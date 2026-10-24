@@ -24,6 +24,23 @@ echo "   certificate and key match"
 
 push "$HOST" root
 
+# ----------------------------------------------------------------- IPv6 -----
+# root/etc/network/interfaces.d/ipv6-ula is pushed with everything else, and
+# the stanza applies itself on the next boot. Apply it now with `ip` rather
+# than `ifup`: bringing an interface up or down on the Proxmox host is how you
+# lose every container's networking and your own session with it, and this
+# change only ever ADDS an address and an off-link route. Both commands are
+# idempotent, so a re-run is a no-op.
+echo "== IPv6 ULA on vmbr0"
+$SSH "root@$HOST" '
+  set -e
+  ip -6 addr replace fd33:5692:1834:1000::21/64 dev vmbr0
+  ip -6 route replace fd33:5692:1834::/48 via fd33:5692:1834:1000::1 dev vmbr0
+'
+$SSH "root@$HOST" "ip -6 addr show dev vmbr0 | grep -q 'fd33:5692:1834:1000::21/64'" \
+  && echo "   fd33:5692:1834:1000::21 is up" \
+  || { echo "!! the ULA is not on vmbr0"; exit 1; }
+
 # ------------------------------------------------------------------ NFS -----
 # /etc/exports is pushed with everything else under root/; reapply it. Only
 # `exportfs -ra` is needed - the export set is re-read, nfs-server is not

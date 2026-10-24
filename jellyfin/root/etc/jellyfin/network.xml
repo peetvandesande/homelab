@@ -29,7 +29,11 @@
   <AutoDiscovery>true</AutoDiscovery>
   <EnableUPnP>false</EnableUPnP>
   <EnableIPv4>true</EnableIPv4>
-  <EnableIPv6>false</EnableIPv6>
+  <!-- On since the lab's IPv6 rollout. Kestrel then binds :: as well as
+       0.0.0.0 for both 8096 and 8920, so jellyfin.home answers over either
+       family. Nothing about invariant 1 changes: 8096 is still plain HTTP
+       over IPv6 too, and 8920 still exists only for Prometheus. -->
+  <EnableIPv6>true</EnableIPv6>
   <EnableRemoteAccess>true</EnableRemoteAccess>
   <LocalNetworkSubnets />
   <LocalNetworkAddresses />

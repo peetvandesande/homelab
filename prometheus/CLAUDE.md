@@ -25,12 +25,28 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    `/etc/homelab-tls/host.key`. Naming the group explicitly does. Do not
    "fix" this by disabling `PrivateUsers`.
 
-3. **Targets are IP addresses, not `.home` names.** This was once forced —
-   nothing resolved `.home` — and since the DHCP cutover to Themis it is a
-   choice: names resolve, and every certificate carries a DNS SAN beside its
-   IP SAN, so a name would verify. Renaming 22 targets buys nothing and a
-   container resolves its own FQDN to 127.0.1.1 under DHCP. The self-scrape
-   uses `localhost:9090`, which is in this host's SANs too.
+3. **Lab-host targets are `.home` names; probe subjects stay IP literals.**
+   The scrape jobs — `node`, `alloy`, `dns`, `jellyfin`, `navidrome`, `loki`,
+   `grafana`, `docker`, `traefik`, `pve` — were renamed from IPs in the IPv6
+   rollout, and verify against the DNS SAN every certificate already carried.
+   The self-scrape stays `localhost:9090`, which is in this host's SANs too.
+
+   **The `blackbox` job and the two `outside-*` jobs must NOT be renamed.**
+   Their targets are what is being probed, not where the exporter lives: a
+   probe by name would test DNS and the tunnels rather than the subject, and
+   both servers resolve the public names to tunnel addresses. The modules carry
+   the Host header and TLS name instead — `outside/CLAUDE.md` invariant 1.
+
+   Consequence worth knowing: `instance` label values changed from `IP:port` to
+   `name:port`. Nothing filters on a literal — the dashboards and rules only
+   display `$labels.instance` or group `by (instance)` — but alert instances
+   have a new identity, so anything firing across the change resolves once and
+   re-fires. The scrape also no longer depends on an address, which is what
+   makes a renumbering stop being a `grep` through this file.
+
+   A `.home` target does depend on DNS being up to scrape at all. That is a
+   real new dependency and it is accepted: Themis and Pythia are themselves
+   targets here, so a DNS outage is visible as a DNS outage.
 
 4. **The `node` job must match `FLEET` in `ca/scripts/enrol.sh`.** A host
    enrolled but not listed here is unmonitored; a host listed here but not
