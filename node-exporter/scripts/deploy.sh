@@ -39,9 +39,17 @@ for ip in "${FLEET[@]}"; do
     chmod +x /etc/homelab-tls/post-renew.d/10-node-exporter
     systemctl daemon-reload
     systemctl restart prometheus-node-exporter
-    for _ in $(seq 1 20); do
-      systemctl is-active --quiet prometheus-node-exporter && break; sleep 1
+    # Wait for the LISTENER, not the unit. `is-active` goes true as soon as the
+    # process starts, which is about 200ms before it binds - measured on themis
+    # - and the TLS check below gets ECONNREFUSED in that window and aborts the
+    # whole fleet run at whichever host loses the race. curl does not retry a
+    # refused connection, and --max-time does not help: it bounds the attempt,
+    # not the number of them.
+    for _ in $(seq 1 150); do
+      ss -ltnH "sport = :9100" | grep -q 9100 && break; sleep 0.1
     done
+    # Still assert the unit, which is what catches a crash loop rather than a
+    # slow start - the loop above would simply run out.
     systemctl is-active --quiet prometheus-node-exporter \
       || { journalctl -u prometheus-node-exporter --no-pager -n 20; exit 1; }
   '

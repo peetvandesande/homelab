@@ -25,7 +25,7 @@ else
       "the G2 root is not trusted on $HOST - re-run ca/scripts/enrol.sh"
 fi
 
-if ssh -o BatchMode=yes root@$HOST 'grep -q "url: https://192.168.8.53:9090" /etc/grafana/provisioning/datasources/prometheus.yaml' 2>/dev/null; then
+if ssh -o BatchMode=yes root@$HOST 'grep -q "url: https://prometheus.home:9090" /etc/grafana/provisioning/datasources/prometheus.yaml' 2>/dev/null; then
   pass "prometheus datasource is provisioned against https"
 else bad "prometheus datasource is provisioned against https" "still http, or the file moved"; fi
 
@@ -46,9 +46,9 @@ ds=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
 import sqlite3
 c=sqlite3.connect(\"file:/var/lib/grafana/grafana.db?mode=ro\", uri=True)
 print(*[\"%s|%s\" % r for r in c.execute(\"select name,url from data_source where type=\x27loki\x27\")], sep=\"\n\")"' 2>/dev/null)
-if [[ "$ds" == "Loki|https://192.168.8.56:3100" ]]; then
-  pass "exactly one loki datasource: Loki at https://192.168.8.56:3100"
-else bad "exactly one loki datasource: Loki at https://192.168.8.56:3100" "got: ${ds:-none}"; fi
+if [[ "$ds" == "Loki|https://loki.home:3100" ]]; then
+  pass "exactly one loki datasource: Loki at https://loki.home:3100"
+else bad "exactly one loki datasource: Loki at https://loki.home:3100" "got: ${ds:-none}"; fi
 
 echo "== provisioned dashboards"
 # Same trick: what Grafana loaded, from its own database. A JSON file the
@@ -167,6 +167,10 @@ done
 # A placeholder left unsubstituted is the failure mode both of the above would
 # miss on a first install: the rule loads, names a uid that does not exist and
 # never evaluates.
+# The two reachability curls below keep IP literals deliberately: they ask
+# whether grafana's container can reach the backend over TLS using the system
+# trust store, and an IP keeps DNS out of that question. The datasource URLs
+# themselves are names - asserted separately, just below each.
 if ssh -o BatchMode=yes root@$HOST \
      'grep -l "@@[A-Z_]*_DS_UID@@" /etc/grafana/provisioning/alerting/*.yaml' >/dev/null 2>&1; then
   bad "no unsubstituted datasource placeholders" "a rule still carries @@..._DS_UID@@ - re-run deploy.sh"
