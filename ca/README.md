@@ -17,10 +17,13 @@ leaf certificates                          ACME (auto) or JWK (by hand)
 
 ## The one thing to understand
 
-**The root key never leaves the workstation.** `rootca/private/root.key` is
+**The root key never touches a host.** `rootca/private/root.key` is
 passphrase-protected and is used exactly twice in normal life: to sign a new
 intermediate, and to regenerate the root CRL. Both are workstation-side scripts
 that prompt for the passphrase and never store it. Pistis holds only the G3 key.
+The key and both passphrases are backed up in a password manager — see "Losing
+pistis is a restore, not a rebuild" and `CLAUDE.md` invariant 1 — so "never
+leaves the workstation" is not the rule; "never reaches a server" is.
 
 Everything else is the usual repo-is-the-truth arrangement: **never edit config
 on pistis**, edit `pistis/` here and run `scripts/deploy.sh`.
@@ -269,10 +272,11 @@ openssl pkey -in intermediate/private/intermediate-g3.key \
 openssl x509 -in intermediate/certs/intermediate-g3.crt -noout -pubkey | openssl sha256
 ```
 
-The root key is a different matter and deliberately so: it never leaves the
-workstation and its passphrase is never written down — `CLAUDE.md` invariant 1.
-It is needed only to mint a new intermediate or regenerate the root CRL, so
-losing it costs a new generation of the hierarchy, not the running lab.
+The root key is in the same password manager, with the passphrases for both
+keys — so a dead workstation costs nothing beyond the time to set a new one up.
+It is needed only to mint a new intermediate or regenerate the root CRL, never
+to run the lab. `CLAUDE.md` invariant 1 has the trade-off: keys and passphrases
+in one vault means that vault is the root of trust for every certificate here.
 
 ## Not done yet
 

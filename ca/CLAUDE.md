@@ -42,10 +42,27 @@ The existing root CA files are in `rootca/`.
 
 ## Invariants — do not "simplify" these away
 
-1. **The root key never leaves the workstation, and its passphrase is never
-   written down.** It is not in `secrets.env` and must not be added. Only
-   `scripts/make-intermediate.sh` and `scripts/root-crl.sh` ever touch it, both
-   prompting interactively. Pistis holds the G3 key and nothing above it.
+1. **The root key stays out of this repo and off every host, and only two
+   scripts ever touch it.** `scripts/make-intermediate.sh` and
+   `scripts/root-crl.sh`, both prompting interactively. It is not in
+   `secrets.env` and must not be added — `secrets.env` holds
+   `STEP_CA_KEY_PASSWORD`, `STEP_CA_JWK_PASSWORD` and `JWK_PROVISIONER`, all
+   of which are G3-level and below. Pistis holds the G3 key and nothing above
+   it.
+
+   **The root key and both passphrases are in a password manager**, by choice,
+   so a dead workstation does not end the hierarchy's ability to mint a new
+   intermediate or regenerate the root CRL. This file used to say the root key
+   never left the workstation and its passphrase was never written down; that
+   described an earlier, more brittle arrangement, not this one.
+
+   The consequence to hold in mind: the keys and the passphrases that protect
+   them are in the same vault, so against a compromise of that vault the
+   encryption buys nothing, and that vault is now the root of trust for every
+   certificate in the lab. That is the trade made for recoverability. It is
+   also why the rule above still stands — a second copy of a passphrase in
+   `secrets.env`, which sits in a working tree next to a public repo, would add
+   exposure without adding any recoverability the vault does not already give.
 
 2. **`rootca/openssl.cnf` is a historical record, not live configuration.** Its
    `dir` still points at `/home/peet/ca.g2/root`, which exists nowhere. The
