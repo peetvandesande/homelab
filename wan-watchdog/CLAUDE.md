@@ -109,7 +109,7 @@ Do not break the real WAN. Copy the script aside with unroutable targets
 (RFC 5737 TEST-NET answers nothing) and a fake `ifup` earlier in `PATH`:
 
 ```sh
-ssh root@192.168.8.1
+ssh root@gw
 sed -e 's|^TARGETS=.*|TARGETS="192.0.2.1 198.51.100.1"|' \
     -e 's|^STATE=.*|STATE=/tmp/ww-test.state|' \
     -e 's|^LOCK=.*|LOCK=/tmp/ww-test.lock|' \

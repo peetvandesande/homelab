@@ -122,7 +122,7 @@ container's output is in Loki under `{host="hermes"}` with a `container` label.
 ## Updating mailcow
 
 ```sh
-ssh root@192.168.8.57 'cd /opt/mailcow-dockerized && ./update.sh'
+ssh root@hermes 'cd /opt/mailcow-dockerized && ./update.sh'
 ```
 
 Then run `deploy.sh` again. `update.sh` can rewrite `mailcow.conf`, and the

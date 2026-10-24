@@ -223,7 +223,7 @@ from grafana's container (it is on the LAN, which `local_only` requires):
 
 ```sh
 . grafana/secrets.env
-ssh root@192.168.8.54 "curl -sS -X POST -H 'Content-Type: application/json' \
+ssh root@grafana "curl -sS -X POST -H 'Content-Type: application/json' \
   https://192.168.8.90/api/webhook/$HA_WEBHOOK_ID -d '{\"commonLabels\":{\"alertname\":\"Test\"},
   \"alerts\":[{\"status\":\"firing\",\"labels\":{\"alertname\":\"Test\",\"severity\":\"warning\"},
   \"annotations\":{\"summary\":\"Test from Grafana\"}}]}'"

@@ -237,7 +237,7 @@ groups:
         annotations:
           summary: "vpn-domain-sync on themis cannot sync from the router"
           description: >-
-            It keeps the last good list, so routing still works - but a policy you add on the router will not take effect. Usually the router rebooted into a firmware upgrade that removed /usr/local/bin/vpn-policy-dump or the authorized_keys entry; dns/README.md has both to paste back. Check: ssh root@192.168.8.50 vpn-domain-sync
+            It keeps the last good list, so routing still works - but a policy you add on the router will not take effect. Usually the router rebooted into a firmware upgrade that removed /usr/local/bin/vpn-policy-dump or the authorized_keys entry; dns/README.md has both to paste back. Check: ssh root@themis vpn-domain-sync
         noDataState: NoData
         execErrState: Alerting
         isPaused: false

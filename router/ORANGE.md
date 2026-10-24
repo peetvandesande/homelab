@@ -107,7 +107,7 @@ there is no data path; the switch port reads `link:up 10gbase` regardless,
 because the YT92xx forces the 10G path.
 
 ```sh
-ssh -J root@192.168.8.1 root@192.168.11.1
+ssh -J root@gw root@192.168.11.1
 pon psg    # ploam state: 51 = O5.1 operational, 23 = O2.3 serial-number state
 pon gsg    # onu_id, auth_status, fec_status
 pon pdcg   # DS counters: assign_onu_id, ranging_time, deact_onu
@@ -193,7 +193,7 @@ separate it from a line that is genuinely down:
 
 ```sh
 ifstatus wan | jsonfilter -e '@.up' -e '@["ipv4-address"][0].address'  # up, with an address
-ssh -J root@192.168.8.1 root@192.168.11.1 pon psg                      # ploam state 51
+ssh -J root@gw root@192.168.11.1 pon psg                      # ploam state 51
 logread | grep udhcpc | tail                                           # silent = never rebound
 ```
 
@@ -218,7 +218,7 @@ see.
 - **`nohup` does not exist** on the router: `nohup cmd & echo ok` prints `ok`
   and never runs `cmd`.
 - The boot-time `Failed to send RS (Address not available)` is a benign DAD race.
-- Reach the stick's UI without routes: `ssh -L 8443:192.168.11.1:443 root@192.168.8.1`.
+- Reach the stick's UI without routes: `ssh -L 8443:192.168.11.1:443 root@gw`.
 
 ## IoT Wi-Fi bridging fault
 

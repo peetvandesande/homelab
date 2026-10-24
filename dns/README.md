@@ -166,7 +166,7 @@ few seconds of LAN DNS; that follows a policy you edited, not a schedule.
 To apply a change immediately rather than waiting:
 
 ```sh
-ssh root@192.168.8.50 vpn-domain-sync
+ssh root@themis vpn-domain-sync
 ```
 
 The file is under `/var/lib` on purpose: everything in `themis/` here is pushed
@@ -312,8 +312,8 @@ first time. After that it never touches the database's contents. To see
 what a lab has registered:
 
 ```sh
-ssh root@192.168.8.52 pdnsutil list-all-zones
-ssh root@192.168.8.52 pdnsutil list-zone openstack.home
+ssh root@pythia pdnsutil list-all-zones
+ssh root@pythia pdnsutil list-zone openstack.home
 ```
 
 While no lab is running, reverse lookups in `192.168.32.0/21` return
@@ -345,7 +345,7 @@ printed is an error.
 #### Add or change `www.acme.example`
 
 ```sh
-ssh root@192.168.8.52 'curl -sS -X PATCH \
+ssh root@pythia 'curl -sS -X PATCH \
   -H "X-API-Key: $(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf)" \
   -H "Content-Type: application/json" \
   http://127.0.0.1:8181/api/v1/servers/localhost/zones/acme.example. \
@@ -374,7 +374,7 @@ changed — `"type": "CNAME", "content": "web.openstack.home."`, or
 `DELETE` takes no `records`, and removes the whole rrset for that name and type:
 
 ```sh
-ssh root@192.168.8.52 'curl -sS -X PATCH \
+ssh root@pythia 'curl -sS -X PATCH \
   -H "X-API-Key: $(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf)" \
   -H "Content-Type: application/json" \
   http://127.0.0.1:8181/api/v1/servers/localhost/zones/acme.example. \
@@ -394,14 +394,14 @@ record's TTL is not a failure:
 
 ```sh
 dig +short @192.168.8.52 www.acme.example A
-ssh root@192.168.8.52 pdnsutil list-zone acme.example
+ssh root@pythia pdnsutil list-zone acme.example
 ```
 
 The zone as the API sees it, which is also how to read back a record's exact
 content before changing it:
 
 ```sh
-ssh root@192.168.8.52 'curl -sS \
+ssh root@pythia 'curl -sS \
   -H "X-API-Key: $(sed -n "s/^api-key=//p" /etc/powerdns/pdns.conf)" \
   http://127.0.0.1:8181/api/v1/servers/localhost/zones/acme.example.' |
   python3 -m json.tool
