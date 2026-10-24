@@ -242,14 +242,14 @@ regenerates and redeploys by hand.
 
 ## Not done yet
 
-- **No certificate-expiry monitoring.** The `node` job covers the container,
-  but step-ca 0.30 exposes no Prometheus endpoint, so nothing watches whether
-  issued certificates are actually being renewed. `blackbox_exporter` with the
-  `tls_connect` module on .53 is the way in, and there is no Grafana dashboard
-  or alert off any of it.
-- **No backup of the G3 key.** `/etc/step-ca/secrets/intermediate_ca_key` on
-  pistis and nowhere else. It is recoverable — re-run `make-intermediate.sh`
-  and re-issue — but that is a rebuild, not a restore.
+- **No backup of the G3 key — the one real gap.**
+  `/etc/step-ca/secrets/intermediate_ca_key` is on pistis and nowhere else. It
+  is recoverable — re-run `make-intermediate.sh` and re-issue — but that is a
+  rebuild of every certificate in the lab, not a restore.
+- **The G2 intermediate expires 19 December 2026** (`rootca/index.txt` serial
+  1000). Nothing chains through it: the two squid certificates were signed by
+  the *root* directly, not by it, so its expiry takes nothing with it. It is
+  listed here so that is a recorded conclusion rather than a surprise.
 - **`ca.home` is a CNAME to `pistis.home`**, and works for TLS only because
   `ca.json` lists it in `dnsNames`. If you add another alias, add it there too
   or TLS to that name fails.
