@@ -141,6 +141,17 @@ by `scripts/install-ruby.sh` run from ruby's own clone:
 ssh ruby 'cd ~/homelab && git pull && sudo ca/scripts/install-ruby.sh'
 ```
 
+**And then `outside/install.sh` on jennie**, or the monitoring half is dead
+weight. The `http_ca` module lives in `outside/etc/prometheus/blackbox.yml`,
+which is installed on the vantage servers and not by this directory, so
+adding the Prometheus targets is only two thirds of the job. A blackbox
+exporter asked for a module it does not have answers **400 Bad Request** —
+which reads exactly like ruby rejecting the request, and cost a round of
+misdiagnosis on 24 October 2026. Check with
+`curl -s 'http://192.168.254.2:9115/probe?module=http_ca&target=http://145.239.73.18/g3/root.crl'`:
+`Unknown module "http_ca"` is the exporter, not the origin.
+```
+
 **`/g2/` holds exactly one file: `root.crl`.** All three certificates the root
 signed before G3 carry `crlDistributionPoints =
 http://ca.peetvandesande.com/g2/root.crl` and **no `authorityInfoAccess` at

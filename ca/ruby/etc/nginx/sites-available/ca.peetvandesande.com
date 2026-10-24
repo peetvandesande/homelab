@@ -35,8 +35,11 @@ server {
     listen [::]:80;
     server_name ca.peetvandesande.com;
 
-    access_log /var/log/nginx/ca.access.log;
-    error_log  /var/log/nginx/ca.error.log;
+    # Named for the vhost in full. Not $server_name: that is resolved per
+    # request, so nginx cannot open the file until one arrives, and a request
+    # with no Host at all writes to a file called "-access.log".
+    access_log /var/log/nginx/ca.peetvandesande.com.access.log;
+    error_log  /var/log/nginx/ca.peetvandesande.com.error.log;
 
     # ------------------------------------------------------------------ /g3/
     # The path is G3's crlDistributionPoints and authorityInfoAccess, so it is
