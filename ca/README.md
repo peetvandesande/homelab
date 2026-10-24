@@ -66,12 +66,10 @@ first, then prometheus, then the rest — see each stack's CLAUDE.md.
 Point an ACME client at the directory URL. Nothing else is needed — the CA
 issues to any name, there is no account approval step.
 
-```
-[https://pistis.home:8443/acme/acme/directory](https://pistis.home:8443/acme/acme/directory)
-```
+<https://pistis.home:8443/acme/acme/directory>
 
 Clients must trust the G2 root first. Pistis serves it, unauthenticated, at
-`[http://pistis.home/g3/root.crt](http://pistis.home/g3/root.crt)`, along with `chain.pem`, `intermediate.crt`
+<http://pistis.home/g3/root.crt>, along with `chain.pem`, `intermediate.crt`
 and `root.crl`.
 
 Note the certificate itself names `http://ca.peetvandesande.com/g3/`, not
@@ -103,14 +101,14 @@ step ca bootstrap --ca-url https://pistis.home:8443 --fingerprint <root fingerpr
 ```
 
 `deploy.sh` prints the fingerprint when it finishes. Without step-cli, fetch
-`[http://pistis.home/g3/root.crt](http://pistis.home/g3/root.crt)` and add it to the system store by hand.
+<http://pistis.home/g3/root.crt> and add it to the system store by hand.
 
 ## Revocation
 
 Two separate mechanisms, and it matters which one you need.
 
 - **A leaf** — `step ca revoke --cert foo.crt`. step-ca handles it and serves
-  the result from its own CRL at `<https://pistis.home:8443/1.0/crl>`.
+  the result from its own CRL at <https://pistis.home:8443/1.0/crl>.
 - **The G3 intermediate itself** — that is the root's job:
   `openssl ca -config … -revoke intermediate/certs/intermediate-g3.crt`, then
   `scripts/root-crl.sh`, then `scripts/deploy.sh` to publish the new CRL.
