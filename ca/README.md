@@ -240,12 +240,42 @@ regenerates and redeploys by hand.
   not be able to change the signing behaviour of a running CA unattended. Note
   the `-1` Debian revision — the `.deb` filenames carry it, the git tags do not.
 
+## Losing pistis is a restore, not a rebuild
+
+The G3 key exists in three places: `/etc/step-ca/secrets/intermediate_ca_key`
+on pistis, `intermediate/private/intermediate-g3.key` on the workstation
+(encrypted PKCS#8, gitignored), and one copy in a password manager outside the
+lab. This file deliberately does not say which, since that account is itself a
+target. The certificate needs no backup — `intermediate/certs/
+intermediate-g3.crt` is committed, because a certificate is public.
+
+To restore: put the key back at `intermediate/private/intermediate-g3.key` and
+run `scripts/deploy.sh`, which pushes the key and certificate and brings
+step-ca up. **Nothing is re-issued and no client re-bootstraps**, because the
+G3 key is unchanged and every leaf under it still chains to the same root.
+`make-intermediate.sh` is for a *lost key*, not a lost host — running it would
+mint a new G3 and invalidate every certificate in the lab.
+
+**The backup is useless without `STEP_CA_KEY_PASSWORD` from `secrets.env`**,
+which is gitignored and exists nowhere else in this repo. Back that up with the
+key, or the key cannot be decrypted. Verified on 24 October 2026 that the
+passphrase in `secrets.env` decrypts the workstation copy to the same public key
+the live G3 certificate carries:
+
+```sh
+set -a; . ./secrets.env; set +a
+openssl pkey -in intermediate/private/intermediate-g3.key \
+  -passin env:STEP_CA_KEY_PASSWORD -pubout | openssl sha256
+openssl x509 -in intermediate/certs/intermediate-g3.crt -noout -pubkey | openssl sha256
+```
+
+The root key is a different matter and deliberately so: it never leaves the
+workstation and its passphrase is never written down — `CLAUDE.md` invariant 1.
+It is needed only to mint a new intermediate or regenerate the root CRL, so
+losing it costs a new generation of the hierarchy, not the running lab.
+
 ## Not done yet
 
-- **No backup of the G3 key — the one real gap.**
-  `/etc/step-ca/secrets/intermediate_ca_key` is on pistis and nowhere else. It
-  is recoverable — re-run `make-intermediate.sh` and re-issue — but that is a
-  rebuild of every certificate in the lab, not a restore.
 - **The G2 intermediate expires 19 December 2026** (`rootca/index.txt` serial
   1000). Nothing chains through it: the two squid certificates were signed by
   the *root* directly, not by it, so its expiry takes nothing with it. It is
