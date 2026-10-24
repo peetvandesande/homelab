@@ -124,6 +124,16 @@ hierarchy that is not live: its one file changes only when something is
 revoked off the root, and pistis is a G3 host that holds no `/g2/` at all, so
 there is nothing there to proxy to. ruby serves it from `/var/www/ca.g2`.
 
+**ruby had a dead `ca.peetvandesande.com` block before this**, inside
+`sites-available/peetvandesande.com` (which this repo does not manage). It had
+`root /var/www/ca`, a directory that does not exist, so it answered 404 to
+everything — this is what "dangling since 2016" meant, and why probing the
+public name returned 404 rather than hitting nginx's default server. Its
+`access_log` file had never been created, so it had served no request at all.
+It was deleted on 24 October 2026; `install-ruby.sh` refuses to run while
+another enabled site claims the name, because nginx would otherwise resolve
+the collision itself with nothing but a warning.
+
 The vhost is `ruby/etc/nginx/sites-available/ca.peetvandesande.com`, installed
 by `scripts/install-ruby.sh` run from ruby's own clone:
 
