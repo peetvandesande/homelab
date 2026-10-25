@@ -1,0 +1,65 @@
+// Fleet-wide automatic patching. Managed from homelab/apt - do not edit here.
+//
+// 52, so it is read after the unattended-upgrades package's own
+// 20auto-upgrades and 50unattended-upgrades. Those stay untouched conffiles:
+// owning a copy of them here would mean re-merging on every package upgrade,
+// and dpkg would prompt on a file we had rewritten.
+
+// apt config LISTS APPEND. Setting Origins-Pattern in a later file adds to
+// whatever 50unattended-upgrades already defined rather than replacing it, so
+// the list has to be cleared first or the package's defaults stay in effect
+// alongside ours. This is the single most important line in the file.
+#clear Unattended-Upgrade::Origins-Pattern;
+
+// Debian security only. What this EXCLUDES is the safety mechanism:
+//   - lenora's pve-* packages come from the Proxmox repo, origin "Proxmox",
+//     so Proxmox upgrades stay a manual, deliberate act.
+//   - moby's docker-ce comes from download.docker.com, origin "Docker". An
+//     unattended docker upgrade restarts the daemon and every stack with it.
+//   - hermes's mailcow is Docker images driven by its own update.sh, not apt.
+//   - alloy comes from apt.grafana.com, which apt reports as origin "." - so
+//     the log shipper on all twelve hosts is not upgraded from under them.
+// It also excludes Debian's own stable point releases (a=stable, 13.7 as of
+// this writing), which are left to a person - apt/CLAUDE.md invariant 3.
+// Widening this to -updates, stable or a third-party origin is how all of
+// that stops being true, so do not, without reading that invariant first.
+// The -security SUFFIX is required and is not a typo. security.debian.org's
+// Release carries n=trixie-security, so `codename=${distro_codename}` - which
+// is the form Debian still ships, for compatibility with the pre-bullseye
+// naming - matches nothing on this fleet and would patch exactly zero
+// packages while looking entirely correct. Verified against apt-cache policy
+// on pythia: v=13, o=Debian, a=stable-security, n=trixie-security,
+// l=Debian-Security.
+Unattended-Upgrade::Origins-Pattern {
+  "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+
+// Never reboot a host on a timer. lenora carries every container, and the
+// containers have no kernel of their own to reboot into. A pending reboot is
+// published as a metric instead and stays a decision someone makes.
+Unattended-Upgrade::Automatic-Reboot "false";
+
+// Both default to letting apt decide what is no longer needed. Unattended
+// autoremove on twelve hosts is how a package something depends on quietly
+// goes away; on lenora the kernel variant could take a pve-kernel with it.
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "false";
+
+// One package at a time, so an interrupted run leaves a consistent dpkg state
+// rather than a half-applied transaction.
+Unattended-Upgrade::MinimalSteps "true";
+
+// The record goes to syslog, which journald collects and alloy/ ships to Loki
+// as {host="<name>"}. That is the only narrative account of what was patched -
+// the metrics say how much and how long ago, not what.
+Unattended-Upgrade::SyslogEnable "true";
+
+// No mail. hermes bounces mail for domains it does not host, and the
+// monitoring path for this is Prometheus, not a mailbox nobody reads.
+
+// Run the periodic jobs. These are scalars rather than a list, so this file
+// simply wins over 20auto-upgrades by being read later.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";

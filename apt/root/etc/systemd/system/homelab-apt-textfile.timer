@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh apt patching metrics hourly
+
+[Timer]
+OnCalendar=hourly
+# Twelve hosts on one Proxmox box: spread the apt-get simulations rather than
+# running them in lockstep at the top of the hour. Nothing here touches the
+# network, so this is about lenora's IO, not a mirror's patience.
+RandomizedDelaySec=5m
+# A host that was off at the hour publishes on boot rather than waiting, so its
+# metrics are not stale for up to an hour after it comes back.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

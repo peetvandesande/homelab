@@ -13,6 +13,10 @@ This is not a service stack and has no `root/` tree: there is nothing to push,
 only state to assert. That is why it does not follow the
 one-directory-per-container shape.
 
+`apt/` is the near miss: unattended security upgrades apply to every host too,
+but they need files pushed and packages installed, so they would have broken
+that shape rather than fitting into it. Patching is not here.
+
 ## Working on this
 
 `masked-units` is the source of truth. `scripts/deploy.sh` masks everything

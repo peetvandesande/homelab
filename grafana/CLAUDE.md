@@ -116,9 +116,12 @@ VM's host metrics, collected by lenora over the guest agent
 itself, the IPv6 prefix, whether `router-metrics/` is collecting at all, and
 the Wi-Fi station table; tunnels are already in `probes`. Its ONT alerts travel over the line they report on, so
 a dead line reaches the phone only afterwards – the heartbeat is what reports
-it live.
+it live. `apt.yaml` covers fleet-wide automatic security patching: whether
+each host is still applying updates at all, an update apt will not take
+unattended, and the two things `apt/` deliberately leaves to a person – a
+reboot and a service restart (`apt/CLAUDE.md`).
 
-Forty-three rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+Forty-seven rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so

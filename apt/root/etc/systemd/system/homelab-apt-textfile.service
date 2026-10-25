@@ -1,0 +1,6 @@
+[Unit]
+Description=Publish apt patching state for node-exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-apt-textfile

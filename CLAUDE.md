@@ -309,6 +309,14 @@ reads the host list from `ca/scripts/enrol.sh` rather than keeping a fourth
 copy. Today it masks `openipmi.service`, which was the fleet's only failed unit
 and made the `systemd-unit-failed` alert useless — see `fleet/CLAUDE.md`.
 
+**Automatic security patching lives in `apt/`** — unattended-upgrades on all
+twelve enrolled hosts, restricted to the Debian security origin, which is what
+keeps Proxmox, Docker and mailcow upgrades a manual act. Nothing is restarted
+or rebooted unattended; that gap is published as a metric instead. There is
+deliberately **no apt cache or proxy**: the bandwidth it would save is a
+rounding error on a fibre line, and the traffic that is actually large is
+Docker image pulls, which an apt proxy does not touch. `apt/CLAUDE.md`.
+
 Jobs that are not services publish state through node-exporter's **textfile
 collector**, enabled fleet-wide: drop a `.prom` file into
 `/var/lib/node_exporter/textfile` and it is scraped with the host's own labels.

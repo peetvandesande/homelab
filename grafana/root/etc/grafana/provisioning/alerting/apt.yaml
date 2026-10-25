@@ -1,0 +1,224 @@
+# Automatic security patching across the fleet: the `apt` job's metrics come
+# from apt/, published through node-exporter's textfile collector on all twelve
+# hosts. Managed from homelab/grafana.
+#
+# unattended-upgrades is silent by design - it logs and exits - so the failure
+# this group exists for is not "an upgrade broke something" but "nothing has
+# been patched for a month and nobody noticed".
+#
+# Two of these alert on a decision left undone rather than on a fault, and
+# repeat every 12h while they last (notifications.yaml). That nagging is the
+# point: a reboot and a service restart are the two things apt/ deliberately
+# will not do unattended, so something has to keep asking.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: apt
+    folder: Homelab
+    interval: 5m
+    rules:
+      - uid: apt-not-patching
+        title: "Host has stopped patching"
+        condition: B
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.role }} has not run unattended-upgrades in over 48h"
+          description: >-
+            apt-daily-upgrade.timer should run daily. A host that has gone quiet for two days is either failing the run or no longer trying - journalctl -u apt-daily-upgrade on the host, then apt/scripts/verify.sh. NoData means the metric itself is gone, which is the same news: nothing is publishing patching state, so nothing can be said to be patched.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            # The age, not the stamp, so the threshold is readable and a host
+            # that has never patched reports a very large number rather than
+            # disappearing - apt/'s textfile script publishes 0 for an absent
+            # stamp on purpose.
+            model:
+              editorMode: code
+              expr: 'time() - apt_periodic_stamp_seconds{job="node",stamp="unattended-upgrades"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [172800]
+      - uid: apt-security-pending
+        title: "Security update held back"
+        condition: B
+        for: 24h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.role }} has {{ $values.A }} security update(s) it is not installing"
+          description: >-
+            A pending security update is normal for a few hours - the daily timer has a randomised window. Still pending after a day means apt will not take it unattended: a conffile question, a phased update, or a package held. apt-get -s upgrade on the host shows which. This is the rule that catches "the timer ran" without "the job got done".
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'apt_upgrades_pending{job="node",origin="security"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      - uid: apt-services-need-restart
+        title: "Patched but not running the patch"
+        condition: B
+        for: 7d
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.role }} has {{ $values.A }} service(s) on replaced libraries"
+          description: >-
+            unattended-upgrades does not restart services, so a replaced libssl or libc leaves every running process on the old copy - installed is not the same as effective. needrestart -b on the host lists them. apt/ keeps the restart a decision rather than automating it, which is why this waits a week before saying so.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'apt_services_need_restart{job="node"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      - uid: apt-reboot-required
+        title: "Reboot required"
+        condition: B
+        for: 7d
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.role }} has had a kernel replaced and wants a reboot"
+          description: >-
+            In practice this is lenora: a container installs no kernel of its own, so the file behind it should never appear in one. Nothing will reboot it for you - apt/ sets Automatic-Reboot false, and lenora carries every container in the lab.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'apt_reboot_required{job="node"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]

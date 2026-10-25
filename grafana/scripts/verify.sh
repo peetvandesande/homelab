@@ -105,6 +105,9 @@ RULE_UIDS=(
   # homelab.yaml, group fleet
   disk-low host-down mailcow-container-down memory-low service-target-down
   systemd-unit-failed textfile-collector-error
+  # apt.yaml
+  apt-not-patching apt-reboot-required apt-security-pending
+  apt-services-need-restart
   # heartbeat.yaml
   heartbeat
   # homeassistant-vm.yaml

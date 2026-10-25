@@ -1,0 +1,61 @@
+#!/bin/sh
+# Publish apt patching state through node-exporter's textfile collector.
+# Managed from homelab/apt - do not edit here.
+#
+# unattended-upgrades has no metrics endpoint and only logs, so a host that has
+# quietly stopped patching looks exactly like one with nothing to patch. These
+# are the metrics grafana/'s `apt` group alerts on.
+set -eu
+
+out=/var/lib/node_exporter/textfile/apt.prom
+tmp=$out.$$
+trap 'rm -f "$tmp"' EXIT
+
+# -s simulates and takes no locks, so this never races a real apt run or the
+# daily timer. It is also offline: each `Inst` line names the archive it would
+# come from, out of the lists on disk, which is how a security update is told
+# from an ordinary one without touching the network. The field matched is the
+# Label - `Debian-Security:13/stable-security` against `Debian:13.7/stable` -
+# whereas the config in 52homelab-unattended-upgrades matches on Codename. Both
+# describe security.debian.org and nothing else here; `unattended-upgrade
+# --dry-run` in deploy.sh is what would catch them disagreeing.
+sim=$(apt-get -s -q -o Debug::NoLocking=true upgrade 2>/dev/null | grep '^Inst ' || true)
+total=$(printf '%s' "$sim" | grep -c '^Inst ' || true)
+sec=$(printf '%s' "$sim" | grep -c 'Debian-Security' || true)
+
+# A stamp that does not exist reports 0 rather than being omitted: `time() - 0`
+# is a very large age, which is the correct reading of "has never run" and the
+# one the alert should fire on. An absent series would evaluate as NoData.
+stamp() { # stamp <label> <path>
+  if [ -e "$2" ]; then set -- "$1" "$(stat -c %Y "$2")"; else set -- "$1" 0; fi
+  printf 'apt_periodic_stamp_seconds{stamp="%s"} %s\n' "$1" "$2"
+}
+
+# Created by unattended-upgrades' own /etc/kernel/postinst.d hook, so in a
+# container - which installs no kernel - this should never appear. It is
+# effectively a lenora metric, and that is the host where it matters.
+reboot=0
+[ -e /var/run/reboot-required ] && reboot=1
+
+# needrestart reports; it is configured never to act. This closes the gap
+# between "patched" and "effective": a replaced libssl leaves every running
+# process on the old copy until something restarts it.
+nr=$(needrestart -b 2>/dev/null | grep -c '^NEEDRESTART-SVC:' || true)
+
+{
+  echo '# HELP apt_upgrades_pending Packages apt would install now, by origin.'
+  echo '# TYPE apt_upgrades_pending gauge'
+  echo "apt_upgrades_pending{origin=\"security\"} ${sec:-0}"
+  echo "apt_upgrades_pending{origin=\"other\"} $(( ${total:-0} - ${sec:-0} ))"
+  echo '# HELP apt_periodic_stamp_seconds Unix time apt last completed each periodic job.'
+  echo '# TYPE apt_periodic_stamp_seconds gauge'
+  stamp update-success /var/lib/apt/periodic/update-success-stamp
+  stamp unattended-upgrades /var/lib/apt/periodic/unattended-upgrades-stamp
+  echo '# HELP apt_reboot_required 1 if a package upgrade asked for a reboot.'
+  echo '# TYPE apt_reboot_required gauge'
+  echo "apt_reboot_required $reboot"
+  echo '# HELP apt_services_need_restart Services running against a library that has since been replaced.'
+  echo '# TYPE apt_services_need_restart gauge'
+  echo "apt_services_need_restart ${nr:-0}"
+} > "$tmp"
+mv -f "$tmp" "$out"
