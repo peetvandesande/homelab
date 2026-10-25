@@ -132,6 +132,23 @@ Every container is unprivileged, nesting-enabled and starts at boot:
   unless it is part of the DNS stack itself.
 - Always pass `--pool`.
 
+**`ip6=auto` leaves a container stuck in `systemd is-system-running: starting`,
+sometimes permanently.** Proxmox writes `iface eth0 inet6 auto`, and Debian's
+ifupdown implements that by running `dhclient -6` as well as accepting RAs. The
+router runs **no DHCPv6** (`ra_flags none`, DHCPv6 disabled — that is the
+design), so the solicits go unanswered forever and `networking.service` never
+leaves `activating`. Addressing itself is fine: the ULA and GUA are there from
+the RA, `network-online.target` goes active, and every service starts.
+
+Two consequences worth knowing. `networking.service` has
+`TimeoutStartSec=infinity`, so it **never fails** — which means the
+`systemd-unit-failed` alert in `grafana/` cannot see it. A unit wedged forever
+is invisible to this lab's monitoring in a way a crashed one is not. And
+anything that keys off `is-system-running` will read a healthy container as
+still booting. On 25 October 2026 four of ten containers were in that state;
+three cleared when they were rebooted and jellyfin did not, so it is a race in
+ifupdown rather than a steady property of a host.
+
 Services bind to specific IPs, and in an LXC with ifupdown
 `network-online.target` is reached *before* `eth0` has its address. DHCP widens
 that window, so this now applies to every container, not just the DNS stack: if
