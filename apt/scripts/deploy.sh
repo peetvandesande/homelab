@@ -75,4 +75,6 @@ done
 
 echo
 echo "== unattended security upgrades on ${#HOSTS[@]} host(s), metrics publishing"
-echo "   alerts live in grafana/ group 'apt' - deploy grafana/ if they are new"
+echo "   alerts live in grafana/ group 'apt'. Deploy grafana/ only once EVERY host"
+echo "   publishes: apt-not-patching treats NoData as alerting, so provisioning it"
+echo "   early fires on the phone for every host still missing the metric."

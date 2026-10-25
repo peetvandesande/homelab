@@ -119,7 +119,10 @@ a dead line reaches the phone only afterwards – the heartbeat is what reports
 it live. `apt.yaml` covers fleet-wide automatic security patching: whether
 each host is still applying updates at all, an update apt will not take
 unattended, and the two things `apt/` deliberately leaves to a person – a
-reboot and a service restart (`apt/CLAUDE.md`).
+reboot and a service restart (`apt/CLAUDE.md`). **Its `apt-not-patching` rule
+treats NoData as alerting**, deliberately — a host publishing nothing cannot be
+called patched — so this group must not be provisioned until every host in
+`apt/` has been deployed, or it fires once per host that is still missing.
 
 Forty-seven rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent

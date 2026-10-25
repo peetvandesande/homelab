@@ -41,6 +41,12 @@ Independent of every other deploy order, with one dependency: the textfile
 drop-box that `node-exporter/scripts/deploy.sh` creates. Deploy refuses without
 it rather than publishing metrics nothing will scrape.
 
+**Deploy here before `grafana/`, and not the other way round.**
+`apt-not-patching` has `noDataState: Alerting` — which is correct, because a
+host that publishes nothing cannot be said to be patched — so provisioning the
+`apt` group while any host is still missing the metric fires it on the phone
+for every one of them. Finish the fleet first, then deploy `grafana/`.
+
 ## Invariants — do not "simplify" these away
 
 1. **The package's own `20auto-upgrades` and `50unattended-upgrades` are left
@@ -163,6 +169,22 @@ assumptions behind it were wrong:
   pending on pythia, 2 on lenora, on 25 October 2026. Nothing had been applying
   them, which is the gap this directory closes.
 
-The end-to-end loop — timer fires, packages install, stamp advances, alert
-clears — has **not** been watched happen yet. Do that before trusting
-`apt-not-patching` to mean anything.
+Then the whole loop was watched happen on pythia, 25 October 2026:
+`apt-daily-upgrade.service` installed 19 security updates — `openssl`,
+`libssl3t64`, `nginx`, `postfix` among them — the log recorded `Allowed origins
+are: origin=Debian,codename=trixie-security,label=Debian-Security`, which is
+the substituted form proving invariant 3, the stamp advanced,
+`apt_upgrades_pending{origin="security"}` went 19 → 0, and Prometheus had all
+six series under `role=pythia` on the next scrape. `pdns` kept answering on
+`192.168.8.52` throughout, no unit failed, and the 35 point-release upgrades
+were left alone exactly as intended.
+
+**`apt_services_need_restart` went to 12 on that one upgrade**, which is
+invariant 4 doing its job rather than a fault: `pdns`, `nginx`, `ssh`,
+`systemd-journald` and eight others are running against the `libssl` that was
+replaced underneath them. Nothing here will restart them.
+
+`apt_periodic_stamp_seconds{stamp="update-success"}` stays 0 until
+`apt-daily.service` has run once — the stamp is written by apt's own daily job,
+not by `apt-get update`. No alert reads it, so that is cosmetic, but do not read
+a 0 there as a fault.
