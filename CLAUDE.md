@@ -190,6 +190,15 @@ Three things to be aware of:
   Moby additionally answers on .73 and .74 for the stacks it publishes,
   inside the range pencilled in for Non-Production. Existing anomalies —
   don't take them as precedent, and don't "tidy" them without asking.
+
+  **Lexie is outside `FLEET`**, so it holds no certificate, is not scraped, and
+  `fleet/` and `apt/` never reach it. It had `proc-fs-nfsd.mount` and
+  `run-rpc_pipefs.mount` failed — an unprivileged LXC cannot mount either —
+  which nothing in the lab could see, for the same reason. Both were masked by
+  hand on 25 October 2026. They must **not** go in `fleet/masked-units`: that
+  file masks on every enrolled host, and both units are *active and required on
+  lenora*, which exports `/hddpool/media` over NFS. Nothing reapplies the mask
+  if lexie is rebuilt.
 - **`homeassistant` (VM 302) is at 192.168.8.90**, pooled into Production
   but outside its range, by choice. It is one of two VMs, with `hermes`:
   Home Assistant OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will

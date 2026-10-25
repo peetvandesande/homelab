@@ -62,6 +62,16 @@ directory owns, so run it whenever.
    should still see it here, because this is the directory that claims the
    fleet is clean.
 
+## When a unit does *not* belong here
+
+`masked-units` masks on every enrolled host, so a unit that is noise on one
+host and load-bearing on another cannot go in it. The worked example is lexie's
+`proc-fs-nfsd.mount` and `run-rpc_pipefs.mount`, failed because an unprivileged
+LXC cannot mount either: both are **active and required on lenora**, which
+exports `/hddpool/media` over NFS, so listing them here would have broken the
+export. They were masked on lexie by hand instead — and lexie is not in `FLEET`
+anyway, so this directory never reaches it. See the root `CLAUDE.md`.
+
 ## What is masked, and why
 
 `masked-units` carries the reason against each entry. At present that is

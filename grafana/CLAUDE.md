@@ -124,7 +124,7 @@ treats NoData as alerting**, deliberately — a host publishing nothing cannot b
 called patched — so this group must not be provisioned until every host in
 `apt/` has been deployed, or it fires once per host that is still missing.
 
-Forty-seven rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+Forty-eight rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so
@@ -151,11 +151,19 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
 
 8. **Queries threshold a gauge rather than filtering with `== 0`.** `up{job="dns"}`
    with a `lt 1` threshold keeps a series present when things are healthy, so
-   `NoData` means something is genuinely missing and can be alerted on. The one
-   exception is `systemd-unit-failed`, which *does* filter — the unfiltered
-   series set is ~1600 per evaluation across the fleet, which is too many alert
-   instances to carry for a metric that is almost always zero. Its
-   `noDataState` is `OK` to match, and that asymmetry is deliberate.
+   `NoData` means something is genuinely missing and can be alerted on. The two
+   exceptions are `systemd-unit-failed` and `systemd-unit-activating`, which
+   *do* filter — `node_systemd_unit_state` is 1809 series **per state** across
+   the fleet, which is far too many alert instances to carry for a metric that
+   is almost always zero. Their `noDataState` is `OK` to match, and that
+   asymmetry is deliberate.
+
+   `systemd-unit-activating` exists because `systemd-unit-failed` cannot see a
+   unit that never finishes starting, and `networking.service` has
+   `TimeoutStartSec=infinity`, so a wedged one never fails. That is how
+   ifupdown's `dhclient -6` sat in `activating` on four containers unnoticed
+   until October 2026 — every service healthy, nothing to alert on. See the
+   root `CLAUDE.md`, Container defaults.
 
 9. **`systemd-unit-failed` has no exclusions, and that is only true because
    `fleet/` keeps it true.** It alerts on any failed unit on any host. The one

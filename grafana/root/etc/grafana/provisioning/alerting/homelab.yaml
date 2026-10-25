@@ -943,6 +943,60 @@ groups:
                   evaluator:
                     type: gt
                     params: [0]
+      - uid: systemd-unit-activating
+        title: "systemd unit stuck starting"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} has been starting for 15m on {{ $labels.role }}"
+          description: >-
+            A unit that never finishes starting is invisible to systemd-unit-failed, which only sees units that fail - and a unit with TimeoutStartSec=infinity never does. That is how ifupdown's dhclient -6 sat wedged in `activating` on four containers until October 2026, with every service healthy and nothing to show for it. Check `systemctl list-jobs` on the host.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            # Filtered, not thresholded, for the same reason as
+            # systemd-unit-failed: 1809 series per state across the fleet is far
+            # too many alert instances to carry for a metric that is zero almost
+            # always. Hence noDataState: OK - no data here means healthy.
+            model:
+              editorMode: code
+              expr: 'node_systemd_unit_state{job="node",state="activating"} == 1'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
       - uid: textfile-collector-error
         title: "Textfile metrics unreadable"
         condition: B
