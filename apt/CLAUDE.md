@@ -165,6 +165,13 @@ assumptions behind it were wrong:
   `Debian:13.7/stable` for 37.
 - **`/var/lib/apt/periodic/` is empty on a host that has never run the timers**,
   which is why an absent stamp publishes 0 rather than being omitted.
+- **`unattended-upgrade --dry-run` advances the stamp**, which was the third
+  thing wrong: the validation step in `deploy.sh` was quietly resetting the very
+  clock the alert reads, so deploying to a host that had never patched was
+  enough to make it look freshly patched. `deploy.sh` now saves the stamp's
+  mtime around the dry-run and puts it back, removing the file again if it did
+  not exist. Found by watching `apt_periodic_stamp_seconds` move on a host whose
+  pending count had not.
 - **The fleet was behind on security updates when this was written** — 13
   pending on pythia, 2 on lenora, on 25 October 2026. Nothing had been applying
   them, which is the gap this directory closes.
@@ -188,3 +195,39 @@ replaced underneath them. Nothing here will restart them.
 `apt-daily.service` has run once — the stamp is written by apt's own daily job,
 not by `apt-get update`. No alert reads it, so that is cosmetic, but do not read
 a 0 there as a fault.
+
+Then the fleet, the same afternoon. **Every host reached
+`apt_upgrades_pending{origin="security"} 0`**, from as many as 19 each: themis,
+delphi, prometheus, grafana and moby were all 16-19 behind, lenora 2, and
+pistis, loki, jellyfin, navidrome and hermes were already current.
+
+Two invariants were proved against live hosts rather than argued:
+
+- **moby's `docker-ce` stayed at `5:29.8.1-1~debian.13~trixie`** through an
+  upgrade that replaced its `libssl3t64`, `openssl`, `nginx` and `curl`. All
+  nine containers across the three stacks kept running and `.73`/`.74` stayed
+  on `eth0`.
+- **lenora's `proxmox-kernel-*` was untouched** — the two packages it took were
+  `libbrotli1` and `libunbound8`. All eleven containers stayed up, `pveproxy`,
+  `pvedaemon`, `pvestatd`, `zfs-zed` and `nfs-server` all active, three zpools
+  ONLINE, no reboot required.
+
+The DNS stack was deployed one host at a time rather than in one sweep, which
+invariant 5 permits but does not require. Afterwards delphi still recursed and
+still blocked the DoH names from its RPZ feeds, and themis answered on all
+three transports — plain, DoT on `:853` serving the lab leaf plus the G3
+intermediate, and DoH on `:443` returning the right answer to a wire-format
+POST. `vpn-domain-sync`'s own metrics were intact.
+
+`apt/scripts/verify.sh` then passed on all twelve, and `grafana/` was deployed
+after the fleet, in that order, for the NoData reason above — 47 rules, the four
+new ones provisioned.
+
+### Forcing a run
+
+`systemctl start apt-daily-upgrade.service` **may silently do nothing**: it runs
+`/usr/lib/apt/apt.systemd.daily install`, which skips when the stamp is recent.
+Observed on pythia, where a 14-minute-old stamp made it a no-op while a
+10-minute-old stamp on prometheus did not — so this is an observation, not a
+rule with a threshold anyone should rely on. To make something definitely
+happen, run `unattended-upgrade -v` directly, and remember it moves the stamp.

@@ -55,9 +55,16 @@ for entry in "${HOSTS[@]}"; do
       || { echo "   Origins-Pattern is not the Debian -security pattern"; exit 1; }
 
     # Prove the configuration parses and resolves to a package set, rather than
-    # trusting that it validated. --dry-run installs nothing.
+    # trusting that it validated. --dry-run installs nothing - but it DOES
+    # advance /var/lib/apt/periodic/unattended-upgrades-stamp, which is the
+    # metric grafana reads to decide whether a host is still patching. So the
+    # stamp is put back: a deploy must not reset that clock, or deploying is
+    # enough to make a host that has never patched look freshly patched.
+    stamp=/var/lib/apt/periodic/unattended-upgrades-stamp
+    prev=$(stat -c %Y "$stamp" 2>/dev/null || true)
     unattended-upgrade --dry-run >/dev/null 2>&1 \
       || { echo "   unattended-upgrade --dry-run failed"; exit 1; }
+    if [ -n "$prev" ]; then touch -d "@$prev" "$stamp"; else rm -f "$stamp"; fi
 
     # Shipped enabled by the apt package, but assert rather than assume: these
     # two timers are the whole mechanism.
