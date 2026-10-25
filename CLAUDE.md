@@ -118,9 +118,13 @@ Every container is unprivileged, nesting-enabled and starts at boot:
   and services may still bind to it. **lenora is the one exception**: its
   address is static in `/etc/network/interfaces`. Add the reservation on the
   router *before* starting the container, or it lands in the dynamic pool.
-- **IPv6 is SLAAC** — pass `ip6=auto` in `--net0`; omitting it forgoes working
-  IPv6. The prefix is delegated by the router and changed with it, so confirm
-  the current one rather than trusting a value written down.
+- **IPv6 is SLAAC, and `--net0` should carry no `ip6=` at all.** Omitting it
+  does *not* forgo IPv6, which this file claimed until 25 October 2026:
+  `accept_ra` is on by default, so the kernel takes the ULA and the GUA from
+  the router's RA with no help from ifupdown. prometheus and grafana had always
+  run that way, which is what disproved it. `ip6=auto` is actively harmful —
+  see below. The prefix is delegated by the router and changed with it, so
+  confirm the current one rather than trusting a value written down.
 - **A DHCP container's `/etc/hosts` maps its own FQDN to `127.0.1.1`**, not to
   its LAN address: Proxmox writes the real address there only when `net0`
   carries a static `ip=` (`PVE/LXC/Setup/Base.pm`). So `<name>.home` resolves
@@ -132,22 +136,26 @@ Every container is unprivileged, nesting-enabled and starts at boot:
   unless it is part of the DNS stack itself.
 - Always pass `--pool`.
 
-**`ip6=auto` leaves a container stuck in `systemd is-system-running: starting`,
-sometimes permanently.** Proxmox writes `iface eth0 inet6 auto`, and Debian's
-ifupdown implements that by running `dhclient -6` as well as accepting RAs. The
-router runs **no DHCPv6** (`ra_flags none`, DHCPv6 disabled — that is the
-design), so the solicits go unanswered forever and `networking.service` never
-leaves `activating`. Addressing itself is fine: the ULA and GUA are there from
-the RA, `network-online.target` goes active, and every service starts.
+**Never put `ip6=auto` back.** Proxmox turns it into `iface eth0 inet6 auto`,
+and Debian's ifupdown implements that by running `dhclient -6` as well as
+accepting RAs. The router runs **no DHCPv6** by design (`ra_flags none`,
+DHCPv6 disabled), so those solicits are never answered and
+`networking.service` never leaves `activating`. Addressing is unaffected — the
+addresses come from the RA — which is exactly what makes it hard to notice.
 
-Two consequences worth knowing. `networking.service` has
-`TimeoutStartSec=infinity`, so it **never fails** — which means the
-`systemd-unit-failed` alert in `grafana/` cannot see it. A unit wedged forever
-is invisible to this lab's monitoring in a way a crashed one is not. And
-anything that keys off `is-system-running` will read a healthy container as
-still booting. On 25 October 2026 four of ten containers were in that state;
-three cleared when they were rebooted and jellyfin did not, so it is a race in
-ifupdown rather than a steady property of a host.
+It was removed from all eleven containers on 25 October 2026. Each is now
+`iface eth0 inet dhcp` alone, holds its ULA and GUA, and runs one `dhclient`
+for IPv4 and none for IPv6. Dropping it preserves the hwaddr, which matters
+more than the rest of the change: the DHCP reservation, the SLAAC ULA in every
+certificate, and the router's by-MAC DNS exemptions for delphi and hermes all
+key off it.
+
+The reason it survived so long is worth keeping even though the cause is gone.
+`networking.service` has `TimeoutStartSec=infinity`, so a wedged one **never
+fails** — and `systemd-unit-failed` in `grafana/` only sees units that fail. A
+unit stuck in `activating` forever is invisible to this lab's monitoring in a
+way a crashed one is not, and anything keying off `is-system-running` reads a
+healthy container as still booting. Nothing alerts on that today.
 
 Services bind to specific IPs, and in an LXC with ifupdown
 `network-online.target` is reached *before* `eth0` has its address. DHCP widens
