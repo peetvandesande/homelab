@@ -45,6 +45,24 @@ runs on lenora's. By IP, so time does not depend on DNS. `verify.sh` asserts the
 router is the only source. The host's previous file is
 `/etc/chrony/chrony.conf.bak-2026-10-11-router-ntp`.
 
+## The GPU is not the host's
+
+The Quadro P2200 is bound to `vfio-pci` for passthrough to uc1-lab
+(`/etc/modprobe.d/uc1-vfio.conf`) and `nvidia` is blacklisted, so lenora never
+loads the driver. `nvidia-devnodes.service` and `nvidia-persistenced.service`,
+shipped by the driver package, therefore failed on every boot and kept
+`systemd-unit-failed` firing. `deploy.sh` masks both and resets them, as of
+26 October 2026. They stay out of `fleet/masked-units`, which is for units
+masked on the whole fleet. If the card is ever handed back to the host, unmask
+them by hand and drop the stanza.
+
+They were not the package's units but hand-written ones in
+`/etc/systemd/system` from 9 September, from when the host used the card
+(`nvidia-devnodes` ran `nvidia-modprobe -c 0 -u` before `pve-guests`). `mask`
+refuses to replace a real file, so those were disabled and deleted first; the
+originals are in `/root/nvidia-units.bak-2026-10-26/` on lenora. A rebuilt host
+has neither file, so the stanza's plain `mask` is enough.
+
 ## Invariants
 
 1. **Only `pveproxy-ssl.pem` and `pveproxy-ssl.key`.** `pve-ssl.pem` and

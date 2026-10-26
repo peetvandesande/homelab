@@ -65,6 +65,20 @@ $SSH "root@$HOST" '
 '
 echo "   chrony synced to the router"
 
+# ------------------------------------------------------------------ GPU -----
+# The Quadro P2200 is bound to vfio-pci for uc1-lab (modprobe.d/uc1-vfio.conf)
+# and nvidia is blacklisted, so the host can never initialise it. The two units
+# the driver package ships fail on every boot and fired systemd-unit-failed.
+# Lenora-only, so this is not in fleet/masked-units. reset-failed follows the
+# mask for the same reason as there: masking does not clear a failed state.
+echo "== host NVIDIA units"
+$SSH "root@$HOST" '
+  set -e
+  systemctl mask nvidia-devnodes.service nvidia-persistenced.service
+  systemctl reset-failed nvidia-devnodes.service nvidia-persistenced.service
+'
+echo "   nvidia-devnodes and nvidia-persistenced masked"
+
 $SSH "root@$HOST" '
   set -e
   node=$(hostname)
