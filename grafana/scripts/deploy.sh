@@ -14,6 +14,9 @@ source secrets.env
 [[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in secrets.env"; exit 1; }
 [[ "${HEALTHCHECKS_PING_URL:-}" == https://hc-ping.com/* ]] \
   || { echo "HEALTHCHECKS_PING_URL unset or not an hc-ping.com URL in secrets.env"; exit 1; }
+[[ -f ../responder/secrets.env ]] || { echo "responder/secrets.env missing - run responder/scripts/deploy.sh first"; exit 1; }
+RESPONDER_TOKEN=$(sed -n 's/^RESPONDER_TOKEN=//p' ../responder/secrets.env)
+[[ -n "$RESPONDER_TOKEN" ]] || { echo "RESPONDER_TOKEN unset in responder/secrets.env"; exit 1; }
 
 require_enrolled "$HOST"
 push "$HOST" root
@@ -24,10 +27,11 @@ push "$HOST" root
 # line.
 NOTIFY=etc/grafana/provisioning/alerting/notifications.yaml
 sed -e "s|@@HA_WEBHOOK_ID@@|${HA_WEBHOOK_ID}|g" \
-    -e "s|@@HEALTHCHECKS_PING_URL@@|${HEALTHCHECKS_PING_URL}|g" "root/$NOTIFY" | $SSH "root@$HOST" "
+    -e "s|@@HEALTHCHECKS_PING_URL@@|${HEALTHCHECKS_PING_URL}|g" \
+    -e "s|@@RESPONDER_TOKEN@@|${RESPONDER_TOKEN}|g" "root/$NOTIFY" | $SSH "root@$HOST" "
   cat > '/$NOTIFY.deploytmp' && chown root:grafana '/$NOTIFY.deploytmp' \
   && chmod 0640 '/$NOTIFY.deploytmp' && mv -f '/$NOTIFY.deploytmp' '/$NOTIFY'"
-echo "   $NOTIFY (0640 root:grafana, HA webhook id and ping URL substituted)"
+echo "   $NOTIFY (0640 root:grafana, HA webhook id, ping URL and responder token substituted)"
 
 # Alert rules need the datasource's uid, and neither provisioned datasource has
 # one pinned - invariant 4 says why one must never be added to a live

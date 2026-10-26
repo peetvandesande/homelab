@@ -51,6 +51,23 @@ contactPoints:
           url: "@@HEALTHCHECKS_PING_URL@@"
           httpMethod: POST
 
+  # The alert responder on lexie (homelab/responder): an AI agent that
+  # investigates read-only and pushes its finding to the phone. Plain HTTP on
+  # the LAN with a bearer token; @@RESPONDER_TOKEN@@ is substituted by
+  # scripts/deploy.sh from responder/secrets.env. Which alerts it acts on is
+  # decided there, not here (responder/root/etc/responder/allowed-alerts).
+  - orgId: 1
+    name: responder
+    receivers:
+      - uid: responder-webhook
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "http://192.168.8.24:9095/alert"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "@@RESPONDER_TOKEN@@"
+
 policies:
   - orgId: 1
     receiver: home-assistant
@@ -70,6 +87,14 @@ policies:
         group_wait: 0s
         group_interval: 1m
         repeat_interval: 5m
+      # A copy of every alert goes to the responder, then on to the routes
+      # below as before. After the heartbeat, which does not continue.
+      - receiver: responder
+        continue: true
+        object_matchers:
+          - [alertname, "=~", ".+"]
+        group_wait: 30s
+        repeat_interval: 12h
       - receiver: home-assistant
         object_matchers:
           - [severity, "=", critical]

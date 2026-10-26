@@ -199,6 +199,9 @@ Three things to be aware of:
   file masks on every enrolled host, and both units are *active and required on
   lenora*, which exports `/hddpool/media` over NFS. Nothing reapplies the mask
   if lexie is rebuilt.
+
+  **Lexie also runs the alert responder**, a dedicated `responder` account that
+  investigates alerts read-only. `responder/CLAUDE.md`.
 - **`homeassistant` (VM 302) is at 192.168.8.90**, pooled into Production
   but outside its range, by choice. It is one of two VMs, with `hermes`:
   Home Assistant OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will

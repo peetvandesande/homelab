@@ -1,0 +1,8 @@
+# Alert names the responder will investigate, one per line (the rule's title).
+# Everything else is acknowledged and ignored. Start narrow and widen it as the
+# reports prove useful. Never list the router, DNS, CA or WAN alerts here
+# without reading responder/CLAUDE.md first.
+systemd unit failed
+systemd unit stuck starting
+Root filesystem nearly full
+Memory nearly exhausted

@@ -1,0 +1,25 @@
+[Unit]
+Description=Alert responder (Grafana webhook -> Claude, read-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=responder
+Group=responder
+EnvironmentFile=/etc/responder/responder.env
+Environment=HOME=/var/lib/responder
+# In an LXC with ifupdown network-online.target comes before eth0 has its
+# address, and this binds to it. "+" runs outside the sandbox below, which
+# blocks the netlink socket "ip" needs. Same pattern as dns/.
+ExecStartPre=+/bin/sh -c 'n=0; while [ $n -lt 120 ]; do ip -4 addr show dev eth0 | grep -q "inet 192.168.8.24/" && exit 0; n=$((n+1)); sleep 0.5; done; echo "192.168.8.24 never appeared on eth0" >&2; exit 1'
+ExecStart=/usr/local/bin/responder
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/responder
+
+[Install]
+WantedBy=multi-user.target
