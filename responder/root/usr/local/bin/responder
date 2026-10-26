@@ -7,13 +7,16 @@ POST /alert over TLS (the lab certificate) with `Authorization: Bearer <token>`.
 alertname is in /etc/responder/allowed-alerts, and which has not been looked at
 inside the cooldown, is queued; one worker runs `claude -p` on them in turn,
 read-only, and the result is written to REPORTS and sent to Home Assistant's
-existing Grafana webhook as a warning, so it reaches the phone without any
-change on the HA side.
+existing Grafana webhook, so it reaches the phone without any change on the HA
+side. The report ends with a VERDICT line that picks the push: action-needed is
+a warning titled with a wrench, unsure a plain warning, no-action a silent
+"resolved" one. A failed investigation is itself pushed as a warning.
 """
 import hmac
 import json
 import os
 import queue
+import re
 import ssl
 import subprocess
 import sys
@@ -35,6 +38,8 @@ STATE = f"{HOME}/seen.json"
 CERT = os.environ.get("RESPONDER_CERT", "/etc/homelab-tls/host.crt")
 KEY = os.environ.get("RESPONDER_KEY", "/etc/homelab-tls/host.key")
 MAX_BODY = 256 * 1024
+
+VERDICT = re.compile(r"^\s*VERDICT:\s*(action-needed|no-action|unsure)\s*$", re.I | re.M)
 
 work = queue.Queue(maxsize=4)
 lock = threading.Lock()
@@ -99,13 +104,25 @@ def investigate(alert):
     return r.stdout.strip()
 
 
-def push(name, text):
+def split_verdict(report):
+    """(verdict, report without its VERDICT line); a missing verdict is `unsure`."""
+    found = list(VERDICT.finditer(report))
+    if not found:
+        return "unsure", report
+    m = found[-1]
+    return m.group(1).lower(), (report[:m.start()] + report[m.end():]).strip()
+
+
+def push(title, text, status="firing"):
+    """Send through Home Assistant's Grafana automation, which has no verdict
+    concept: a firing warning is an ordinary push, and a resolved-only one is
+    delivered silently – which is how `no-action` stays quiet."""
     body = json.dumps({
-        "commonLabels": {"alertname": f"Responder: {name}"},
+        "commonLabels": {"alertname": title},
         "alerts": [{
-            "status": "firing",
-            "labels": {"alertname": f"Responder: {name}", "severity": "warning"},
-            "annotations": {"summary": text[:600]},
+            "status": status,
+            "labels": {"alertname": title, "severity": "warning"},
+            "annotations": {"summary": text[:900]},
         }],
     })
     subprocess.run(["curl", "-fsS", "--max-time", "15", "-X", "POST",
@@ -119,14 +136,28 @@ def worker():
         name = alert.get("labels", {}).get("alertname", "unknown")
         try:
             report = investigate(alert)
+            verdict, text = split_verdict(report)
             os.makedirs(REPORTS, exist_ok=True)
-            path = f"{REPORTS}/{time.strftime('%Y%m%dT%H%M%S')}-{name.replace(' ', '_')}.md"
-            with open(path, "w") as f:
+            base = f"{time.strftime('%Y%m%dT%H%M%S')}-{name.replace(' ', '_')}-{verdict}.md"
+            with open(f"{REPORTS}/{base}", "w") as f:
                 f.write(report + "\n")
-            log(f"investigated {name!r} -> {path}")
-            push(name, report or "No finding.")
+            log(f"investigated {name!r} ({verdict}) -> {REPORTS}/{base}")
+            text = (text or "No finding.") + f"\n[{base}]"
+            if verdict == "action-needed":
+                push(f"🔧 Responder: {name}", text)
+            elif verdict == "no-action":
+                push(f"Responder: {name} – no action", text, status="resolved")
+            else:
+                push(f"Responder: {name} (unsure)", text)
         except Exception as e:  # one bad alert must not stop the worker
-            log(f"investigating {name!r} failed: {e}")
+            # TimeoutExpired's own message is the whole command line, prompt included.
+            why = (f"timed out after {e.timeout:.0f}s" if isinstance(e, subprocess.TimeoutExpired)
+                   else str(e)[:300])
+            log(f"investigating {name!r} failed: {why}")
+            try:  # silence would look like "nothing to do"
+                push(f"Responder could not investigate: {name}", why)
+            except Exception as e2:
+                log(f"and the failure notice failed too: {e2}")
         finally:
             work.task_done()
 

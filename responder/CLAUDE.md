@@ -57,4 +57,15 @@ token from here.
    host. All of this was found by the first live report, which said it could
    not reach lexie.
 
+8. **The report ends in a verdict, and the verdict picks the push.** Home Assistant's
+   automation knows only firing and resolved, so: `action-needed` is a
+   warning titled 🔧 (a *warning*, not critical, until the verdicts have proved
+   reliable – a wrong one at critical wakes you), `unsure` a plain warning,
+   and `no-action` is sent as *resolved*, which that automation delivers
+   silently. A missing verdict counts as `unsure`. A run that fails or times
+   out pushes "could not investigate" rather than staying silent. The push
+   cannot link to the report – the tap-through URL is fixed in the HA
+   automation – so the message ends with the report's file name; read it with
+   `scripts/reports.sh latest`.
+
 Reports are kept in `/var/lib/responder/reports/` on lexie, one file per run.
