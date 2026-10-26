@@ -2,7 +2,7 @@
 # Turn on unattended security upgrades across the whole fleet, and the metrics
 # that say whether they are still happening.
 #
-# One service on twelve hosts, so one directory rather than twelve copies -
+# One service on thirteen hosts, so one directory rather than thirteen copies -
 # the same shape as node-exporter/ and alloy/, and the reason this is not in
 # fleet/, which asserts state and has nothing to push.
 #

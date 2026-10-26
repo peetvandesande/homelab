@@ -12,8 +12,8 @@ echo "== service"
 [[ $($R 'systemctl is-active responder') == active ]] && pass "responder active" || bad "responder active" "not active"
 
 echo "== webhook"
-code() { curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$@" 2>/dev/null; }
-URL="http://$HOST:9095/alert"
+code() { curl -sS --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' --max-time 5 "$@" 2>/dev/null; }
+URL="https://$HOST:9095/alert"
 c=$(code -X POST -d '{}' "$URL"); [[ $c == 401 ]] && pass "no token is refused (401)" || bad "no token is refused" "$c"
 c=$(code -X POST -H "Authorization: Bearer $RESPONDER_TOKEN" -d '{"alerts":[{"status":"firing","labels":{"alertname":"verify-not-allowlisted"}}]}' "$URL")
 [[ $c == 202 ]] && pass "valid token accepted, unlisted alert ignored (202)" || bad "valid token accepted" "$c"

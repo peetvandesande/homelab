@@ -52,8 +52,8 @@ contactPoints:
           httpMethod: POST
 
   # The alert responder on lexie (homelab/responder): an AI agent that
-  # investigates read-only and pushes its finding to the phone. Plain HTTP on
-  # the LAN with a bearer token; @@RESPONDER_TOKEN@@ is substituted by
+  # investigates read-only and pushes its finding to the phone. TLS off the lab
+  # CA (an IP SAN, as with Home Assistant above) and a bearer token; @@RESPONDER_TOKEN@@ is substituted by
   # scripts/deploy.sh from responder/secrets.env. Which alerts it acts on is
   # decided there, not here (responder/root/etc/responder/allowed-alerts).
   - orgId: 1
@@ -63,7 +63,7 @@ contactPoints:
         type: webhook
         disableResolveMessage: true
         settings:
-          url: "http://192.168.8.24:9095/alert"
+          url: "https://192.168.8.24:9095/alert"
           httpMethod: POST
           authorization_scheme: Bearer
           authorization_credentials: "@@RESPONDER_TOKEN@@"

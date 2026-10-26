@@ -3,7 +3,7 @@
 
 Managed from homelab/responder. Standard library only.
 
-POST /alert with `Authorization: Bearer <token>`. Each firing alert whose
+POST /alert over TLS (the lab certificate) with `Authorization: Bearer <token>`. Each firing alert whose
 alertname is in /etc/responder/allowed-alerts, and which has not been looked at
 inside the cooldown, is queued; one worker runs `claude -p` on them in turn,
 read-only, and the result is written to REPORTS and sent to Home Assistant's
@@ -14,6 +14,7 @@ import hmac
 import json
 import os
 import queue
+import ssl
 import subprocess
 import sys
 import threading
@@ -31,6 +32,8 @@ PROMPT = "/etc/responder/prompt.md"
 HOME = os.environ.get("HOME", "/var/lib/responder")
 REPORTS = f"{HOME}/reports"
 STATE = f"{HOME}/seen.json"
+CERT = os.environ.get("RESPONDER_CERT", "/etc/homelab-tls/host.crt")
+KEY = os.environ.get("RESPONDER_KEY", "/etc/homelab-tls/host.key")
 MAX_BODY = 256 * 1024
 
 work = queue.Queue(maxsize=4)
@@ -171,4 +174,9 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(f"{HOME}/work", exist_ok=True)
     threading.Thread(target=worker, daemon=True).start()
-    ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()
+    httpd = ThreadingHTTPServer((BIND, PORT), Handler)
+    # Read once at start; the post-renew hook restarts the service on renewal.
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(CERT, KEY)
+    httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+    httpd.serve_forever()

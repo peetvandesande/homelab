@@ -41,11 +41,11 @@ token from here.
    queue of four (overflow is dropped and logged), and a cooldown keyed on the
    alert fingerprint, so a flapping rule cannot run it in a loop. Each run is
    capped at 25 turns, $1 and ten minutes.
-5. **Plain HTTP on :9095, bearer token.** Lexie is not enrolled with the CA
-   (root `CLAUDE.md`), and enrolling it is a change to `FLEET`, Prometheus and
-   Alloy that was not asked for. The payload is alert text on the LAN. It does
-   take the lab root as a trust anchor, nothing more, so it can reach
-   Prometheus, Loki and HA over verified TLS.
+5. **TLS off the lab CA on :9095, plus a bearer token.** Lexie is enrolled
+   (`ca/scripts/enrol.sh`), so the receiver serves the host certificate; the
+   `responder` user is in `tlscert` to read the key and
+   `post-renew.d/30-responder` restarts the service on renewal. Grafana
+   reaches it by IP, verified against the IP SAN, like Home Assistant.
 6. **It rides the same path as the alerts.** Grafana, lexie and HA must all be
    up, so it cannot report a home outage; the heartbeat still owns that.
 

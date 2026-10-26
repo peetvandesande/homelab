@@ -22,13 +22,6 @@ fi
 source secrets.env
 [[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in secrets.env"; exit 1; }
 
-# Lexie is not enrolled, so it has no lab trust anchor; it needs the root to
-# reach Prometheus, Loki and Home Assistant. This is the whole of what it takes
-# from ca/ - no certificate, no renewal timer.
-$SSH "root@$HOST" 'cat > /usr/local/share/ca-certificates/homelab-root.crt && update-ca-certificates >/dev/null' \
-  < ../ca/rootca/certs/root.crt
-echo "   lab root installed as a trust anchor"
-
 $SSH "root@$HOST" '
   set -e
   id responder >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/responder \
@@ -48,5 +41,5 @@ printf 'RESPONDER_BIND=%s\nRESPONDER_TOKEN=%s\nRESPONDER_HA_URL=https://192.168.
   && chmod 0640 /etc/responder/responder.env.deploytmp && mv -f /etc/responder/responder.env.deploytmp /etc/responder/responder.env'
 echo "   etc/responder/responder.env (0640 root:responder)"
 
-$SSH "root@$HOST" 'systemctl daemon-reload && systemctl enable responder >/dev/null 2>&1'
+$SSH "root@$HOST" 'chmod +x /etc/homelab-tls/post-renew.d/30-responder && usermod -aG tlscert responder && systemctl daemon-reload && systemctl enable responder >/dev/null 2>&1'
 restart_assert "$HOST" responder

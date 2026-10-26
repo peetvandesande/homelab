@@ -6,6 +6,8 @@ Wants=network-online.target
 [Service]
 User=responder
 Group=responder
+# Reads the host key, which is root:tlscert 0640.
+SupplementaryGroups=tlscert
 EnvironmentFile=/etc/responder/responder.env
 Environment=HOME=/var/lib/responder
 # In an LXC with ifupdown network-online.target comes before eth0 has its

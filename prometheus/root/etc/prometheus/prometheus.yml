@@ -76,8 +76,10 @@ scrape_configs:
         labels: {role: jellyfin }
       - targets: ['navidrome.home:9100']
         labels: {role: navidrome }
+      - targets: ['lexie.home:9100']
+        labels: {role: lexie }
 
-  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same twelve
+  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same thirteen
   # targets as `node` - keep the two lists identical; a host in one and not
   # the other is either unmonitored or unlogged.
   - job_name: alloy
@@ -109,6 +111,8 @@ scrape_configs:
         labels: {role: jellyfin }
       - targets: ['navidrome.home:12345']
         labels: {role: navidrome }
+      - targets: ['lexie.home:12345']
+        labels: {role: lexie }
 
   # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
   # on 127.0.0.1:9221. Pre-existing.
@@ -233,6 +237,7 @@ scrape_configs:
       # certificate - the Proxmox GUI, step-ca itself, mailcow and HA.
       - targets:
           - '192.168.8.21:9100'
+          - '192.168.8.24:9100'
           - '192.168.8.27:9100'
           - '192.168.8.50:9100'
           - '192.168.8.51:9100'

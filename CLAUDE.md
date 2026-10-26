@@ -191,14 +191,15 @@ Three things to be aware of:
   inside the range pencilled in for Non-Production. Existing anomalies —
   don't take them as precedent, and don't "tidy" them without asking.
 
-  **Lexie is outside `FLEET`**, so it holds no certificate, is not scraped, and
-  `fleet/` and `apt/` never reach it. It had `proc-fs-nfsd.mount` and
-  `run-rpc_pipefs.mount` failed — an unprivileged LXC cannot mount either —
-  which nothing in the lab could see, for the same reason. Both were masked by
-  hand on 25 October 2026. They must **not** go in `fleet/masked-units`: that
-  file masks on every enrolled host, and both units are *active and required on
-  lenora*, which exports `/hddpool/media` over NFS. Nothing reapplies the mask
-  if lexie is rebuilt.
+  **Lexie is in `FLEET`** since 26 October 2026, so it holds a certificate, is
+  scraped and ships logs like the rest. Until then it was outside, and had
+  `proc-fs-nfsd.mount` and `run-rpc_pipefs.mount` failed – an unprivileged LXC
+  cannot mount either – which nothing in the lab could see. They were NFS
+  remnants of the migration, not something lexie needs: the NFS server, client
+  and rpcbind were purged and the masks removed, so there is nothing to
+  reapply after a rebuild. (Both units are active and required on *lenora*,
+  which exports `/hddpool/media`, so they still must not go in
+  `fleet/masked-units`.) Its `postfix` listens on loopback only and was left.
 
   **Lexie also runs the alert responder**, a dedicated `responder` account that
   investigates alerts read-only. `responder/CLAUDE.md`.
@@ -330,7 +331,7 @@ each other's public side with blackbox exporters, scraped over the tunnels –
 end to end and every lab certificate – `prometheus/CLAUDE.md` invariant 7. Loki (192.168.8.56) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
-twelve hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
+thirteen hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
 instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
@@ -347,7 +348,7 @@ copy. Today it masks `openipmi.service`, which was the fleet's only failed unit
 and made the `systemd-unit-failed` alert useless — see `fleet/CLAUDE.md`.
 
 **Automatic security patching lives in `apt/`** — unattended-upgrades on all
-twelve enrolled hosts, restricted to the Debian security origin, which is what
+thirteen enrolled hosts, restricted to the Debian security origin, which is what
 keeps Proxmox, Docker and mailcow upgrades a manual act. Nothing is restarted
 or rebooted unattended; that gap is published as a metric instead. There is
 deliberately **no apt cache or proxy**: the bandwidth it would save is a
@@ -386,7 +387,7 @@ prometheus-pve-exporter on 127.0.0.1:9221 is not running.
 ## TLS
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS
-off the lab's own CA (`ca/`). Twelve hosts are enrolled — all ten containers,
+off the lab's own CA (`ca/`). Thirteen hosts are enrolled — all eleven containers,
 the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
 **not enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
 `homeassistant/`.
@@ -413,8 +414,8 @@ the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
 - **Per-service TLS config lives in that service's own top-level directory**
   (`grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`, `loki/`, `moby/`,
   `navidrome/`, `prometheus/`), one per container or VM. `node-exporter/` and
-  `alloy/` are the exceptions: one service on twelve hosts, so one directory
-  rather than twelve copies.
+  `alloy/` are the exceptions: one service on thirteen hosts, so one directory
+  rather than thirteen copies.
 - **The Home Assistant VM is the one host that cannot renew itself.** HAOS has
   no step-cli and no openssl, and `/ssl` is read-only to the core container, so
   a timer on lenora drives it over the guest agent. The key is still generated

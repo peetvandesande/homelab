@@ -1,9 +1,9 @@
 # node-exporter
 
-TLS for `prometheus-node-exporter` on `:9100`, across **all twelve enrolled
-hosts** — the ten containers, the hermes VM and lenora.
+TLS for `prometheus-node-exporter` on `:9100`, across **all thirteen enrolled
+hosts** — the eleven containers, the hermes VM and lenora.
 
-One directory rather than twelve, because this is one service replicated, not
+One directory rather than thirteen, because this is one service replicated, not
 a per-container concern. It is the exception to the one-directory-per-container
 shape the service stacks use.
 
@@ -11,7 +11,7 @@ shape the service stacks use.
 
 `root/` mirrors the container filesystem and is the source of truth; the same
 two files go to every host. `scripts/deploy.sh` pushes them,
-`scripts/verify.sh` checks all twelve. `scripts/deploy.sh <ip>` does one host,
+`scripts/verify.sh` checks all thirteen. `scripts/deploy.sh <ip>` does one host,
 for bringing a new container in without bouncing the rest.
 
 Hosts must be enrolled first (`ca/scripts/enrol.sh --all`) — deploy refuses
@@ -44,7 +44,7 @@ off curl's exit status will call a correctly-configured exporter broken. Assert
 ## The textfile collector is on everywhere
 
 The drop-in adds `--collector.textfile.directory=/var/lib/node_exporter/textfile`
-on all twelve hosts, and `scripts/deploy.sh` creates that directory
+on all thirteen hosts, and `scripts/deploy.sh` creates that directory
 `root:prometheus 0775`. It is how a job that is not a service publishes state to
 Prometheus — a `.prom` file written atomically into that directory, scraped as
 part of the `node` job with the host's own labels.

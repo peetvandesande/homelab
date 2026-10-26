@@ -38,6 +38,7 @@ FLEET=(
   # Words after the shortname would be extra SANs. moby needed them while it
   # fronted Home Assistant on .79; the stacks it publishes now carry their own
   # certificates, so it is back to the plain form.
+  "192.168.8.24 lexie"
   "192.168.8.27 moby"
   "192.168.8.60 jellyfin"
   "192.168.8.61 navidrome"
