@@ -29,6 +29,10 @@ $SSH "root@$HOST" '
   install -d -o responder -g responder -m 0700 /var/lib/responder /var/lib/responder/.ssh
   [ -f /var/lib/responder/.ssh/id_ed25519 ] || runuser -u responder -- \
     ssh-keygen -q -t ed25519 -N "" -C responder@lexie -f /var/lib/responder/.ssh/id_ed25519
+  # IPv4 only: the hosts accept this key only from 192.168.8.24, and a name
+  # that resolves to a ULA would otherwise connect from one and be refused.
+  printf "Host *\\n  AddressFamily inet\\n" > /var/lib/responder/.ssh/config
+  chown responder:responder /var/lib/responder/.ssh/config && chmod 0600 /var/lib/responder/.ssh/config
   install -d -m 0755 /etc/responder
 '
 push "$HOST" root

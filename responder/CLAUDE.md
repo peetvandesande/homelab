@@ -48,5 +48,13 @@ token from here.
    reaches it by IP, verified against the IP SAN, like Home Assistant.
 6. **It rides the same path as the alerts.** Grafana, lexie and HA must all be
    up, so it cannot report a home outage; the heartbeat still owns that.
+7. **SSH is IPv4-only, with seeded host keys.** Each host's `authorized_keys`
+   entry carries `from="192.168.8.24"`, so the responder's `~/.ssh/config`
+   pins `AddressFamily inet` – a name that resolved to a ULA would otherwise
+   be refused. Lexie's own entry also allows `127.0.0.1`, because its own name
+   resolves to loopback. Host keys are scanned into `known_hosts` by
+   `hosts.sh` (non-interactive ssh cannot prompt); rerun it after rebuilding a
+   host. All of this was found by the first live report, which said it could
+   not reach lexie.
 
 Reports are kept in `/var/lib/responder/reports/` on lexie, one file per run.
