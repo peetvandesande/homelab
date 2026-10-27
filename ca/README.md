@@ -109,7 +109,10 @@ stays there; the key stays on the device.
 **Check the CSR first.** step-ca refuses a CSR whose SANs differ from the
 token's, and it cannot add names at signing time, so the CSR has to carry every
 name a client will use – for anything that speaks Bonjour that includes
-`<name>.local`, which is what AirPrint and friends connect to:
+`<name>.local`, which is what AirPrint and friends connect to, and the
+device's own Bonjour hostname. The factory certificate it serves lists both
+(`openssl s_client -connect <device>:443 | openssl x509 -noout -ext
+subjectAltName`); copy its SANs before replacing it:
 
 ```sh
 openssl req -in dev.csr -noout -verify -subject -ext subjectAltName
@@ -157,8 +160,9 @@ The 3DES/SHA-1 PKCS#12 is deliberate: OpenSSL 3+ defaults to AES-256 with
 PBKDF2, which appliance firmware commonly rejects, and the file only has to
 survive the trip to the device. Delete it once imported.
 
-The Brother printer (`printer.home`, 192.168.8.241) was issued this way on
-27 October 2026 and expires on **27 October 2027**.
+The Brother printer (`printer.home`) was issued this way on 27 October 2026,
+with `BRXF64EB4AEDD38.local` among its SANs, and expires on
+**27 October 2027**. The first issue lacked that name and was revoked.
 
 ## Trusting the root on a client
 
