@@ -46,7 +46,8 @@ DHCP pools differ by network, which is easy to get wrong:
 Lab hosts sit **below .100** as reservations keyed by MAC. On the LAN only,
 **.240-.254** is for client devices that need a stable address without being lab
 hosts — anything named in a DNS policy set, which stops working the moment its
-address drifts. That is why the LAN pool alone was narrowed from 150: at
+address drifts, and the Brother printer (MFC-J4350DW, on Wi-Fi), which moved
+there from a dynamic .195 on 27 October 2026. That is why the LAN pool alone was narrowed from 150: at
 .100-.249 the range was inside it, and a reservation inside the pool races the
 dynamic allocator. Narrow guest or iot the same way before reserving anything
 above .239 there.

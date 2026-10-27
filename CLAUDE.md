@@ -31,8 +31,9 @@ than fought.
   host sits **below .100**, outside the pool, as a static reservation keyed by
   MAC. Keep it that way: a reservation inside the pool races the dynamic range.
 - **`.240-.254` is for client devices that need a stable address** but are not
-  lab hosts — today that means anything named in a DNS policy set, which stops
-  working the moment the device's address drifts. The pool was narrowed from
+  lab hosts — anything named in a DNS policy set, which stops working the
+  moment the device's address drifts, and the Brother printer, so a client set
+  up by address keeps finding it. The pool was narrowed from
   `limit=150` to make room: at .100-.249 this range was *inside* it. Below .100
   stays for servers and services.
 - **Reservations are the source of truth for lab addressing.** They live on the
