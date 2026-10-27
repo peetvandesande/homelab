@@ -408,7 +408,7 @@ ssh root@pythia 'curl -sS \
 ```
 
 Scripting this from a lab rather than by hand goes through nginx instead:
-`https://192.168.8.52:8081/api/v1/...` is open to lenora, with `AUTH_API_KEY`
+`https://pythia.home:8081/api/v1/...` is open to lenora, with `AUTH_API_KEY`
 from `secrets.env` as the key. The paths and payloads are identical.
 
 ## Overriding a public name internally (split-horizon)

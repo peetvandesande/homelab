@@ -107,7 +107,7 @@ once and writes into `mailcow.conf`. mailcow loads it into its `api` table
 when php-fpm starts, so a changed key needs a deploy, which recreates php-fpm.
 openstack-lab's `cloud.yml` is the example.
 
-Lab hosts send to `192.168.8.57:25` as their smarthost and need no MX records.
+Lab hosts send to `hermes.home:25` as their smarthost and need no MX records.
 An app that insists on MX lookup needs an MX in the lab's own `<lab>.home` zone,
 pointing at `hermes.home`.
 

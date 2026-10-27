@@ -309,7 +309,7 @@ It is cut down to Rspamd plus webmail – no ClamAV, Olefy, full-text search or
 ACME – and the lab CA supplies its certificate.
 
 Lab hosts on 192.168.32.0/21 (and lenora, for SDN zones that SNAT) relay
-through `192.168.8.57:25` without authentication. **Nothing leaves by
+through `hermes.home:25` without authentication. **Nothing leaves by
 default**: mail for a domain hermes does not host bounces. A domain that really
 must go out is routed via ruby with a mailcow transport map. See
 `hermes/CLAUDE.md`.
