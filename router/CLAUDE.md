@@ -128,7 +128,7 @@ of them is obvious from the router's own UI.
     Update `firewall.dns_egress_lan_53.src_mac` in the same change as the
     container. Keep the target `REJECT`: with `DROP`, clients wait out a
     timeout per query instead of falling back at once. The resolver sets must
-    stay :443-only — the blackbox `internet` probe on .53 pings 1.1.1.1 and
+    stay :443-only — the blackbox `internet` probe on prometheus pings 1.1.1.1 and
     8.8.8.8, and an all-ports block would make it report the internet down.
 
 11. **Never run `apk upgrade` on this device.** `/etc/apk/repositories.d/

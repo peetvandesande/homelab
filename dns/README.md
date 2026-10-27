@@ -511,7 +511,7 @@ None of the three components can serve TLS itself, so each backend binds
 loopback and nginx terminates TLS on the port it always used — 8083 (themis),
 8082 (delphi), 8081 (pythia). Target addresses did not change.
 
-**nginx allows only Prometheus (.53).** From anywhere else these return 403,
+**nginx allows only Prometheus.** From anywhere else these return 403,
 which still proves TLS terminated and the chain verified. Do not "fix" a 403 by
 widening the backend ACL — the backend only ever sees 127.0.0.1 now, and the
 real access control is the `allow`/`deny` in the vhost.
@@ -541,7 +541,7 @@ every run.
 
 ## Monitoring
 
-Prometheus (192.168.8.53) scrapes all three under `job="dns"`, plus
+Prometheus scrapes all three under `job="dns"`, plus
 node_exporter on each under `job="node"`. All three `/metrics` endpoints are
 unauthenticated but ACL'd to the Prometheus container.
 

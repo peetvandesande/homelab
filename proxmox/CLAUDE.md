@@ -92,7 +92,7 @@ PVE has native ACME with its own renewal timer, and step-ca offers an ACME
 provisioner, so this looks like the obvious fit. It does not work here: http-01
 requires pistis to resolve `lenora.home`, and pistis uses the router, which
 knows nothing about `.home`. The dns-01 route would need Pythia's API key on
-lenora and an nginx ACL change on .52.
+lenora and an nginx ACL change on pythia.
 
 Reusing the enrolment mechanism costs one hook and no new failure modes, and
 lenora was already enrolled for node-exporter. The DHCP cutover has since

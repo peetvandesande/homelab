@@ -136,7 +136,7 @@ The two sets hold the well-known public resolvers — Cloudflare, Google, Quad9,
 AdGuard, OpenDNS/Umbrella, NextDNS, Control D, Mullvad, dns0.eu, CleanBrowsing,
 Comodo, Yandex — as single addresses or, where the provider has a dedicated
 prefix, the prefix. They match on `dest_net` and only on :443, so ICMP to
-1.1.1.1 and 8.8.8.8 still works; the blackbox exporter on .53 pings exactly
+1.1.1.1 and 8.8.8.8 still works; the blackbox exporter on prometheus pings exactly
 those for its `internet` probe. The names of DoH resolvers are blocked
 separately, by the `doh` feed on Delphi, so the sets only have to catch
 clients that skip the lookup. hagezi publishes a fuller IPv4 list
@@ -303,7 +303,7 @@ Neither is in this repo, and a firmware upgrade can remove both. The
 cat > /usr/local/bin/vpn-policy-dump <<'EOF'
 #!/bin/sh
 # Read-only: the VPN policy, the per-tunnel dnsmasq ports, and the domain/IP
-# lists. Consumed by vpn-domain-sync on themis (192.168.8.50).
+# lists. Consumed by vpn-domain-sync on themis.
 uci show route_policy
 uci show dhcp | grep -E "^dhcp\.[a-z0-9]+\.port="
 for f in /etc/domain_mac_list/*; do

@@ -220,9 +220,9 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 `dns/README.md`. What matters at this level:
 
 - **Internal domain is `home.`**, served authoritatively by Pythia
-  (192.168.8.52). Reverse zone `8.168.192.in-addr.arpa.`.
+  (`pythia.home`). Reverse zone `8.168.192.in-addr.arpa.`.
 - **`ca.peetvandesande.com` is overridden internally** to point at pistis
-  (192.168.8.55), because the CA's certificates name it. Split-horizon on a
+  (`pistis.home`), because the CA's certificates name it. Split-horizon on a
   DNSSEC-signed domain needs three coordinated pieces — read `dns/CLAUDE.md`
   invariant 5 before touching it.
 - **`mail.peetvandesande.com` is overridden internally too**, to ruby's wg0
@@ -282,7 +282,7 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 ## Docker
 
 Container workloads that are not worth an LXC run on `moby` (CT 108,
-192.168.8.27) — Docker Engine with compose v2, one directory per stack under
+`moby.home`) — Docker Engine with compose v2, one directory per stack under
 `/opt/stacks`. See `moby/CLAUDE.md`. Nextcloud, Traefik and XWiki moved here
 from the old moby at 192.168.1.25 (a machine this repo does not manage) in
 September 2026; the rest of that host's stacks are still there.
@@ -302,7 +302,7 @@ nothing from the host; reach for an LXC when it wants to look like a machine.
 
 ## Mail
 
-`hermes` (VM 109, 192.168.8.57) runs **mailcow** for the Proxmox labs, so
+`hermes` (VM 109, `hermes.home`) runs **mailcow** for the Proxmox labs, so
 their made-up customers have mailboxes to read in SOGo at
 `https://hermes.home/SOGo/`. It is a VM because mailcow does not support LXC.
 It is cut down to Rspamd plus webmail – no ClamAV, Olefy, full-text search or
@@ -316,8 +316,8 @@ must go out is routed via ruby with a mailcow transport map. See
 
 ## Monitoring
 
-Prometheus (192.168.8.53) is used for **all** monitoring; Grafana
-(192.168.8.54) for dashboards and alerting. Three dashboards are provisioned
+Prometheus (`prometheus.home`) is used for **all** monitoring; Grafana
+(`grafana.home`) for dashboards and alerting. Three dashboards are provisioned
 from `grafana/` — `homelab-dns`, `homelab-fleet` and `homelab-router` — with
 the alert rules in groups `dns`, `fleet` and one per concern beside them. The
 router and the ONT in it cannot run node-exporter, so lenora collects both into
@@ -328,8 +328,8 @@ the home connection, so it cannot report a home outage; a heartbeat rule pings
 **Healthchecks.io** every 5 minutes instead, and that alerts from outside when
 the pings stop – `grafana/CLAUDE.md`, "Heartbeat". ruby and jennie probe
 each other's public side with blackbox exporters, scraped over the tunnels –
-`outside/`; a blackbox exporter on .53 probes the internet, the tunnels, DNS
-end to end and every lab certificate – `prometheus/CLAUDE.md` invariant 7. Loki (192.168.8.56) is the log
+`outside/`; a blackbox exporter on prometheus probes the internet, the tunnels, DNS
+end to end and every lab certificate – `prometheus/CLAUDE.md` invariant 7. Loki (`loki.home`) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
 thirteen hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
@@ -337,7 +337,7 @@ The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
 instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
-`/etc/prometheus/prometheus.yml` on .53 directly will be overwritten by the
+`/etc/prometheus/prometheus.yml` on prometheus directly will be overwritten by the
 next deploy.
 
 **Fleet-wide host hygiene lives in `fleet/`** — units masked on every host, and

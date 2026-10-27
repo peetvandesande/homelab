@@ -280,5 +280,5 @@ Each of these was found by something breaking.
 
 The homelab rule applies here as everywhere: add its A and PTR records to
 `dns/pythia/var/lib/powerdns/zones/`, bump both serials, run
-`dns/scripts/deploy.sh`, and add the `node` target on 192.168.8.53.
+`dns/scripts/deploy.sh`, and add the `node` target on prometheus.
 `pistis` (`.55`) and the `ca.home` CNAME are already done.

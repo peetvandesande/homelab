@@ -6,7 +6,7 @@ migrated services over TLS.
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth. **Never
-edit `/etc/prometheus/prometheus.yml` on .53.** `scripts/deploy.sh` pushes and
+edit `/etc/prometheus/prometheus.yml` on prometheus.** `scripts/deploy.sh` pushes and
 validates with `promtool`; `scripts/verify.sh` asserts every target is up.
 
 Deploy **after** `node-exporter/`, and **before** `grafana/`.
@@ -65,7 +65,7 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    unchanged. A 403 from anywhere else is that ACL working. The `docker` job
    on moby works the same way: the engine serves plain HTTP on loopback and
    nginx fronts it on `:9323`. `traefik`, also on moby, is plain HTTP on
-   .74:8080 — a migrated stack that predates this repo's TLS posture and
+   `traefik.home:8080` — a migrated stack that predates this repo's TLS posture and
    carries its own certificates for the sites it fronts.
 
 6. **The `grafana` job is not for graphs.** `grafana_alerting_*` is the only

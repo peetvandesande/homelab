@@ -6,7 +6,7 @@ only for Prometheus.
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth. **Never
-edit `/etc/jellyfin/network.xml` on .60** – Jellyfin rewrites that file from
+edit `/etc/jellyfin/network.xml` on jellyfin** – Jellyfin rewrites that file from
 its own UI, so a change made there will be silently reverted by a deploy, and a
 change made in the UI will be silently reverted too. Settings that matter go
 here.

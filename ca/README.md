@@ -53,15 +53,15 @@ serve TLS off the G3 intermediate:
 |---|---|---|
 | all thirteen | prometheus-node-exporter | 9100 |
 | all thirteen | Grafana Alloy `/metrics` | 12345 |
-| .53 | Prometheus API | 9090 |
-| .54 | Grafana UI | 3000 |
-| .60 | Jellyfin `/metrics` for Prometheus | 8920 (UI is plain HTTP on 8096) |
-| .50 | dnsdist DoT / DoH | 853 / 443 |
-| .50/.51/.52 | PowerDNS metrics, via nginx | 8083 / 8082 / 8081 |
-| .56 | Loki API and `/metrics` | 3100 |
-| .27 | Docker Engine `/metrics`, via nginx | 9323 |
-| .21 | Proxmox VE web GUI | 8006 |
-| .57 | mailcow UI and SOGo; SMTP, IMAP | 443; 25/465/587, 993 |
+| prometheus | Prometheus API | 9090 |
+| grafana | Grafana UI | 3000 |
+| jellyfin | Jellyfin `/metrics` for Prometheus | 8920 (UI is plain HTTP on 8096) |
+| themis | dnsdist DoT / DoH | 853 / 443 |
+| themis/delphi/pythia | PowerDNS metrics, via nginx | 8083 / 8082 / 8081 |
+| loki | Loki API and `/metrics` | 3100 |
+| moby | Docker Engine `/metrics`, via nginx | 9323 |
+| lenora | Proxmox VE web GUI | 8006 |
+| hermes | mailcow UI and SOGo; SMTP, IMAP | 443; 25/465/587, 993 |
 
 Each lives in its own directory at the top of `homelab/`, with the fleet-wide
 node-exporter in `node-exporter/`. **Deploy order matters**: node-exporter
@@ -118,19 +118,19 @@ openssl req -in dev.csr -noout -verify -subject -ext subjectAltName
 Then sign with a token whose `--san` list matches it exactly:
 
 ```sh
-scp dev.csr root@192.168.8.55:/tmp/
-ssh root@192.168.8.55 'set -e
+scp dev.csr root@pistis.home:/tmp/
+ssh root@pistis.home 'set -e
   CA="--ca-url https://pistis.home:8443 --root /etc/step-ca/certs/root_ca.crt"
   TOKEN=$(step ca token dev.home --san dev.home --san dev.local --san 192.168.8.x \
     --provisioner admin --provisioner-password-file /etc/step-ca/secrets/jwk-password $CA)
   step ca sign /tmp/dev.csr /tmp/dev.crt --token "$TOKEN" --not-after 8760h $CA
   rm /tmp/dev.csr'
-scp root@192.168.8.55:/tmp/dev.crt . && ssh root@192.168.8.55 rm /tmp/dev.crt
+scp root@pistis.home:/tmp/dev.crt . && ssh root@pistis.home rm /tmp/dev.crt
 ```
 
 - **`--not-after 8760h`**, the year `maxTLSCertDuration` allows. A device that
   cannot renew itself would otherwise be back in 30 days. Nothing watches its
-  expiry either – the blackbox probes on .53 cover lab hosts only – so put the
+  expiry either – the blackbox probes on prometheus cover lab hosts only – so put the
   date somewhere you will see it.
 - **`step ca sign` returns leaf + G3 intermediate.** Most appliance UIs take
   the leaf alone; import the second block as a CA certificate so the device
