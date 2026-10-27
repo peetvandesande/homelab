@@ -100,6 +100,66 @@ step ca certificate foo.home foo.crt foo.key \
 The `admin` password is `STEP_CA_JWK_PASSWORD` in `secrets.env`; on pistis
 itself it is already at `/etc/step-ca/secrets/jwk-password`.
 
+### Signing a device's CSR
+
+For an appliance that makes its own key and CSR but cannot run step-cli or
+ACME – a printer, a NAS, a switch. Sign on pistis, so the provisioner password
+stays there; the key stays on the device.
+
+**Check the CSR first.** step-ca refuses a CSR whose SANs differ from the
+token's, and it cannot add names at signing time, so the CSR has to carry every
+name a client will use – for anything that speaks Bonjour that includes
+`<name>.local`, which is what AirPrint and friends connect to:
+
+```sh
+openssl req -in dev.csr -noout -verify -subject -ext subjectAltName
+```
+
+Then sign with a token whose `--san` list matches it exactly:
+
+```sh
+scp dev.csr root@192.168.8.55:/tmp/
+ssh root@192.168.8.55 'set -e
+  CA="--ca-url https://pistis.home:8443 --root /etc/step-ca/certs/root_ca.crt"
+  TOKEN=$(step ca token dev.home --san dev.home --san dev.local --san 192.168.8.x \
+    --provisioner admin --provisioner-password-file /etc/step-ca/secrets/jwk-password $CA)
+  step ca sign /tmp/dev.csr /tmp/dev.crt --token "$TOKEN" --not-after 8760h $CA
+  rm /tmp/dev.csr'
+scp root@192.168.8.55:/tmp/dev.crt . && ssh root@192.168.8.55 rm /tmp/dev.crt
+```
+
+- **`--not-after 8760h`**, the year `maxTLSCertDuration` allows. A device that
+  cannot renew itself would otherwise be back in 30 days. Nothing watches its
+  expiry either – the blackbox probes on .53 cover lab hosts only – so put the
+  date somewhere you will see it.
+- **`step ca sign` returns leaf + G3 intermediate.** Most appliance UIs take
+  the leaf alone; import the second block as a CA certificate so the device
+  serves the full chain.
+
+**If the device cannot produce a usable CSR** – common: Brother's lets you set
+nothing and names only the bare hostname – but will import a PKCS#12, make the
+key on the workstation instead. That breaks the rule that a key never leaves
+its host, so do it in a scratch directory and delete the key once it is
+bundled:
+
+```sh
+umask 077
+openssl ecparam -name prime256v1 -genkey -noout -out dev.key
+openssl req -new -key dev.key -out dev.csr -subj /CN=dev.home \
+  -addext "subjectAltName=DNS:dev.home,DNS:dev.local,IP:192.168.8.x"
+# sign dev.csr as above, then:
+openssl pkcs12 -export -inkey dev.key -in dev.crt -name dev.home \
+  -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1 -out dev.p12
+rm -P dev.key dev.csr
+```
+
+The 3DES/SHA-1 PKCS#12 is deliberate: OpenSSL 3+ defaults to AES-256 with
+PBKDF2, which appliance firmware commonly rejects, and the file only has to
+survive the trip to the device. Delete it once imported.
+
+The Brother printer (`printer.home`, 192.168.8.241) was issued this way on
+27 October 2026 and expires on **27 October 2027**.
+
 ## Trusting the root on a client
 
 ```sh
