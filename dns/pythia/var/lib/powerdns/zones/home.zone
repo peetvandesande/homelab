@@ -9,7 +9,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026102401  ; serial
+                2026102701  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -54,6 +54,10 @@ homeassistant IN  A   192.168.8.90     ; HAOS VM 302 - outside the .60-.69 range
 ; --- non-production -------------------------------------------------
 lexie       IN  A   192.168.8.24
 lexie       IN  AAAA fd33:5692:1834:1000:be24:11ff:fe35:8257
+
+; --- clients --------------------------------------------------------
+printer     IN  A   192.168.8.241    ; Brother MFC-J4350DW, on Wi-Fi
+printer     IN  AAAA fd33:5692:1834:1000:f64e:b4ff:feae:5d38 ; Brother MFC-J4350DW, on Wi-Fi
 
 ; --- aliases --------------------------------------------------------
 dns         IN  CNAME themis.home.

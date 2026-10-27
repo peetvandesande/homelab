@@ -89,6 +89,10 @@ zones:
       - title: non-production
         records:
           - { name: lexie, data: 192.168.8.24, data6: 'fd33:5692:1834:1000:be24:11ff:fe35:8257' }
+      # Client devices with a reservation in .240-.254 (router/README.md).
+      - title: clients
+        records:
+          - { name: printer, data: 192.168.8.241, data6: 'fd33:5692:1834:1000:f64e:b4ff:feae:5d38', comment: 'Brother MFC-J4350DW, on Wi-Fi' }
       - title: aliases
         records:
           - { name: dns, type: CNAME, data: themis.home. }
