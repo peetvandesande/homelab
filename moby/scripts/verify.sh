@@ -128,8 +128,13 @@ echo "== n8n sandbox"
 SBX=n8n-sandbox.home
 $SSH "root@$HOST" 'cd /opt/stacks/n8n-sandbox && docker compose ps --status running -q | wc -l' 2>/dev/null | grep -qx 1 \
   && pass "the sandbox is running" || bad "the sandbox is running" "docker compose ps in /opt/stacks/n8n-sandbox"
-https_ok "$SBX" "https://$SBX/healthz"
-https_ok "sandbox /metrics refused off Prometheus" "https://$SBX/metrics" 403
+code=$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' "http://$SBX/healthz" 2>/dev/null) || code=000
+[[ $code == 200 ]] && pass "http://$SBX/ answers (200)" || bad "http://$SBX/ answers" "http=$code"
+code=$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' "http://$SBX/metrics" 2>/dev/null) || code=000
+[[ $code == 403 ]] && pass "sandbox /metrics refused off Prometheus (403)" || bad "sandbox /metrics refused off Prometheus" "http=$code"
+loc=$(curl -sS --max-time 8 --cacert "$CA_ROOT" -o /dev/null -w '%{redirect_url}' "https://$SBX/healthz" 2>/dev/null)
+[[ $loc == "http://$SBX/healthz" ]] && pass "https://$SBX/ redirects to http, not to production" \
+  || bad "https://$SBX/ redirects to http" "redirects to ${loc:-nothing}"
 if nc -z -G 2 "$HOST" 5679 2>/dev/null; then bad "the sandbox's 5679 is loopback-only" "reachable from the LAN"
 else pass "the sandbox's 5679 is loopback-only"; fi
 # Production stays the default for any other name on moby's address.

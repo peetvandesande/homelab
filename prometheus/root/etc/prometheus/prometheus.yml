@@ -192,14 +192,11 @@ scrape_configs:
       - targets: ['n8n.home:443']
         labels: {role: moby }
 
-  # The n8n sandbox on moby. Scraped but deliberately not in the target-down
-  # alert: it is for experiments.
+  # The n8n sandbox on moby, plain HTTP like its clients. Scraped but
+  # deliberately not in the target-down alert: it is for experiments.
   - job_name: n8n-sandbox
-    scheme: https
-    tls_config:
-      ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['n8n-sandbox.home:443']
+      - targets: ['n8n-sandbox.home:80']
         labels: {role: moby }
 
   # Loki exposes its own metrics on the same TLS port as its API.

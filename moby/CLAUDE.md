@@ -12,7 +12,7 @@ traefik), which came from the old moby (192.168.1.25, since retired) on
 21 September 2026 and are host-owned; and **n8n**, the one
 stack this repo owns, behind the host nginx on .27 as `n8n.peetvandesande.com`
 (built 28 October 2026), plus **n8n-sandbox**, a second, disposable n8n at
-`n8n-sandbox.home` (LAN and VPN only).
+`http://n8n-sandbox.home` (LAN and VPN only).
 
 ## Working on this
 
@@ -122,7 +122,8 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
 ## n8n sandbox
 
 `root/opt/stacks/n8n-sandbox/`: a second n8n, separate data, for experiments
-and API clients, at `https://n8n-sandbox.home/` – LAN and VPN only, nothing on
+and API clients, at `http://n8n-sandbox.home/` – plain HTTP, because n8n's
+clients do not trust the lab CA; `https://` redirects there. LAN and VPN only, nothing on
 ruby proxies to it, so its webhooks are not reachable from the internet.
 SQLite in its `data` volume, no mail, published on `127.0.0.1:5679` behind
 moby's nginx (`n8n-sandbox.conf`). Its `.env` holds only the encryption key,
