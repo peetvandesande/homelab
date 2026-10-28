@@ -29,6 +29,7 @@ $SSH "root@$HOST" '
   # the nginx splash page to the LAN. Nothing here wants it.
   rm -f /etc/nginx/sites-enabled/default
   ln -sf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-enabled/metrics.conf
+  ln -sf /etc/nginx/sites-available/n8n.conf /etc/nginx/sites-enabled/n8n.conf
   nginx -t
   systemctl enable nginx >/dev/null
   systemctl restart nginx
@@ -45,7 +46,26 @@ $SSH "root@$HOST" '
 restart_assert "$HOST" docker
 echo "   docker restarted"
 
-# No stack here is the repo's: nextcloud, traefik and xwiki came from the old
-# moby, are host-owned, carry their own secrets, and nothing in this repo
-# starts or stops them. A repo-owned stack would live in root/opt/stacks and
-# be converged here with `docker compose up -d`.
+# Repo-owned stacks: root/opt/stacks/<name>, converged with `docker compose
+# up -d`. nextcloud, traefik and xwiki are NOT among them - they came from the
+# old moby, are host-owned, carry their own secrets, and nothing in this repo
+# starts or stops them.
+#
+# A stack's secrets are its .env, generated here the first time and never
+# again: n8n's N8N_ENCRYPTION_KEY encrypts every credential it stores, so a
+# new one would orphan them all.
+$SSH "root@$HOST" '
+  set -e
+  env=/opt/stacks/n8n/.env
+  if [ ! -s "$env" ]; then
+    umask 077
+    printf "POSTGRES_PASSWORD=%s\nN8N_ENCRYPTION_KEY=%s\n" \
+      "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$env"
+    echo "   generated $env"
+  fi
+  chmod 0600 "$env"
+  cd /opt/stacks/n8n
+  docker compose pull -q
+  docker compose up -d --remove-orphans
+'
+echo "   n8n converged"

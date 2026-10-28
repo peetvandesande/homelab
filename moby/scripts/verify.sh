@@ -59,7 +59,7 @@ echo "== node-exporter"
 https_ok "node-exporter on $HOST:9100" "https://$HOST:9100/metrics"
 
 echo "== scraped by prometheus"
-for job in node alloy docker traefik; do
+for job in node alloy docker traefik n8n; do
   $CURL "https://$PROM:9090/api/v1/targets" 2>/dev/null | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -104,6 +104,25 @@ case "$code" in
   202)     warn "xwiki through traefik" "202 - tomcat is still starting" ;;
   *)       bad  "xwiki serves through traefik" "http=$code" ;;
 esac
+
+echo "== n8n, the repo-owned stack"
+N8N=n8n.peetvandesande.com
+$SSH "root@$HOST" 'cd /opt/stacks/n8n && docker compose ps --status running -q | wc -l' 2>/dev/null | grep -qx 2 \
+  && pass "n8n and its database are running" || bad "n8n and its database are running" "docker compose ps in /opt/stacks/n8n"
+https_ok "$N8N/healthz (split-horizon to moby)" "https://$N8N/healthz"
+code=$(curl -6 -sS --max-time 10 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' "https://$N8N/healthz" 2>/dev/null) || code=000
+[[ $code == 200 ]] && pass "$N8N over IPv6 (200)" || bad "$N8N over IPv6" "http=$code"
+chain_ok "moby:443 (n8n)" "$HOST:443"
+https_ok "n8n /metrics refused off Prometheus" "https://$N8N/metrics" 403
+if nc -z -G 2 "$HOST" 5678 2>/dev/null; then bad "n8n's 5678 is loopback-only" "reachable from the LAN"
+else pass "n8n's 5678 is loopback-only"; fi
+# Through ruby, pinned to its public address. Webhooks reach n8n (its own 404
+# for an unregistered path); the editor does not.
+body=$(curl -sS --max-time 15 --resolve "$N8N:443:145.239.73.18" "https://$N8N/webhook/verify-probe" 2>/dev/null)
+grep -q 'not registered' <<<"$body" && pass "webhooks reach n8n via ruby" \
+  || bad "webhooks reach n8n via ruby" "${body:0:80} - is moby/scripts/install-ruby.sh installed on ruby?"
+code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$N8N:443:145.239.73.18" "https://$N8N/" 2>/dev/null) || code=000
+[[ $code == 403 ]] && pass "the editor is closed via ruby (403)" || bad "the editor is closed via ruby" "http=$code"
 
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \

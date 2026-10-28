@@ -9,8 +9,9 @@ the stacks that came from the old moby publish their ports on them.
 
 Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
 traefik), which came from the old moby (192.168.1.25, a machine this repo has
-never managed) on 21 September 2026. Every stack on this host is one of those
-three — the repo owns none of them.
+never managed) on 21 September 2026 and are host-owned; and **n8n**, the one
+stack this repo owns, behind the host nginx on .27 as `n8n.peetvandesande.com`
+(built 28 October 2026).
 
 ## Working on this
 
@@ -79,6 +80,40 @@ of the metrics names the certificate and will not start without it.
    Non-Production: they are inherited from the old host, and every compose
    file here names them literally.
 
+8. **nginx binds 192.168.8.27:80/443, not the IPv4 wildcard.** Docker holds
+   those ports on .73 and .74, and Linux will not let a wildcard listener share
+   a port with specific ones – so nginx names .27, and has a wait-for-address
+   drop-in (`nginx.service.d`) because a specific address can lose the
+   cold-boot race. If it does, nginx fails whole and the engine metrics on
+   9323 go with it. IPv6 is `[::]`, which nginx makes v6-only, so it never
+   collides. The server for n8n is the only one on .27:443, so `moby.home`
+   answers with n8n too.
+
+## n8n
+
+`root/opt/stacks/n8n/compose.yaml`: n8n pinned to a release, plus Postgres,
+published on `127.0.0.1:5678` only. `etc/nginx/sites-available/n8n.conf`
+terminates TLS with moby's lab certificate, which carries `n8n.home` and
+`n8n.peetvandesande.com` as SANs (`FLEET` in `ca/scripts/enrol.sh`).
+
+- **One URL.** `WEBHOOK_URL` is the public name; on the LAN it is
+  split-horizon to moby, off it ruby proxies to moby's nginx over wg1
+  (`ruby/`, installed on ruby with `scripts/install-ruby.sh`). Through ruby
+  only webhooks, forms and their assets are public; the editor and APIs are
+  limited to `snippets/home-lan-allow.conf`. On the LAN everything is open.
+- **One proxy hop, both ways.** moby's nginx trusts `X-Forwarded-For` from
+  ruby's ranges (`real_ip`) and passes the real client on, so
+  `N8N_PROXY_HOPS=1` is right whether a request came via ruby or not.
+- **`.env` is the secrets, generated once by `deploy.sh`.**
+  `N8N_ENCRYPTION_KEY` encrypts every stored credential; regenerating it
+  orphans them. It and the `n8n_db` volume are one backup – and there is no
+  backup yet.
+- **Upgrades are a tag bump** in `compose.yaml` and a deploy. n8n migrates its
+  database on start; read the release notes first.
+- **`/metrics`** goes through nginx, allowed to Prometheus by both its
+  addresses; the `n8n` job scrapes `n8n.home:443`.
+- **No mail.** Nothing is configured to send it.
+
 ## Home Assistant is gone
 
 It ran here as `/opt/stacks/homeassistant` on **192.168.8.79**, behind the
@@ -127,12 +162,18 @@ still a rollback.
 
 Four things this move left behind:
 
-- **`gotenberg`, `n8n` and `baserow` are no longer proxied.** Traefik's compose
+- **`gotenberg` and `baserow` are no longer proxied.** Traefik's compose
   file joined their networks, which do not exist here, and Traefik refuses to
-  start on a missing external network — so those three entries are commented
-  out in `/opt/stacks/traefik/docker-compose.yml` (the original is beside it
-  as `docker-compose.yml.from-old-moby`). gotenberg is still running on .25
-  with no way in. Re-add the line when its stack follows it here.
+  start on a missing external network — so those entries are commented out
+  in `/opt/stacks/traefik/docker-compose.yml` (the original is beside it as
+  `docker-compose.yml.from-old-moby`). gotenberg is still running on .25 with
+  no way in. Re-add the line when its stack follows it here. **n8n is not
+  coming**: it was rebuilt fresh on 28 October 2026, and its commented-out
+  `n8n_default` lines and the `n8n.lan` certificate in `dynamic/tls.yml` were
+  removed that day (backups beside them, `*.bak-2026-10-28-n8n`). The new
+  stack's network is also called `n8n_default`, so uncommenting the old line
+  would have wired traefik into it. The old n8n on .25 still exists – .25 is
+  unreachable from the 192.168.8.0/24 LAN.
 - **Nextcloud went from 33.0.3 to 34.0.4 on the way.** The compose file tracks
   `nextcloud:stable-fpm-alpine`, so the first start here pulled the current
   stable and ran its upgrade. It completed clean — `needsDbUpgrade` is false
