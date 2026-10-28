@@ -107,7 +107,7 @@ esac
 
 echo "== n8n, the repo-owned stack"
 N8N=n8n.peetvandesande.com
-$SSH "root@$HOST" 'cd /opt/stacks/n8n && docker compose ps --status running -q | wc -l' 2>/dev/null | grep -qx 2 \
+$SSH "root@$HOST" 'cd /opt/stacks/n8n && docker compose ps --status running --services | grep -cxE "n8n|db"' 2>/dev/null | grep -qx 2 \
   && pass "n8n and its database are running" || bad "n8n and its database are running" "docker compose ps in /opt/stacks/n8n"
 https_ok "$N8N/healthz (split-horizon to moby)" "https://$N8N/healthz"
 code=$(curl -6 -sS --max-time 10 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' "https://$N8N/healthz" 2>/dev/null) || code=000
