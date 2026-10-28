@@ -67,7 +67,7 @@ if command -v rspamadm >/dev/null; then
     [[ -s $key.dns ]] && txt=$(tr -d '\n\t"' < "$key.dns" | sed 's/.*( *//; s/ *).*//; s/  */ /g')
     [[ -n $txt ]] || txt=$(openssl pkey -in "$key" -pubout 2>/dev/null | sed '1d;$d' | tr -d '\n' | sed 's/^/v=DKIM1; k=rsa; p=/')
   else
-    bad "rspamd does not sign from a per-domain ($domain) path - its dkim_signing is:"
+    bad 'rspamd does not sign from a per-domain ($domain) path - its dkim_signing is:'
     echo "$dump" | sed 's/^/     /'
   fi
 elif [[ -d /etc/opendkim ]]; then
