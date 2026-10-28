@@ -1,8 +1,8 @@
 # n8n.peetvandesande.com on ruby - the public face of the n8n stack on moby.
 # Managed in homelab/moby/ruby; installed by moby/scripts/install-ruby.sh.
 #
-# Publicly the name is a CNAME to this host. Inside the lab it is split-horizon
-# and answers moby (dns/CLAUDE.md invariant 5), whose nginx fronts the stack.
+# Publicly the name is a CNAME to this host; inside the lab and the VPN it
+# resolves to moby, whose nginx fronts the stack.
 #
 # THE INTERNET GETS WEBHOOKS AND FORMS, NOT THE EDITOR. The editor and its API
 # run arbitrary code on moby by design, so they are behind
@@ -42,9 +42,9 @@ server {
 
     client_max_body_size 16m;
 
-    # Upstream, resolved per request for the reason ca.peetvandesande.com
-    # gives: a name that fails at config load stops all of nginx. Both
-    # families, as in git.peetvandesande.com.
+    # Upstream, resolved per request: a name that fails at config load stops
+    # all of nginx. 127.0.0.1 is this host's named, which resolves home. for
+    # both families.
     resolver 127.0.0.1 valid=30s;
     resolver_timeout 3s;
     set $moby moby.home;

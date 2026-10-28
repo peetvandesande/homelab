@@ -1,9 +1,7 @@
 ; /etc/bind/wireguard/git.peetvandesande.com
 ;
-; VPN clients get the lab's answer, as the LAN does (dns/ansible, the
-; split-horizon zone of the same name): forgejo directly over the
-; tunnel, rather than ruby's public address and its public vhost. Same
-; addresses as the LAN's copy - change both together.
+; VPN clients get the lab's own addresses: forgejo directly over the tunnel,
+; rather than ruby's public address and its public vhost.
 ;
 ; Validate after every edit:
 ;   named-checkzone git.peetvandesande.com /etc/bind/wireguard/git.peetvandesande.com

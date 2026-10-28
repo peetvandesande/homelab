@@ -51,18 +51,27 @@ echo "   docker restarted"
 # old moby, are host-owned, carry their own secrets, and nothing in this repo
 # starts or stops them.
 #
-# A stack's secrets are its .env, generated here the first time and never
-# again: n8n's N8N_ENCRYPTION_KEY encrypts every credential it stores, so a
-# new one would orphan them all.
-$SSH "root@$HOST" '
+# A stack's secrets are its .env. The database password and the encryption
+# key are generated here the first time and never again: n8n's
+# N8N_ENCRYPTION_KEY encrypts every credential it stores, so a new one would
+# orphan them all. The mail password comes from homelab-private and is
+# rewritten on every deploy, over stdin.
+N8N_SECRETS=../../homelab-private/n8n/secrets.env
+[[ -f $N8N_SECRETS ]] || { echo "$N8N_SECRETS missing"; exit 1; }
+SMTP_PASSWD=$(sed -n 's/^SMTP_PASSWD=//p' "$N8N_SECRETS")
+[[ -n $SMTP_PASSWD ]] || { echo "SMTP_PASSWD unset in $N8N_SECRETS"; exit 1; }
+printf '%s\n' "$SMTP_PASSWD" | $SSH "root@$HOST" '
   set -e
   env=/opt/stacks/n8n/.env
+  umask 077
   if [ ! -s "$env" ]; then
-    umask 077
     printf "POSTGRES_PASSWORD=%s\nN8N_ENCRYPTION_KEY=%s\n" \
       "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$env"
     echo "   generated $env"
   fi
+  read -r pass
+  { grep -v "^N8N_SMTP_PASS=" "$env"; printf "N8N_SMTP_PASS=%s\n" "$pass"; } > "$env.new"
+  mv "$env.new" "$env"
   chmod 0600 "$env"
   cd /opt/stacks/n8n
   docker compose pull -q

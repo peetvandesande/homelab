@@ -9,10 +9,10 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
 HOST=192.168.8.62
-[[ -f secrets.env ]] || { echo "secrets.env missing - see CLAUDE.md, Mail"; exit 1; }
-# shellcheck disable=SC1091
-source secrets.env
-[[ -n "${SMTP_PASSWD:-}" ]] || { echo "SMTP_PASSWD unset in secrets.env"; exit 1; }
+SECRETS=../../homelab-private/forgejo/secrets.env
+[[ -f $SECRETS ]] || { echo "$SECRETS missing - see CLAUDE.md, Mail"; exit 1; }
+SMTP_PASSWD=$(sed -n 's/^SMTP_PASSWD=//p' "$SECRETS")
+[[ -n $SMTP_PASSWD ]] || { echo "SMTP_PASSWD unset in $SECRETS"; exit 1; }
 
 require_enrolled "$HOST"
 push "$HOST" root

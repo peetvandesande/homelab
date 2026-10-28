@@ -6,10 +6,9 @@
 #
 #   install-ruby-vhost.sh <vhost-file> <public-name> <origin.home>
 #
-# Run from ruby's clone, with sudo. Safe to re-run. Modelled on
-# ca/scripts/install-ruby.sh, with two differences: these vhosts are HTTPS,
-# so a certificate is issued before the vhost is enabled, and the upstream is
-# HTTPS too, verified against the lab root.
+# Run from ruby's clone, with sudo. Safe to re-run. A certificate is issued
+# before the vhost is enabled, and the upstream is HTTPS, verified against the
+# lab root.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 [[ $# -eq 3 ]] || { echo "usage: $0 <vhost-file> <public-name> <origin.home>"; exit 1; }
@@ -19,14 +18,14 @@ ROOT_CA=/etc/nginx/homelab-root-g2.crt
 PUBLIC4=145.239.73.18
 PUBLIC6=2001:41d0:305:2100::1:3a0e
 
-# ruby is identified by dummy0, as in outside/install.sh.
+# ruby is identified by dummy0.
 ip -4 addr show dev dummy0 2>/dev/null | grep -q "inet 192.168.254.254/" || {
   echo "not ruby: no 192.168.254.254 on dummy0"; exit 1; }
 [[ -s $SRC ]] || { echo "no vhost at $SRC"; exit 1; }
 
 echo "== origin $ORIGIN"
 # Through this host's named, which needs a `home` static-stub in its internal
-# view (ca/CLAUDE.md, and the comment in ca/scripts/install-ruby.sh).
+# view.
 addr=$(dig +short +time=3 +tries=1 @127.0.0.1 "$ORIGIN" A | tail -1)
 [[ -n $addr ]] || { echo "!! $ORIGIN does not resolve via 127.0.0.1"; exit 1; }
 echo "   resolves to $addr"

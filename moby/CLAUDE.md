@@ -113,7 +113,10 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   database on start; read the release notes first.
 - **`/metrics`** goes through nginx, allowed to Prometheus by both its
   addresses; the `n8n` job scrapes `n8n.home:443`.
-- **No mail.** Nothing is configured to send it.
+- **Mail** goes out as `n8n@peetvandesande.com` through ruby's submission
+  port, as Forgejo's does. The password is in
+  `homelab-private/n8n/secrets.env` (`SMTP_PASSWD=`) and the mailbox; change
+  both, then `deploy.sh`, which rewrites it into `.env` every time.
 
 ## Home Assistant is gone
 

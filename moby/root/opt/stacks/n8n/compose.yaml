@@ -5,8 +5,8 @@
 # (etc/nginx/sites-available/n8n.conf), and ruby proxies the public side to
 # that nginx over wgclient1 - nothing reaches 5678 directly.
 #
-# Secrets are in .env beside this file, generated on moby by deploy.sh the
-# first time and never in git. N8N_ENCRYPTION_KEY encrypts every stored
+# Secrets are in .env beside this file, written on moby by deploy.sh and
+# never in git. N8N_ENCRYPTION_KEY encrypts every stored
 # credential: lose it and they are unreadable, so it goes wherever the
 # database goes.
 name: n8n
@@ -60,6 +60,16 @@ services:
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      # Invitations and password resets, out through ruby's submission port,
+      # which the lab resolves to ruby's wg0 address.
+      N8N_EMAIL_MODE: smtp
+      N8N_SMTP_HOST: mail.peetvandesande.com
+      N8N_SMTP_PORT: "587"
+      N8N_SMTP_SSL: "false"
+      N8N_SMTP_STARTTLS: "true"
+      N8N_SMTP_USER: n8n@peetvandesande.com
+      N8N_SMTP_PASS: ${N8N_SMTP_PASS:?run moby/scripts/deploy.sh}
+      N8N_SMTP_SENDER: n8n <n8n@peetvandesande.com>
       GENERIC_TIMEZONE: Europe/Paris
       TZ: Europe/Paris
     volumes:

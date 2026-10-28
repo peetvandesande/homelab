@@ -1,9 +1,7 @@
 ; /etc/bind/wireguard/n8n.peetvandesande.com
 ;
-; VPN clients get the lab's answer, as the LAN does (dns/ansible, the
-; split-horizon zone of the same name): moby directly over the
-; tunnel, rather than ruby's public address and its public vhost. Same
-; addresses as the LAN's copy - change both together.
+; VPN clients get the lab's own addresses: moby directly over the tunnel,
+; rather than ruby's public address and its public vhost.
 ;
 ; Validate after every edit:
 ;   named-checkzone n8n.peetvandesande.com /etc/bind/wireguard/n8n.peetvandesande.com

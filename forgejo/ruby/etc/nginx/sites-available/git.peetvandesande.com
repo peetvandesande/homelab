@@ -1,15 +1,11 @@
 # git.peetvandesande.com on ruby - the public face of Forgejo. Managed in
 # homelab/forgejo/ruby; installed by forgejo/scripts/install-ruby.sh.
 #
-# Publicly the name is a CNAME to this host. Inside the lab it is split-horizon
-# and answers forgejo itself (dns/CLAUDE.md invariant 5), so this vhost is the
-# path for everyone off the LAN and nobody on it.
+# Publicly the name is a CNAME to this host; inside the lab and the VPN it
+# resolves to forgejo itself, so this vhost serves only the internet.
 #
 # Proxied, not cached: Forgejo is the single origin. When wgclient1 or home is
 # down this answers 502, which is the truth.
-#
-# git over SSH does not come through here: ruby's public :22 is a stream
-# proxy to forgejo (stream.d/), installed by forgejo/scripts/install-ruby-ssh.sh.
 
 server {
     listen 80;
@@ -35,7 +31,6 @@ server {
     ssl_certificate     /etc/letsencrypt/live/git.peetvandesande.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/git.peetvandesande.com/privkey.pem;
 
-    # Named for the vhost in full, as ca.peetvandesande.com explains.
     access_log /var/log/nginx/git.peetvandesande.com.access.log;
     error_log  /var/log/nginx/git.peetvandesande.com.error.log;
 
@@ -49,11 +44,10 @@ server {
     }
 
     location / {
-        # RESOLVED AT RUNTIME, NOT AT CONFIG LOAD - the same reasoning as /g3/
-        # in ca.peetvandesande.com. A literal name in proxy_pass is resolved
-        # once when nginx starts, and a failure is fatal: nginx does not start,
-        # and sogode.com and webmail go with it. Through a variable it is a 502
-        # on this vhost alone.
+        # RESOLVED AT RUNTIME, NOT AT CONFIG LOAD. A literal name in
+        # proxy_pass is resolved once when nginx starts, and a failure is
+        # fatal: nginx does not start, and every other site on ruby goes with
+        # it. Through a variable it is a 502 on this vhost alone.
         #
         # 127.0.0.1 is this host's named, with a `home` static-stub to Pythia in
         # its internal view. Both families: forgejo.home carries a ULA AAAA, and

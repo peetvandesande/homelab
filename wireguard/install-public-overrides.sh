@@ -26,19 +26,19 @@ SRC=$self/services/etc/bind/named.conf.local
 LIVE=/etc/bind/named.conf.local
 echo "== $self"
 
-# The repo's copy with the new zone blocks taken out: what the live file
-# should be if this has never run.
-without=$(awk -v names="${ZONES[*]}" '
+# Both copies with these zone blocks taken out must match: the blocks
+# themselves are this script's to replace.
+strip() { awk -v names="${ZONES[*]}" '
   BEGIN { n = split(names, a, " "); for (i = 1; i <= n; i++) drop["zone \"" a[i] "\" {"] = 1 }
   { key = $0; sub(/^[ \t]+/, "", key) }
   skip { if (key == "};") { skip = 0; blank = 1 } ; next }
   key in drop { skip = 1; next }
   blank && $0 == "" { blank = 0; next }
-  { blank = 0; print }' "$SRC")
+  { blank = 0; print }' "$1"; }
 if cmp -s "$SRC" "$LIVE"; then
   echo "   named.conf.local is already the repo's"
-elif cmp -s <(printf '%s\n' "$without") "$LIVE"; then
-  echo "   named.conf.local is the repo's, without the new zones"
+elif cmp -s <(strip "$SRC") <(strip "$LIVE"); then
+  echo "   named.conf.local differs from the repo only in these zones"
 else
   echo "!! $LIVE differs from the repo by more than these zones:"
   diff -u "$LIVE" "$SRC" || true
