@@ -78,8 +78,10 @@ scrape_configs:
         labels: {role: navidrome }
       - targets: ['lexie.home:9100']
         labels: {role: lexie }
+      - targets: ['forgejo.home:9100']
+        labels: {role: forgejo }
 
-  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same thirteen
+  # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same fourteen
   # targets as `node` - keep the two lists identical; a host in one and not
   # the other is either unmonitored or unlogged.
   - job_name: alloy
@@ -113,6 +115,8 @@ scrape_configs:
         labels: {role: navidrome }
       - targets: ['lexie.home:12345']
         labels: {role: lexie }
+      - targets: ['forgejo.home:12345']
+        labels: {role: forgejo }
 
   # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
   # on 127.0.0.1:9221. Pre-existing.
@@ -165,6 +169,27 @@ scrape_configs:
   - job_name: traefik
     static_configs:
       - targets: ['traefik.home:8080']
+        labels: {role: moby }
+
+  # Forgejo serves /metrics itself, on the same :443 as everything else, off
+  # the lab certificate. Open on the LAN like node-exporter; ruby refuses the
+  # path, so it is not reachable from outside (homelab/forgejo).
+  - job_name: forgejo
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['forgejo.home:443']
+        labels: {role: forgejo }
+
+  # n8n on moby (N8N_METRICS). The stack publishes 5678 on loopback only, so
+  # this goes through moby's nginx, which allows /metrics to this host alone.
+  - job_name: n8n
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['n8n.home:443']
         labels: {role: moby }
 
   # Loki exposes its own metrics on the same TLS port as its API.
@@ -234,7 +259,8 @@ scrape_configs:
         labels: {kind: dns, check: dot, __param_module: dns_dot }
       # Lab certificates: every enrolled host's own (via node-exporter, keep in
       # step with the `node` job), plus the ones that are not the host
-      # certificate - the Proxmox GUI, step-ca itself, mailcow and HA.
+      # certificate - the Proxmox GUI, step-ca itself, mailcow, HA, Forgejo
+      # and the n8n nginx on moby.
       - targets:
           - '192.168.8.21:9100'
           - '192.168.8.24:9100'
@@ -249,10 +275,13 @@ scrape_configs:
           - '192.168.8.57:9100'
           - '192.168.8.60:9100'
           - '192.168.8.61:9100'
+          - '192.168.8.62:9100'
           - '192.168.8.21:8006'
           - '192.168.8.55:8443'
           - '192.168.8.57:443'
           - '192.168.8.90:443'
+          - '192.168.8.62:443'
+          - '192.168.8.27:443'
         labels: {kind: tls, __param_module: tls_lab }
     relabel_configs:
       - source_labels: [__address__]

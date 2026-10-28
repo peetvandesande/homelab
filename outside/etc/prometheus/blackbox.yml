@@ -86,3 +86,47 @@ modules:
       fail_if_not_ssl: true
       no_follow_redirects: true
       valid_status_codes: [404]
+
+  # Forgejo through ruby. /api/healthz is answered by Forgejo itself after it
+  # has checked its database, so a 200 means ruby, wg1, forgejo and Postgres.
+  https_git:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: git.peetvandesande.com
+      tls_config:
+        server_name: git.peetvandesande.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [200]
+
+  # n8n through ruby. No workflow is registered at this path, so n8n itself
+  # answers 404 saying so - which only happens if the request reached it.
+  # nginx's own 404, or a 502 from a dead tunnel, does not carry that text.
+  https_n8n_webhook:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: n8n.peetvandesande.com
+      tls_config:
+        server_name: n8n.peetvandesande.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [404]
+      fail_if_body_not_matches_regexp: ["not registered"]
+
+  # The editor must refuse the internet. 403 is ruby's allow list doing its
+  # job; anything else - above all a 200 - fails.
+  https_n8n_editor_closed:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: n8n.peetvandesande.com
+      tls_config:
+        server_name: n8n.peetvandesande.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [403]

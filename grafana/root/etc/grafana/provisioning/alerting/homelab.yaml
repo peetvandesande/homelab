@@ -709,7 +709,7 @@ groups:
             datasourceUid: "@@PROM_DS_UID@@"
             model:
               editorMode: code
-              expr: 'up{job=~"alloy|loki|docker|traefik|jellyfin|navidrome|prometheus|blackbox"}'
+              expr: 'up{job=~"alloy|loki|docker|traefik|jellyfin|navidrome|forgejo|n8n|prometheus|blackbox"}'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
