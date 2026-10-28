@@ -30,7 +30,6 @@ $SSH "root@$HOST" '
   rm -f /etc/nginx/sites-enabled/default
   ln -sf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-enabled/metrics.conf
   ln -sf /etc/nginx/sites-available/n8n.conf /etc/nginx/sites-enabled/n8n.conf
-  ln -sf /etc/nginx/sites-available/n8n-sandbox.conf /etc/nginx/sites-enabled/n8n-sandbox.conf
   nginx -t
   systemctl enable nginx >/dev/null
   systemctl restart nginx
@@ -71,6 +70,10 @@ printf '%s\n' "$SMTP_PASSWD" | $SSH "root@$HOST" '
     echo "   generated $env"
   fi
   read -r pass
+  # The sandbox service secrets, generated once alongside the others.
+  for k in SANDBOX_API_KEY SANDBOX_REGISTRATION_TOKEN SANDBOX_RUNNER_KEY; do
+    grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 32)" >> "$env"; echo "   generated $k"; }
+  done
   { grep -v "^N8N_SMTP_PASS=" "$env"; printf "N8N_SMTP_PASS=%s\n" "$pass"; } > "$env.new"
   mv "$env.new" "$env"
   chmod 0600 "$env"
@@ -79,19 +82,3 @@ printf '%s\n' "$SMTP_PASSWD" | $SSH "root@$HOST" '
   docker compose up -d --remove-orphans
 '
 echo "   n8n converged"
-
-# The sandbox: one secret, generated once like production's.
-$SSH "root@$HOST" '
-  set -e
-  env=/opt/stacks/n8n-sandbox/.env
-  umask 077
-  if [ ! -s "$env" ]; then
-    printf "N8N_ENCRYPTION_KEY=%s\n" "$(openssl rand -hex 32)" > "$env"
-    echo "   generated $env"
-  fi
-  chmod 0600 "$env"
-  cd /opt/stacks/n8n-sandbox
-  docker compose pull -q
-  docker compose up -d --remove-orphans
-'
-echo "   n8n-sandbox converged"

@@ -11,8 +11,7 @@ Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
 traefik), which came from the old moby (192.168.1.25, since retired) on
 21 September 2026 and are host-owned; and **n8n**, the one
 stack this repo owns, behind the host nginx on .27 as `n8n.peetvandesande.com`
-(built 28 October 2026), plus **n8n-sandbox**, a second, disposable n8n at
-`http://n8n-sandbox.home` (LAN and VPN only).
+(built 28 October 2026).
 
 ## Working on this
 
@@ -87,8 +86,8 @@ of the metrics names the certificate and will not start without it.
    drop-in (`nginx.service.d`) because a specific address can lose the
    cold-boot race. If it does, nginx fails whole and the engine metrics on
    9323 go with it. IPv6 is `[::]`, which nginx makes v6-only, so it never
-   collides. Production n8n is the `default_server` on .27:443, so `moby.home`
-   answers with it; the sandbox has its own `server_name`.
+   collides. n8n is the `default_server` on .27:443, so `moby.home` answers
+   with it.
 
 ## n8n
 
@@ -110,6 +109,14 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   `N8N_ENCRYPTION_KEY` encrypts every stored credential; regenerating it
   orphans them. It and the `n8n_db` volume are one backup – and there is no
   backup yet.
+- **Instance AI's sandbox service** runs in the same stack: `sandbox-api`,
+  `sandbox-runner-1` and a one-shot `sandbox-certs`, pinned together to one
+  release (n8n's own `get-n8n-compose.yml`). n8n reaches it as
+  `http://sandbox-api:8080` on the stack's network and nothing of it is
+  published. The runner is **privileged Docker-in-Docker**, root-equivalent
+  on moby – which works in this unprivileged LXC with `nesting` and
+  `keyctl`. Its three secrets are generated into `.env` once. Bump its tag
+  with n8n's, following that file.
 - **Upgrades are a tag bump** in `compose.yaml` and a deploy. n8n migrates its
   database on start; read the release notes first.
 - **`/metrics`** goes through nginx, allowed to Prometheus by both its
@@ -118,22 +125,6 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   port, as Forgejo's does. The password is in
   `homelab-private/n8n/secrets.env` (`SMTP_PASSWD=`) and the mailbox; change
   both, then `deploy.sh`, which rewrites it into `.env` every time.
-
-## n8n sandbox
-
-`root/opt/stacks/n8n-sandbox/`: a second n8n, separate data, for experiments
-and API clients, at `http://n8n-sandbox.home/` – plain HTTP, because n8n's
-clients do not trust the lab CA; `https://` redirects there. LAN and VPN only, nothing on
-ruby proxies to it, so its webhooks are not reachable from the internet.
-SQLite in its `data` volume, no mail, published on `127.0.0.1:5679` behind
-moby's nginx (`n8n-sandbox.conf`). Its `.env` holds only the encryption key,
-generated once by `deploy.sh`. The owner login and the API key are in
-`homelab-private/n8n-sandbox/secrets.env`. It is scraped as the `n8n-sandbox`
-job but not alerted on. To wipe it: `docker compose down -v` in its directory,
-`deploy.sh`, then set up the owner again.
-
-`n8n.conf` is `default_server`, so any other name on moby's address still gets
-production n8n.
 
 ## Home Assistant is gone
 

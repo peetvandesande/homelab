@@ -59,7 +59,7 @@ echo "== node-exporter"
 https_ok "node-exporter on $HOST:9100" "https://$HOST:9100/metrics"
 
 echo "== scraped by prometheus"
-for job in node alloy docker traefik n8n n8n-sandbox; do
+for job in node alloy docker traefik n8n; do
   $CURL "https://$PROM:9090/api/v1/targets" 2>/dev/null | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -124,23 +124,17 @@ grep -q 'not registered' <<<"$body" && pass "webhooks reach n8n via ruby" \
 code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$N8N:443:145.239.73.18" "https://$N8N/" 2>/dev/null) || code=000
 [[ $code == 403 ]] && pass "the editor is closed via ruby (403)" || bad "the editor is closed via ruby" "http=$code"
 
-echo "== n8n sandbox"
-SBX=n8n-sandbox.home
-$SSH "root@$HOST" 'cd /opt/stacks/n8n-sandbox && docker compose ps --status running -q | wc -l' 2>/dev/null | grep -qx 1 \
-  && pass "the sandbox is running" || bad "the sandbox is running" "docker compose ps in /opt/stacks/n8n-sandbox"
-code=$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' "http://$SBX/healthz" 2>/dev/null) || code=000
-[[ $code == 200 ]] && pass "http://$SBX/ answers (200)" || bad "http://$SBX/ answers" "http=$code"
-code=$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' "http://$SBX/metrics" 2>/dev/null) || code=000
-[[ $code == 403 ]] && pass "sandbox /metrics refused off Prometheus (403)" || bad "sandbox /metrics refused off Prometheus" "http=$code"
-loc=$(curl -sS --max-time 8 --cacert "$CA_ROOT" -o /dev/null -w '%{redirect_url}' "https://$SBX/healthz" 2>/dev/null)
-[[ $loc == "http://$SBX/healthz" ]] && pass "https://$SBX/ redirects to http, not to production" \
-  || bad "https://$SBX/ redirects to http" "redirects to ${loc:-nothing}"
-if nc -z -G 2 "$HOST" 5679 2>/dev/null; then bad "the sandbox's 5679 is loopback-only" "reachable from the LAN"
-else pass "the sandbox's 5679 is loopback-only"; fi
-# Production stays the default for any other name on moby's address.
-code=$(curl -sS --max-time 8 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' https://moby.home/healthz 2>/dev/null) || code=000
-[[ $code == 200 ]] && curl -sS --max-time 8 --cacert "$CA_ROOT" https://moby.home/healthz 2>/dev/null | grep -q ok \
-  && pass "moby.home still answers with production n8n" || bad "moby.home still answers with production n8n" "http=$code"
+# Instance AI's sandbox service: the API healthy, the runner registered and
+# able to start a container, nothing published.
+$SSH "root@$HOST" 'docker inspect -f "{{.State.Health.Status}}" n8n-sandbox-api-1' 2>/dev/null | grep -qx healthy \
+  && pass "sandbox-api is healthy" || bad "sandbox-api is healthy" "docker logs n8n-sandbox-api-1"
+$SSH "root@$HOST" 'docker exec n8n-n8n-1 wget -qO- http://sandbox-api:8080/healthz' 2>/dev/null | grep -q ok \
+  && pass "n8n reaches sandbox-api by name" || bad "n8n reaches sandbox-api by name" "same compose network?"
+$SSH "root@$HOST" 'docker exec n8n-sandbox-runner-1-1 docker info -f "{{.ServerVersion}}"' >/dev/null 2>&1 \
+  && pass "the sandbox runner's inner Docker is up" || bad "the sandbox runner's inner Docker is up" "docker logs n8n-sandbox-runner-1-1"
+$SSH "root@$HOST" 'docker ps --filter label=com.docker.compose.project=n8n --format "{{.Ports}}" | grep -E "0\.0\.0\.0|\[::\]"' >/dev/null 2>&1 \
+  && bad "nothing in the n8n stack is published beyond loopback" "a port is on the wildcard" \
+  || pass "nothing in the n8n stack is published beyond loopback"
 
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \

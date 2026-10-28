@@ -308,9 +308,8 @@ nothing from the host; reach for an LXC when it wants to look like a machine.
 
 **n8n** is the first stack the repo owns there (`moby/root/opt/stacks/n8n`,
 converged by `moby/scripts/deploy.sh`), behind moby's host nginx on
-192.168.8.27:443, built fresh rather than migrated. **n8n-sandbox** beside it
-is a disposable second instance at `http://n8n-sandbox.home`, LAN and VPN
-only.
+192.168.8.27:443, built fresh rather than migrated. The stack includes n8n's sandbox
+service for Instance AI, which runs a privileged Docker-in-Docker runner.
 
 ## Public services
 
@@ -479,8 +478,7 @@ The Proxmox web GUI (lenora:8006) is on the CA too — see `proxmox/CLAUDE.md`.
 Only `pveproxy-ssl.*` was replaced; `pve-ssl.*` stays on Proxmox's internal CA
 because the cluster API depends on it.
 
-Still plain HTTP, deliberately: the n8n sandbox (`moby/CLAUDE.md`), whose
-clients do not trust the lab CA, and the media UIs. Streaming is LAN-only, so
+Still plain HTTP, deliberately: the media UIs. Streaming is LAN-only, so
 Jellyfin's :8096 and Navidrome's :4533 are unencrypted. Their metrics scrapes
 stay TLS where the service can offer it – Jellyfin serves :8920 alongside for
 Prometheus; Navidrome has a single listener, so its scrape is plain too. See
