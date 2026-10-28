@@ -347,6 +347,10 @@ scrape_configs:
         labels: {vantage: jennie, subject: ruby, check: n8n-webhook, __param_module: https_n8n_webhook }
       - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
         labels: {vantage: jennie, subject: ruby, check: n8n-editor-closed, __param_module: https_n8n_editor_closed }
+      - targets: ['https://145.239.73.18/webhook/outside-probe', 'https://[2001:41d0:305:2100::1:3a0e]/webhook/outside-probe']
+        labels: {vantage: jennie, subject: ruby, check: n8n-sogode-webhook, __param_module: https_n8n_sogode_webhook }
+      - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
+        labels: {vantage: jennie, subject: ruby, check: n8n-sogode-editor-closed, __param_module: https_n8n_sogode_editor_closed }
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
