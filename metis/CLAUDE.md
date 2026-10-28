@@ -38,9 +38,20 @@ is and makes the card a unit you can hand to one guest or another.
    `/etc/nftables.d/ollama.nft` admits only moby (both n8n stacks egress as
    moby) and loopback. Plain HTTP on the LAN, by choice: n8n would otherwise
    need the lab root in its trust store.
-4. **Ollama is pinned** (`OLLAMA_VERSION` in `bootstrap.sh`). An upgrade can
-   change GPU support; bump on purpose and re-run `bootstrap.sh` and
+4. **Ollama is pinned** (`OLLAMA_VERSION` and its `OLLAMA_SHA256` in
+   `bootstrap.sh`), installed from the release tarball with our own unit in
+   `root/` – never upstream's `install.sh` piped into a shell. An upgrade can
+   change GPU support; bump both on purpose and re-run `bootstrap.sh` and
    `verify.sh`.
-5. **bge-m3 vectors are 1024-dim** and stored in each pipeline's pgvector
+5. **`rombar=0` on the passthrough.** metis has no emulated VGA
+   (`vga: serial0`), and with the card's option ROM exposed SeaBIOS hangs
+   before the guest boots – no console, no DHCP request, nothing in any log.
+   uc1-worker-1 got away with `rombar=1` only because it kept a VGA.
+6. **The generic kernel, not the cloud one.** Debian's cloud image boots the
+   trimmed `-cloud` kernel; DKMS builds nvidia for `linux-headers-amd64`, the
+   generic one. `bootstrap.sh` installs the generic kernel and purges the cloud
+   kernel. If `nvidia-smi` cannot reach the driver after an upgrade, check
+   `uname -r` first.
+7. **bge-m3 vectors are 1024-dim** and stored in each pipeline's pgvector
    column of that size. Changing the embedding model means re-embedding every
    job and the profile, not just pulling a new model.

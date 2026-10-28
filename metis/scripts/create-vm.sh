@@ -62,8 +62,12 @@ else
   qm disk resize "$VMID" scsi0 "$DISK"
 fi
 
-qm config "$VMID" | grep -q "^hostpci0: mapping=$GPU_MAPPING" \
-  || qm set "$VMID" --hostpci0 "mapping=$GPU_MAPPING,pcie=1,rombar=1,x-vga=0"
+# rombar=0: with no emulated VGA (vga: serial0), SeaBIOS hangs running the
+# card's option ROM and the guest never boots - no DHCP request, no console.
+# The Linux driver does not need the ROM. uc1-worker-1 got away with rombar=1
+# because it kept the default emulated VGA.
+qm config "$VMID" | grep -q "^hostpci0: mapping=$GPU_MAPPING,pcie=1,rombar=0" \
+  || qm set "$VMID" --hostpci0 "mapping=$GPU_MAPPING,pcie=1,rombar=0,x-vga=0"
 qm config "$VMID" | grep -q '^onboot: 1' || qm set "$VMID" --onboot 1
 qm status "$VMID" | grep -q running || qm start "$VMID"
 

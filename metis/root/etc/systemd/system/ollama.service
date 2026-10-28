@@ -1,0 +1,18 @@
+# Ollama, installed from the release tarball by scripts/bootstrap.sh. Settings
+# are in ollama.service.d/homelab.conf.
+[Unit]
+Description=Ollama
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ollama
+Group=ollama
+Environment="HOME=/var/lib/ollama"
+Environment="OLLAMA_MODELS=/var/lib/ollama/models"
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
