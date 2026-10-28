@@ -59,7 +59,7 @@ cmp -s "$bak" "$LIVE" && rm -f "$bak"
 echo "== verify, asking as a VPN client would"
 fail=0
 for z in "${ZONES[@]}"; do
-  want=$(awk '$3 == "A" { print $4 }' "/etc/bind/wireguard/$z")
+  want=$(awk '$4 == "A" { print $5 }' "/etc/bind/wireguard/$z")
   for _ in {1..5}; do
     got=$(dig +short +time=2 +tries=1 -b "$ns" @"$ns" "$z" A | tail -1)
     [[ $got == "$want" ]] && break

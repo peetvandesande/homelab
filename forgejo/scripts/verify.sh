@@ -76,7 +76,7 @@ code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$NAME:44
 want=$(ssh-keyscan -T 5 -t ed25519 "$HOST" 2>/dev/null | awk '{print $3}')
 got=$(ssh-keyscan -T 8 -t ed25519 "$RUBY4" 2>/dev/null | awk '{print $3}')
 [[ -n $want && $got == "$want" ]] && pass "ruby :22 is forgejo's sshd (host key matches)" \
-  || bad "ruby :22 is forgejo's sshd" "${got:+another host key - ruby's own sshd is public}${got:-nothing} - forgejo/scripts/install-ruby-ssh.sh"
+  || bad "ruby :22 is forgejo's sshd" "${got:+another host key - the sshd of ruby itself is public}${got:-nothing} - forgejo/scripts/install-ruby-ssh.sh"
 
 echo "== monitored"
 for job in node alloy forgejo; do
