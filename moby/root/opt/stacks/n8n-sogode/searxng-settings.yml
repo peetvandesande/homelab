@@ -1,0 +1,7 @@
+# SearXNG for n8n's Instance AI web search. The stock image serves HTML only;
+# n8n needs the JSON API. The secret comes from SEARXNG_SECRET in .env.
+use_default_settings: true
+search:
+  formats:
+    - html
+    - json

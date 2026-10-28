@@ -54,6 +54,7 @@ addNTA("mail.peetvandesande.com.", "split-horizon to ruby over wgclient1, unsign
 addNTA("ruby.peetvandesande.com.", "split-horizon to ruby over wgclient1, unsigned internally")
 addNTA("git.peetvandesande.com.", "split-horizon to forgejo, unsigned internally")
 addNTA("n8n.peetvandesande.com.", "split-horizon to moby, unsigned internally")
+addNTA("n8n.sogode.com.", "split-horizon to moby, unsigned internally")
 
 -- No defpol is set: the hagezi feeds already carry their own actions
 -- (CNAME . == NXDOMAIN), and overriding them would discard that intent.

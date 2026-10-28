@@ -39,7 +39,7 @@ FLEET=(
   # nginx fronts; forgejo's is the public name it serves inside the lab, by
   # split-horizon (dns/ansible, "overrides").
   "192.168.8.24 lexie"
-  "192.168.8.27 moby n8n.home n8n.peetvandesande.com"
+  "192.168.8.27 moby n8n.home n8n.peetvandesande.com n8n.sogode.com"
   "192.168.8.60 jellyfin"
   "192.168.8.61 navidrome"
   "192.168.8.62 forgejo git.peetvandesande.com"

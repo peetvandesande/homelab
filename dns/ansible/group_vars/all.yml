@@ -279,6 +279,25 @@ zones:
       - { name: "@", type: A,    data: 192.168.8.27,                           comment: 'moby' }
       - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe13:54b8", comment: 'moby''s ULA' }
 
+  - name: n8n.sogode.com
+    kind: override
+    backend: bind
+    comment: |
+      Split-horizon zone for n8n.sogode.com, the Sogode business n8n.
+
+      Publicly an A/AAAA to ruby (not a CNAME: the name also carries the MX and
+      SPF of its mail domain, hosted on ruby), which reverse-proxies webhooks
+      and forms to moby over wgclient1 - homelab/moby/ruby. Inside the lab it
+      resolves to moby, whose nginx fronts the n8n-sogode stack with a lab-CA
+      certificate carrying this name. Only the addresses are overridden: the
+      lab sends no mail to this domain directly, so MX and TXT stay public-only.
+
+      sogode.com is DNSSEC-signed, so this needs a matching addNTA() on Delphi
+      or every lookup here SERVFAILs.
+    records:
+      - { name: "@", type: A,    data: 192.168.8.27,                           comment: 'moby' }
+      - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe13:54b8", comment: 'moby''s ULA' }
+
   # ------------------------------------------------------- lab zones -----
   # The Proxmox labs share 192.168.32.0/21 and only one runs at a time. Their
   # contents are dynamic - a lab registers its own names on bootstrap and

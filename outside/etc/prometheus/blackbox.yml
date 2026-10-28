@@ -130,3 +130,31 @@ modules:
       fail_if_not_ssl: true
       no_follow_redirects: true
       valid_status_codes: [403]
+
+  # The same two checks for the Sogode n8n.
+  https_n8n_sogode_webhook:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: n8n.sogode.com
+      tls_config:
+        server_name: n8n.sogode.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [404]
+      fail_if_body_not_matches_regexp: ["not registered"]
+
+  # The editor must refuse the internet. 403 is ruby's allow list doing its
+  # job; anything else - above all a 200 - fails.
+  https_n8n_sogode_editor_closed:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: n8n.sogode.com
+      tls_config:
+        server_name: n8n.sogode.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [403]

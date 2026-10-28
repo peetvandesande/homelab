@@ -137,9 +137,9 @@ services:
       DB_POSTGRESDB_USER: n8n
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?run moby/scripts/deploy.sh}
-      # One URL, both sides: on the LAN this name is moby (split-horizon,
-      # dns/ansible), outside it is ruby. Webhook URLs shown in the editor are
-      # built from it, so it must be the public name.
+      # One URL, both sides: on the LAN and the VPN this name is moby, outside
+      # it is ruby. Webhook URLs shown in the editor are built from it, so it
+      # must be the public name.
       N8N_HOST: n8n.peetvandesande.com
       N8N_PROTOCOL: https
       N8N_PORT: "5678"

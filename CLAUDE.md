@@ -74,7 +74,7 @@ than fought.
 This repo is public. Besides the gitignored `secrets.env` files, secrets with no
 deploy script to template them live outside git in `~/projects/homelab-private/`:
 WireGuard keys and filled configs, the Orange WAN credentials, and the mail
-passwords for Forgejo and n8n, Grafana's and the responder's alerting
+passwords for Forgejo and both n8n stacks, Grafana's and the responder's alerting
 secrets, and the CA's passphrases – each in `<service>/secrets.env` there,
 read by that service's deploy script.
 
@@ -237,7 +237,7 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   **`ruby.peetvandesande.com`** is overridden to ruby's dummy0 addresses
   192.168.254.254 and `fd33:5692:1834:254::254`, so the LAN reaches ruby's
   nginx admin pages over the tunnel, where they are allowed.
-  **`git.` and `n8n.peetvandesande.com`** go the other way: publicly they are
+  **`git.` and `n8n.peetvandesande.com`, and `n8n.sogode.com`,** go the other way: publicly they are
   ruby, which reverse-proxies them home, and inside they resolve to forgejo
   and moby directly. See "Public services" below.
 - **When you add a container, add its A and PTR records** to
@@ -320,6 +320,7 @@ works from both sides**:
 |---|---|---|
 | `git.peetvandesande.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
 | `n8n.peetvandesande.com` | n8n on moby | webhooks, forms and their assets; the editor only from `home-lan-allow.conf` ranges |
+| `n8n.sogode.com` | n8n-sogode on moby, for Sogode business use | the same as `n8n.peetvandesande.com`; also a mail domain on ruby (`moby/CLAUDE.md`, "n8n-sogode") |
 
 Publicly each name is a CNAME to ruby, whose nginx terminates TLS with a Let's
 Encrypt certificate and proxies over wg1 to the origin, verifying the origin's

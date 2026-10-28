@@ -192,6 +192,16 @@ scrape_configs:
       - targets: ['n8n.home:443']
         labels: {role: moby }
 
+  # The Sogode business n8n on moby, through the same nginx. By its public
+  # name, which resolves to moby inside the lab.
+  - job_name: n8n-sogode
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['n8n.sogode.com:443']
+        labels: {role: moby }
+
   # Loki exposes its own metrics on the same TLS port as its API.
   - job_name: loki
     scheme: https

@@ -59,7 +59,7 @@ echo "== node-exporter"
 https_ok "node-exporter on $HOST:9100" "https://$HOST:9100/metrics"
 
 echo "== scraped by prometheus"
-for job in node alloy docker traefik n8n; do
+for job in node alloy docker traefik n8n n8n-sogode; do
   $CURL "https://$PROM:9090/api/v1/targets" 2>/dev/null | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -105,40 +105,43 @@ case "$code" in
   *)       bad  "xwiki serves through traefik" "http=$code" ;;
 esac
 
-echo "== n8n, the repo-owned stack"
-N8N=n8n.peetvandesande.com
-$SSH "root@$HOST" 'cd /opt/stacks/n8n && docker compose ps --status running --services | grep -cxE "n8n|db"' 2>/dev/null | grep -qx 2 \
-  && pass "n8n and its database are running" || bad "n8n and its database are running" "docker compose ps in /opt/stacks/n8n"
-https_ok "$N8N/healthz (split-horizon to moby)" "https://$N8N/healthz"
-code=$(curl -6 -sS --max-time 10 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' "https://$N8N/healthz" 2>/dev/null) || code=000
-[[ $code == 200 ]] && pass "$N8N over IPv6 (200)" || bad "$N8N over IPv6" "http=$code"
-chain_ok "moby:443 (n8n)" "$HOST:443"
-https_ok "n8n /metrics refused off Prometheus" "https://$N8N/metrics" 403
-if nc -z -G 2 "$HOST" 5678 2>/dev/null; then bad "n8n's 5678 is loopback-only" "reachable from the LAN"
-else pass "n8n's 5678 is loopback-only"; fi
-# Through ruby, pinned to its public address. Webhooks reach n8n (its own 404
-# for an unregistered path); the editor does not.
-body=$(curl -sS --max-time 15 --resolve "$N8N:443:145.239.73.18" "https://$N8N/webhook/verify-probe" 2>/dev/null)
-grep -q 'not registered' <<<"$body" && pass "webhooks reach n8n via ruby" \
-  || bad "webhooks reach n8n via ruby" "${body:0:80} - is moby/scripts/install-ruby.sh installed on ruby?"
-code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$N8N:443:145.239.73.18" "https://$N8N/" 2>/dev/null) || code=000
-[[ $code == 403 ]] && pass "the editor is closed via ruby (403)" || bad "the editor is closed via ruby" "http=$code"
-
-# Instance AI's sandbox service: the API healthy, the runner registered and
-# able to start a container, nothing published.
-$SSH "root@$HOST" 'docker inspect -f "{{.State.Health.Status}}" n8n-sandbox-api-1' 2>/dev/null | grep -qx healthy \
-  && pass "sandbox-api is healthy" || bad "sandbox-api is healthy" "docker logs n8n-sandbox-api-1"
-$SSH "root@$HOST" 'docker exec n8n-n8n-1 wget -qO- http://sandbox-api:8080/healthz' 2>/dev/null | grep -q ok \
-  && pass "n8n reaches sandbox-api by name" || bad "n8n reaches sandbox-api by name" "same compose network?"
-$SSH "root@$HOST" 'docker exec n8n-sandbox-runner-1-1 docker info -f "{{.ServerVersion}}"' >/dev/null 2>&1 \
-  && pass "the sandbox runner's inner Docker is up" || bad "the sandbox runner's inner Docker is up" "docker logs n8n-sandbox-runner-1-1"
-$SSH "root@$HOST" 'docker exec n8n-n8n-1 wget -qO- "http://searxng:8080/search?q=n8n&format=json"' 2>/dev/null | grep -q '"query"' \
-  && pass "SearXNG answers n8n in JSON" || bad "SearXNG answers n8n in JSON" "docker logs n8n-searxng-1"
-$SSH "root@$HOST" 'docker logs n8n-n8n-1 2>&1' | grep -q 'Registered runner "launcher-javascript"' \
-  && pass "the task runners reached n8n's broker" || bad "the task runners reached n8n's broker" "docker logs n8n-runners-1"
-$SSH "root@$HOST" 'docker ps --filter label=com.docker.compose.project=n8n --format "{{.Ports}}" | grep -E "0\.0\.0\.0|\[::\]"' >/dev/null 2>&1 \
-  && bad "nothing in the n8n stack is published beyond loopback" "a port is on the wildcard" \
-  || pass "nothing in the n8n stack is published beyond loopback"
+# The repo-owned n8n stacks: n8n by its one URL, the sandbox service, the
+# task runners and SearXNG, nothing published, and the public side via ruby.
+check_n8n() {  # <stack> <public name> <loopback port> <ruby installer>
+  local st=$1 N8N=$2 port=$3 inst=$4 code body
+  echo "== $st ($N8N)"
+  $SSH "root@$HOST" "cd /opt/stacks/$st && docker compose ps --status running --services | grep -cxE 'n8n|db'" 2>/dev/null | grep -qx 2 \
+    && pass "n8n and its database are running" || bad "n8n and its database are running" "docker compose ps in /opt/stacks/$st"
+  https_ok "$N8N/healthz (split-horizon to moby)" "https://$N8N/healthz"
+  code=$(curl -6 -sS --max-time 10 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' "https://$N8N/healthz" 2>/dev/null) || code=000
+  [[ $code == 200 ]] && pass "$N8N over IPv6 (200)" || bad "$N8N over IPv6" "http=$code"
+  https_ok "/metrics refused off Prometheus" "https://$N8N/metrics" 403
+  if nc -z -G 2 "$HOST" "$port" 2>/dev/null; then bad "$port is loopback-only" "reachable from the LAN"
+  else pass "$port is loopback-only"; fi
+  # Through ruby, pinned to its public address. Webhooks reach n8n (its own
+  # 404 for an unregistered path); the editor does not.
+  body=$(curl -sS --max-time 15 --resolve "$N8N:443:145.239.73.18" "https://$N8N/webhook/verify-probe" 2>/dev/null)
+  grep -q 'not registered' <<<"$body" && pass "webhooks reach n8n via ruby" \
+    || bad "webhooks reach n8n via ruby" "${body:0:80} - is $inst installed on ruby?"
+  code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$N8N:443:145.239.73.18" "https://$N8N/" 2>/dev/null) || code=000
+  [[ $code == 403 ]] && pass "the editor is closed via ruby (403)" || bad "the editor is closed via ruby" "http=$code"
+  $SSH "root@$HOST" "docker inspect -f '{{.State.Health.Status}}' $st-sandbox-api-1" 2>/dev/null | grep -qx healthy \
+    && pass "sandbox-api is healthy" || bad "sandbox-api is healthy" "docker logs $st-sandbox-api-1"
+  $SSH "root@$HOST" "docker exec $st-n8n-1 wget -qO- http://sandbox-api:8080/healthz" 2>/dev/null | grep -q ok \
+    && pass "n8n reaches sandbox-api by name" || bad "n8n reaches sandbox-api by name" "same compose network?"
+  $SSH "root@$HOST" "docker exec $st-sandbox-runner-1-1 docker info -f '{{.ServerVersion}}'" >/dev/null 2>&1 \
+    && pass "the sandbox runner's inner Docker is up" || bad "the sandbox runner's inner Docker is up" "docker logs $st-sandbox-runner-1-1"
+  $SSH "root@$HOST" "docker exec $st-n8n-1 wget -qO- 'http://searxng:8080/search?q=n8n&format=json'" 2>/dev/null | grep -q '"query"' \
+    && pass "SearXNG answers n8n in JSON" || bad "SearXNG answers n8n in JSON" "docker logs $st-searxng-1"
+  $SSH "root@$HOST" "docker logs $st-n8n-1 2>&1" | grep -q 'Registered runner "launcher-javascript"' \
+    && pass "the task runners reached n8n's broker" || bad "the task runners reached n8n's broker" "docker logs $st-runners-1"
+  $SSH "root@$HOST" "docker ps --filter label=com.docker.compose.project=$st --format '{{.Ports}}' | grep -E '0\.0\.0\.0|\[::\]'" >/dev/null 2>&1 \
+    && bad "nothing in the stack is published beyond loopback" "a port is on the wildcard" \
+    || pass "nothing in the stack is published beyond loopback"
+}
+chain_ok "moby:443" "$HOST:443"
+check_n8n n8n        n8n.peetvandesande.com 5678 moby/scripts/install-ruby.sh
+check_n8n n8n-sogode n8n.sogode.com         5680 moby/scripts/install-ruby-sogode.sh
 
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \

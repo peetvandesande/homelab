@@ -30,6 +30,7 @@ $SSH "root@$HOST" '
   rm -f /etc/nginx/sites-enabled/default
   ln -sf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-enabled/metrics.conf
   ln -sf /etc/nginx/sites-available/n8n.conf /etc/nginx/sites-enabled/n8n.conf
+  ln -sf /etc/nginx/sites-available/n8n-sogode.conf /etc/nginx/sites-enabled/n8n-sogode.conf
   nginx -t
   systemctl enable nginx >/dev/null
   systemctl restart nginx
@@ -56,30 +57,34 @@ echo "   docker restarted"
 # N8N_ENCRYPTION_KEY encrypts every credential it stores, so a new one would
 # orphan them all. The mail password comes from homelab-private and is
 # rewritten on every deploy, over stdin.
-N8N_SECRETS=../../homelab-private/n8n/secrets.env
-[[ -f $N8N_SECRETS ]] || { echo "$N8N_SECRETS missing"; exit 1; }
-SMTP_PASSWD=$(sed -n 's/^SMTP_PASSWD=//p' "$N8N_SECRETS")
-[[ -n $SMTP_PASSWD ]] || { echo "SMTP_PASSWD unset in $N8N_SECRETS"; exit 1; }
-printf '%s\n' "$SMTP_PASSWD" | $SSH "root@$HOST" '
-  set -e
-  env=/opt/stacks/n8n/.env
-  umask 077
-  if [ ! -s "$env" ]; then
-    printf "POSTGRES_PASSWORD=%s\nN8N_ENCRYPTION_KEY=%s\n" \
-      "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$env"
-    echo "   generated $env"
-  fi
-  read -r pass
-  # The sandbox, task-runner and SearXNG secrets, generated once alongside
-  # the others.
-  for k in SANDBOX_API_KEY SANDBOX_REGISTRATION_TOKEN SANDBOX_RUNNER_KEY N8N_RUNNERS_AUTH_TOKEN SEARXNG_SECRET; do
-    grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 32)" >> "$env"; echo "   generated $k"; }
-  done
-  { grep -v "^N8N_SMTP_PASS=" "$env"; printf "N8N_SMTP_PASS=%s\n" "$pass"; } > "$env.new"
-  mv "$env.new" "$env"
-  chmod 0600 "$env"
-  cd /opt/stacks/n8n
-  docker compose pull -q
-  docker compose up -d --remove-orphans
-'
-echo "   n8n converged"
+converge_n8n() {  # <stack> <secrets file in homelab-private>
+  local stack=$1 secrets=$2 smtp
+  [[ -f $secrets ]] || { echo "$secrets missing"; exit 1; }
+  smtp=$(sed -n 's/^SMTP_PASSWD=//p' "$secrets")
+  [[ -n $smtp ]] || { echo "SMTP_PASSWD unset in $secrets"; exit 1; }
+  printf '%s\n' "$smtp" | $SSH "root@$HOST" "stack=$stack"'
+    set -e
+    env=/opt/stacks/$stack/.env
+    umask 077
+    if [ ! -s "$env" ]; then
+      printf "POSTGRES_PASSWORD=%s\nN8N_ENCRYPTION_KEY=%s\n" \
+        "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$env"
+      echo "   generated $env"
+    fi
+    read -r pass
+    # The sandbox, task-runner and SearXNG secrets, generated once alongside
+    # the others.
+    for k in SANDBOX_API_KEY SANDBOX_REGISTRATION_TOKEN SANDBOX_RUNNER_KEY N8N_RUNNERS_AUTH_TOKEN SEARXNG_SECRET; do
+      grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 32)" >> "$env"; echo "   generated $k"; }
+    done
+    { grep -v "^N8N_SMTP_PASS=" "$env"; printf "N8N_SMTP_PASS=%s\n" "$pass"; } > "$env.new"
+    mv "$env.new" "$env"
+    chmod 0600 "$env"
+    cd /opt/stacks/$stack
+    docker compose pull -q
+    docker compose up -d --remove-orphans
+  '
+  echo "   $stack converged"
+}
+converge_n8n n8n ../../homelab-private/n8n/secrets.env
+converge_n8n n8n-sogode ../../homelab-private/n8n-sogode/secrets.env

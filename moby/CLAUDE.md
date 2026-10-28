@@ -11,6 +11,7 @@ Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
 traefik), which came from the old moby (192.168.1.25, since retired) on
 21 September 2026 and are host-owned; and **n8n**, the one
 stack this repo owns, behind the host nginx on .27 as `n8n.peetvandesande.com`
+– and **n8n-sogode**, the same stack for Sogode business use as `n8n.sogode.com`
 (built 28 October 2026).
 
 ## Working on this
@@ -86,7 +87,7 @@ of the metrics names the certificate and will not start without it.
    drop-in (`nginx.service.d`) because a specific address can lose the
    cold-boot race. If it does, nginx fails whole and the engine metrics on
    9323 go with it. IPv6 is `[::]`, which nginx makes v6-only, so it never
-   collides. n8n is the `default_server` on .27:443, so `moby.home` answers
+   collides. n8n (production) is the `default_server` on .27:443, so `moby.home` answers
    with it.
 
 ## n8n
@@ -129,6 +130,32 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   port, as Forgejo's does. The password is in
   `homelab-private/n8n/secrets.env` (`SMTP_PASSWD=`) and the mailbox; change
   both, then `deploy.sh`, which rewrites it into `.env` every time.
+
+## n8n-sogode
+
+`root/opt/stacks/n8n-sogode/`: the same stack again for **Sogode business
+use**, at `https://n8n.sogode.com/` – its own Postgres, encryption key,
+sandbox service, task runners and SearXNG, published on `127.0.0.1:5680`
+behind `n8n-sogode.conf`. Keep the two compose files in step: they differ
+only in the name, port, URLs and mailbox, and `deploy.sh` converges both with
+one function.
+
+- **The name works from three sides.** Publicly an A/AAAA to ruby (not a
+  CNAME – the name also carries its mail domain's MX and SPF), whose vhost
+  `ruby/…/n8n.sogode.com` is installed with `scripts/install-ruby-sogode.sh`;
+  in the lab a split-horizon zone on Pythia, with a forward and an `addNTA`
+  on Delphi because sogode.com is DNSSEC-signed; on the VPN an `n8n` record
+  in ruby's and jennie's own sogode.com zone
+  (`wireguard/install-public-overrides.sh`). moby's certificate carries it.
+- **Mail is `n8n@n8n.sogode.com`, a mailbox on ruby**, not Office 365, which
+  keeps sogode.com itself. `n8n.sogode.com` is its own mail domain: MX to
+  ruby, `v=spf1 mx -all`, DKIM selector `mail` signed by ruby, and no DMARC
+  record of its own, so sogode.com's `p=reject` applies – which the SPF and
+  DKIM alignment satisfy. `shared/ruby-mail-domain.sh n8n.sogode.com
+  n8n@n8n.sogode.com` on ruby checks all of it and makes the DKIM key. The
+  password is in `homelab-private/n8n-sogode/secrets.env`.
+- **Monitored and alerted** like production: the `n8n-sogode` job is in the
+  service target-down alert. No backup, as for production.
 
 ## Home Assistant is gone
 
