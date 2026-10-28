@@ -6,7 +6,7 @@
 #   sudo ~/homelab/shared/ruby-mail-domain.sh <domain> <mailbox>
 #
 # Read-only apart from one thing: if rspamd signs from per-domain key files
-# and this domain has none yet, it generates one (selector "mail", 2048-bit)
+# and this domain has none yet, it generates one (2048-bit, under rspamd's selector)
 # and reloads rspamd. It prints the DNS records the domain needs, then checks
 # them in public DNS, so run it again once they are published. Safe to re-run.
 set -euo pipefail
@@ -49,7 +49,11 @@ if command -v rspamadm >/dev/null; then
   if [[ $DOMAIN == *.*.* ]] && grep -Eq '^[[:space:]]*use_esld = true;' <<<"$dump"; then
     bad "rspamd signs with use_esld = true, so mail from $DOMAIN looks for ${DOMAIN#*.}'s key - set use_esld = false; in /etc/rspamd/local.d/dkim_signing.conf and restart rspamd"
   fi
-  if [[ $path == *'$domain'* && $path == *'$selector'* ]]; then
+  # A path without $selector holds one key per domain, published under the
+  # global selector.
+  sel=$(sed -n 's/^[[:space:]]*selector = "\(.*\)";$/\1/p' <<<"$dump" | head -1)
+  SELECTOR=${sel:-$SELECTOR}
+  if [[ $path == *'$domain'* ]]; then
     key=${path//\$domain/$DOMAIN}; key=${key//\$selector/$SELECTOR}
     if [[ -s $key ]]; then
       ok "key exists: $key"
@@ -63,7 +67,7 @@ if command -v rspamadm >/dev/null; then
     [[ -s $key.dns ]] && txt=$(tr -d '\n\t"' < "$key.dns" | sed 's/.*( *//; s/ *).*//; s/  */ /g')
     [[ -n $txt ]] || txt=$(openssl pkey -in "$key" -pubout 2>/dev/null | sed '1d;$d' | tr -d '\n' | sed 's/^/v=DKIM1; k=rsa; p=/')
   else
-    bad "rspamd does not sign from a \$domain/\$selector path - its dkim_signing is:"
+    bad "rspamd does not sign from a per-domain ($domain) path - its dkim_signing is:"
     echo "$dump" | sed 's/^/     /'
   fi
 elif [[ -d /etc/opendkim ]]; then
