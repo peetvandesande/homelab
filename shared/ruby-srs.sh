@@ -6,8 +6,8 @@
 #   sudo ~/homelab/shared/ruby-srs.sh
 #
 # Installs postsrsd, makes peetvandesande.com its SRS domain and exempts every
-# domain ruby holds a DKIM key for, so mail from ruby's own domains keeps its
-# sender. Re-run after adding a domain. Bounces to an SRS address are mapped
+# domain ruby both hosts and holds a DKIM key for, so mail from ruby's own
+# domains keeps its sender. Re-run after adding a domain. Bounces to an SRS address are mapped
 # back to the original sender. Keeps a dated copy of each file it changes.
 # Safe to re-run.
 set -euo pipefail
@@ -21,7 +21,17 @@ die() { echo "!! $*"; exit 1; }
 keep() { [[ -f $1 && ! -f $1.$stamp ]] && cp -p "$1" "$1.$stamp" && ok "kept $1.$stamp"; return 0; }
 
 echo "== own domains"
-# The domains ruby signs for are the domains it sends as.
+# A domain ruby sends as is one it hosts and signs for. A key alone is not
+# enough: a domain whose mail lives elsewhere still needs rewriting when ruby
+# forwards it.
+hosted() {  # <domain>: in virtual_mailbox_domains or virtual_alias_domains
+  local m
+  for m in $(postconf -hx virtual_mailbox_domains virtual_alias_domains | tr ',' ' '); do
+    [[ $m == *:* ]] || { [[ $m == "$1" ]] && return 0; continue; }
+    postmap -q "$1" "$m" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
 dump=$(rspamadm configdump dkim_signing 2>/dev/null)
 path=$(sed -n 's/^[[:space:]]*path = "\(.*\)";$/\1/p' <<<"$dump" | head -1)
 sel=$(sed -n 's/^[[:space:]]*selector = "\(.*\)";$/\1/p' <<<"$dump" | head -1)
@@ -32,7 +42,8 @@ domains=("$SRS_DOMAIN")
 for k in "${path%/*}"/*; do
   n=${k##*/}; [[ $n == "$pre"*"$suf" ]] || continue
   d=${n#"$pre"}; d=${d%"$suf"}
-  [[ $d == "$SRS_DOMAIN" || $d == *[!a-z0-9.-]* ]] || domains+=("$d")
+  [[ $d == "$SRS_DOMAIN" || $d == *[!a-z0-9.-]* ]] && continue
+  if hosted "$d"; then domains+=("$d"); else ok "$d has a key but is not hosted here, so it is rewritten"; fi
 done
 ok "SRS domain $SRS_DOMAIN; not rewritten: ${domains[*]}"
 
