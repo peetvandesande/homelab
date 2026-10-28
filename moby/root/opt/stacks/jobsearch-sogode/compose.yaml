@@ -1,0 +1,52 @@
+# The sogode job search pipeline's state: its Postgres with pgvector, and
+# changedetection.io watching target firms' career pages. The workflows run in
+# the n8n-sogode stack's n8n; render, Gotenberg and ntfy are in jobsearch-shared.
+# Managed from homelab/moby - edit there, not in /opt/stacks/jobsearch-sogode.
+#
+# Both services join n8n-sogode_default, so n8n reaches the database as
+# jobsearch-db:5432 and changedetection.io calls n8n's webhooks at
+# http://n8n:5678/webhook/... without leaving moby. The names are prefixed
+# because that network already has a `db`: n8n's own.
+#
+# changedetection.io's UI is published on loopback only, on 5691 - reach it
+# with `ssh -L 5691:127.0.0.1:5691 root@moby`. The schema is loaded by
+# sogode-jobsearch/ansible/db.yml, not here.
+name: jobsearch-sogode
+
+services:
+  jobsearch-db:
+    image: pgvector/pgvector:0.8.1-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobsearch
+      POSTGRES_DB: jobsearch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run moby/scripts/deploy.sh}
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks: [default, n8n]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobsearch -d jobsearch"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  changedetection:
+    image: dgtlmoon/changedetection.io:0.50
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5691:5000"
+    environment:
+      BASE_URL: http://127.0.0.1:5691
+      TZ: Europe/Paris
+    volumes:
+      - changedetection:/datastore
+    networks: [default, n8n]
+
+networks:
+  n8n:
+    name: n8n-sogode_default
+    external: true
+
+volumes:
+  db:
+  changedetection:

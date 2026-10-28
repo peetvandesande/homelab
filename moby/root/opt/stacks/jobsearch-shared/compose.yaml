@@ -1,0 +1,68 @@
+# Shared services for the two job search pipelines (jobsearch-sogode and
+# jobsearch-personal): the CV renderer, Gotenberg behind it, and ntfy for the
+# morning push. Stateless apart from ntfy's user database. Managed from
+# homelab/moby - edit there, not in /opt/stacks/jobsearch-shared.
+#
+# render and ntfy join both n8n stacks' networks, so each n8n reaches them as
+# http://render:8080 and http://ntfy by name. Gotenberg is only on this
+# stack's own network: render is its one client.
+#
+# ntfy is published on loopback only, on 5690. The host's nginx terminates TLS
+# for it as ntfy.sogode.com (etc/nginx/sites-available/ntfy.conf) and ruby
+# proxies the public side, for the phone. Access is deny-all by default; the
+# users are created by deploy.sh from .env.
+name: jobsearch-shared
+
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8.25
+    restart: unless-stopped
+    command: [gotenberg, --api-timeout=120s, --log-format=text]
+
+  render:
+    build: ./render
+    image: homelab/jobsearch-render:1
+    restart: unless-stopped
+    depends_on: [gotenberg]
+    environment:
+      GOTENBERG_URL: http://gotenberg:3000
+    networks: [default, n8n, n8n-sogode]
+    healthcheck:
+      test: ['CMD', 'python3', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8080/healthz")']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  ntfy:
+    image: binwiederhier/ntfy:v2.14.0
+    restart: unless-stopped
+    command: [serve]
+    ports:
+      - "127.0.0.1:5690:80"
+    environment:
+      NTFY_BASE_URL: https://ntfy.sogode.com
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_ENABLE_LOGIN: "true"
+      TZ: Europe/Paris
+    volumes:
+      - ntfy:/var/lib/ntfy
+    networks: [default, n8n, n8n-sogode]
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost/v1/health | grep -q true']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  n8n:
+    name: n8n_default
+    external: true
+  n8n-sogode:
+    name: n8n-sogode_default
+    external: true
+
+volumes:
+  ntfy:

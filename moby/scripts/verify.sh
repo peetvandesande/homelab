@@ -143,6 +143,31 @@ chain_ok "moby:443" "$HOST:443"
 check_n8n n8n        n8n.peetvandesande.com 5678 moby/scripts/install-ruby.sh
 check_n8n n8n-sogode n8n.sogode.com         5680 moby/scripts/install-ruby-sogode.sh
 
+echo "== job search stacks"
+for pair in jobsearch-sogode:n8n-sogode jobsearch-personal:n8n; do
+  st=${pair%%:*} n8nst=${pair#*:}
+  $SSH "root@$HOST" "docker inspect -f '{{.State.Health.Status}}' $st-jobsearch-db-1" 2>/dev/null | grep -qx healthy \
+    && pass "$st database is healthy" || bad "$st database is healthy" "docker logs $st-jobsearch-db-1"
+  $SSH "root@$HOST" "docker exec $st-jobsearch-db-1 psql -U jobsearch -Atc \"select extversion from pg_extension where extname='vector'\"" 2>/dev/null | grep -q . \
+    && pass "$st has pgvector and the schema" || bad "$st has pgvector and the schema" "run sogode-jobsearch/ansible/db.yml"
+  $SSH "root@$HOST" "docker exec $n8nst-n8n-1 sh -c 'nc -z -w3 jobsearch-db 5432'" 2>/dev/null \
+    && pass "$n8nst reaches its jobsearch-db by name" || bad "$n8nst reaches its jobsearch-db by name" "same network?"
+  $SSH "root@$HOST" "docker exec $n8nst-n8n-1 wget -qO- http://render:8080/healthz" 2>/dev/null | grep -qx ok \
+    && pass "$n8nst reaches render" || bad "$n8nst reaches render" "jobsearch-shared up?"
+done
+$SSH "root@$HOST" "docker exec jobsearch-shared-render-1 python3 -c 'import urllib.request; urllib.request.urlopen(\"http://gotenberg:3000/health\")'" 2>/dev/null \
+  && pass "render reaches Gotenberg" || bad "render reaches Gotenberg" "docker logs jobsearch-shared-gotenberg-1"
+code=$(curl -sS --max-time 10 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' --resolve "ntfy.sogode.com:443:$HOST" https://ntfy.sogode.com/v1/health 2>/dev/null) || code=000
+[[ $code == 200 ]] && pass "ntfy answers as ntfy.sogode.com on moby" || bad "ntfy answers as ntfy.sogode.com on moby" "http=$code"
+code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' --resolve "ntfy.sogode.com:443:145.239.73.18" https://ntfy.sogode.com/jobs-sogode/json?poll=1 2>/dev/null) || code=000
+[[ $code == 403 || $code == 401 ]] && pass "ntfy topics are closed to anonymous users via ruby ($code)" \
+  || bad "ntfy topics are closed to anonymous users via ruby" "http=$code - install-ruby-ntfy.sh?"
+for st in jobsearch-shared jobsearch-sogode jobsearch-personal; do
+  $SSH "root@$HOST" "docker ps --filter label=com.docker.compose.project=$st --format '{{.Ports}}' | grep -E '0\.0\.0\.0|\[::\]'" >/dev/null 2>&1 \
+    && bad "$st publishes nothing beyond loopback" "a port is on the wildcard" \
+    || pass "$st publishes nothing beyond loopback"
+done
+
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \
       --data-urlencode 'query=count_over_time({host="moby"}[15m])' 2>/dev/null \

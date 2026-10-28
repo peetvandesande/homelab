@@ -31,6 +31,7 @@ $SSH "root@$HOST" '
   ln -sf /etc/nginx/sites-available/metrics.conf /etc/nginx/sites-enabled/metrics.conf
   ln -sf /etc/nginx/sites-available/n8n.conf /etc/nginx/sites-enabled/n8n.conf
   ln -sf /etc/nginx/sites-available/n8n-sogode.conf /etc/nginx/sites-enabled/n8n-sogode.conf
+  ln -sf /etc/nginx/sites-available/ntfy-sogode.conf /etc/nginx/sites-enabled/ntfy-sogode.conf
   nginx -t
   systemctl enable nginx >/dev/null
   systemctl restart nginx
@@ -88,3 +89,55 @@ converge_n8n() {  # <stack> <secrets file in homelab-private>
 }
 converge_n8n n8n ../../homelab-private/n8n/secrets.env
 converge_n8n n8n-sogode ../../homelab-private/n8n-sogode/secrets.env
+
+# The job search pipelines (sogode-jobsearch and personal-jobsearch repos).
+# After the n8n stacks: every jobsearch stack joins an n8n stack's network,
+# which has to exist first. Each instance's database password is generated
+# here once; the pipelines' own deploy (sogode-jobsearch/ansible) reads it
+# from the .env to build the n8n credential, and loads the schema.
+converge_jobsearch() {  # <stack>
+  local stack=$1
+  $SSH "root@$HOST" "stack=$stack"'
+    set -e
+    env=/opt/stacks/$stack/.env
+    umask 077
+    [ -s "$env" ] || { printf "POSTGRES_PASSWORD=%s\n" "$(openssl rand -hex 24)" > "$env"; echo "   generated $env"; }
+    chmod 0600 "$env"
+    cd /opt/stacks/$stack
+    docker compose pull -q
+    docker compose up -d --remove-orphans
+  '
+  echo "   $stack converged"
+}
+converge_jobsearch jobsearch-sogode
+converge_jobsearch jobsearch-personal
+
+# Shared by both: render (built here), Gotenberg and ntfy. ntfy denies
+# everything by default; its two users are (re)written from .env on every
+# deploy - n8n may publish to jobs-*, peet may read them. peet's password is
+# what goes into the phone app: `cat /opt/stacks/jobsearch-shared/.env`.
+$SSH "root@$HOST" '
+  set -e
+  env=/opt/stacks/jobsearch-shared/.env
+  umask 077
+  touch "$env"
+  for k in NTFY_N8N_PASSWORD NTFY_PEET_PASSWORD; do
+    grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 16)" >> "$env"; echo "   generated $k"; }
+  done
+  chmod 0600 "$env"
+  cd /opt/stacks/jobsearch-shared
+  docker compose pull -q --ignore-buildable
+  docker compose up -d --build --remove-orphans
+  . ./.env
+  for _ in $(seq 20); do docker compose exec -T ntfy ntfy user list >/dev/null 2>&1 && break; sleep 1; done
+  for u in n8n:$NTFY_N8N_PASSWORD:write-only peet:$NTFY_PEET_PASSWORD:read-only; do
+    name=${u%%:*}; rest=${u#*:}; pass=${rest%%:*}; perm=${rest#*:}
+    if docker compose exec -T ntfy ntfy user list 2>&1 | grep -q "^user $name "; then
+      docker compose exec -T -e NTFY_PASSWORD="$pass" ntfy ntfy user change-pass "$name" >/dev/null
+    else
+      docker compose exec -T -e NTFY_PASSWORD="$pass" ntfy ntfy user add "$name" >/dev/null
+    fi
+    docker compose exec -T ntfy ntfy access "$name" "jobs-*" "$perm" >/dev/null
+  done
+'
+echo "   jobsearch-shared converged"

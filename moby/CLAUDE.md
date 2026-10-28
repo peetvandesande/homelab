@@ -157,6 +157,36 @@ one function.
 - **Monitored and alerted** like production: the `n8n-sogode` job is in the
   service target-down alert. No backup, as for production.
 
+## Job search stacks
+
+Three stacks for the job search pipelines, whose workflows run in the two n8n
+stacks and whose profile, CV, prompts and workflow generator live in the
+`sogode-jobsearch` and `personal-jobsearch` repos (built 28 October 2026):
+
+- **`jobsearch-sogode`** and **`jobsearch-personal`**: one Postgres with
+  pgvector each (`jobsearch-db`), and changedetection.io on `127.0.0.1:5691`
+  and `:5692` (UI over `ssh -L`). Each joins its n8n stack's network
+  (`n8n-sogode_default`, `n8n_default`) as an external network, so that n8n
+  reaches `jobsearch-db` by name. The `jobsearch-` prefix is not decoration:
+  both n8n networks already have a `db`.
+- **`jobsearch-shared`**: `render` (Pandoc to .docx, Gotenberg to PDF, and a
+  YAML-to-JSON endpoint, built here from `render/`), Gotenberg, and ntfy on
+  `127.0.0.1:5690` behind `ntfy-sogode.conf` as **ntfy.sogode.com**, public via
+  ruby (`scripts/install-ruby-ntfy.sh`). render and ntfy join both n8n
+  networks; Gotenberg only this stack's own.
+
+- **`.env` per stack, generated once** by `deploy.sh`: the database password
+  for each instance, and ntfy's two user passwords. ntfy is deny-all; `n8n`
+  may publish to `jobs-*`, `peet` may read them, and the users are rewritten
+  on every deploy.
+- **The schema and n8n side are not deployed from here.**
+  `sogode-jobsearch/ansible` loads `sql/schema.sql` into both databases and
+  builds each instance's credentials and workflows. The HMAC key that signs the
+  links in the emails lives in each database's `settings` table: losing a
+  volume invalidates every link already sent, nothing worse.
+- **Embeddings come from metis** (`../metis`, `ollama.home:11434`), allowed
+  from moby's address only.
+
 ## Home Assistant is gone
 
 It ran here as `/opt/stacks/homeassistant` on **192.168.8.79**, behind the
