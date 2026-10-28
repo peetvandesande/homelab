@@ -8,11 +8,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-[[ -f secrets.env ]] || { echo "secrets.env missing - see README.md"; exit 1; }
-# shellcheck disable=SC1091
-source secrets.env
-: "${STEP_CA_KEY_PASSWORD:?not set in secrets.env}"
-: "${STEP_CA_JWK_PASSWORD:?not set in secrets.env}"
+SECRETS=../../homelab-private/ca/secrets.env
+[[ -f $SECRETS ]] || { echo "$SECRETS missing - see README.md"; exit 1; }
+# shellcheck disable=SC1090
+source "$SECRETS"
+: "${STEP_CA_KEY_PASSWORD:?not set in $SECRETS}"
+: "${STEP_CA_JWK_PASSWORD:?not set in $SECRETS}"
 
 PISTIS=192.168.8.55
 INT="intermediate"
@@ -120,7 +121,7 @@ put "$CRT"                     /var/www/g3/intermediate.crt root:root 0644
 put "$INT/certs/chain-g3.pem"  /var/www/g3/chain.pem       root:root 0644
 
 # --------------------------------------------- JWK provisioner (once) ------
-# Minted on the host and stored in secrets.env, never regenerated: the kid is
+# Minted on the host and stored in homelab-private, never regenerated: the kid is
 # baked into any client that has bootstrapped against it, and `--create` mints
 # a fresh one every time it is called.
 if [[ -z "${JWK_PROVISIONER:-}" ]]; then
@@ -144,8 +145,8 @@ if [[ -z "${JWK_PROVISIONER:-}" ]]; then
           encryptedKey:([.protected,.encrypted_key,.iv,.ciphertext,.tag]|join(\".\"))}' priv.json
     ")
   [[ $JWK_PROVISIONER == *'"encryptedKey"'* ]] || { echo "provisioner mint failed: $JWK_PROVISIONER"; exit 1; }
-  printf "JWK_PROVISIONER='%s'\n" "$JWK_PROVISIONER" >> secrets.env
-  echo "   stored in secrets.env"
+  printf "JWK_PROVISIONER='%s'\n" "$JWK_PROVISIONER" >> "$SECRETS"
+  echo "   stored in $SECRETS"
 fi
 
 # ------------------------------------------------------------- config ------

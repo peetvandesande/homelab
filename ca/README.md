@@ -97,7 +97,7 @@ step ca certificate foo.home foo.crt foo.key \
   --root /etc/step-ca/certs/root_ca.crt
 ```
 
-The `admin` password is `STEP_CA_JWK_PASSWORD` in `secrets.env`; on pistis
+The `admin` password is `STEP_CA_JWK_PASSWORD` in `homelab-private/ca/secrets.env`; on pistis
 itself it is already at `/etc/step-ca/secrets/jwk-password`.
 
 ### Signing a device's CSR
@@ -298,7 +298,7 @@ regenerates and redeploys by hand.
   is bound to the tool, so binding it to the tool's host costs nothing.
 - **`authority.enableAdmin` is `false`.** With it true, provisioners live in
   the badger DB and `ca.json` here would be a lie.
-- **The JWK provisioner is minted once** and kept in `secrets.env`. Re-minting
+- **The JWK provisioner is minted once** and kept in `homelab-private/ca/secrets.env`. Re-minting
   changes the `kid` and breaks every client that has bootstrapped against it.
 - **ACME certificates last 24 hours** by default, 90 days at most. Anything on
   ACME renews unattended, so a long lifetime buys nothing and makes revocation
@@ -323,14 +323,14 @@ G3 key is unchanged and every leaf under it still chains to the same root.
 `make-intermediate.sh` is for a *lost key*, not a lost host — running it would
 mint a new G3 and invalidate every certificate in the lab.
 
-**The backup is useless without `STEP_CA_KEY_PASSWORD` from `secrets.env`**,
-which is gitignored and exists nowhere else in this repo. Back that up with the
-key, or the key cannot be decrypted. Verified on 24 October 2026 that the
+**The backup is useless without `STEP_CA_KEY_PASSWORD`** from
+`homelab-private/ca/secrets.env`, outside this repo. Back that up with the key,
+or the key cannot be decrypted. Verified on 24 October 2026 that the
 passphrase in `secrets.env` decrypts the workstation copy to the same public key
 the live G3 certificate carries:
 
 ```sh
-set -a; . ./secrets.env; set +a
+set -a; . ../../homelab-private/ca/secrets.env; set +a
 openssl pkey -in intermediate/private/intermediate-g3.key \
   -passin env:STEP_CA_KEY_PASSWORD -pubout | openssl sha256
 openssl x509 -in intermediate/certs/intermediate-g3.crt -noout -pubkey | openssl sha256

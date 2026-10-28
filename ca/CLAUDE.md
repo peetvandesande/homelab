@@ -35,7 +35,7 @@ filesystem and is the source of truth.
 `scripts/deploy.sh` pushes it and enables services; `scripts/verify.sh` is an
 end-to-end smoke test that exits non-zero on failure. Run it after any change.
 
-Secrets are in `secrets.env` (git-ignored, mode 600) and substituted into
+Secrets are in `homelab-private/ca/secrets.env` (mode 600) and substituted into
 `@@PLACEHOLDER@@` slots at push time, so no key is committed.
 
 The existing root CA files are in `rootca/`.
@@ -45,7 +45,7 @@ The existing root CA files are in `rootca/`.
 1. **The root key stays out of this repo and off every host, and only two
    scripts ever touch it.** `scripts/make-intermediate.sh` and
    `scripts/root-crl.sh`, both prompting interactively. It is not in
-   `secrets.env` and must not be added — `secrets.env` holds
+   that `secrets.env` and must not be added — it holds
    `STEP_CA_KEY_PASSWORD`, `STEP_CA_JWK_PASSWORD` and `JWK_PROVISIONER`, all
    of which are G3-level and below. Pistis holds the G3 key and nothing above
    it.
@@ -61,7 +61,7 @@ The existing root CA files are in `rootca/`.
    encryption buys nothing, and that vault is now the root of trust for every
    certificate in the lab. That is the trade made for recoverability. It is
    also why the rule above still stands — a second copy of a passphrase in
-   `secrets.env`, which sits in a working tree next to a public repo, would add
+   `secrets.env`, on the workstation beside a clone of a public repo, would add
    exposure without adding any recoverability the vault does not already give.
 
 2. **`rootca/openssl.cnf` is a historical record, not live configuration.** Its
@@ -82,7 +82,7 @@ The existing root CA files are in `rootca/`.
    the truth.
 
 5. **The JWK provisioner is minted exactly once**, on first deploy, and stored
-   in `secrets.env` as `JWK_PROVISIONER`. `--create` mints a fresh key every
+   in `homelab-private/ca/secrets.env` as `JWK_PROVISIONER`. `--create` mints a fresh key every
    time it is called; re-minting changes the `kid` and breaks every client that
    has bootstrapped against it.
 

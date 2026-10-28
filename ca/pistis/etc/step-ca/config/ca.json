@@ -7,7 +7,7 @@
     "into the badger DB and `step ca provisioner add` becomes the only way to",
     "change them - which would quietly make this file a lie.",
     "",
-    "The JWK provisioner slot below is filled in by deploy.sh from secrets.env.",
+    "The JWK provisioner slot below is filled in by deploy.sh from homelab-private.",
     "It is minted once on first deploy and kept there: re-minting would change",
     "the kid on every run and invalidate anyone's bootstrapped client config."
   ],

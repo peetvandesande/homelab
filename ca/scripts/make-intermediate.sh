@@ -32,10 +32,11 @@ if [[ -f "$CRT" && $force -eq 0 ]]; then
   exit 0
 fi
 
-[[ -f secrets.env ]] || { echo "secrets.env missing - see README.md"; exit 1; }
-# shellcheck disable=SC1091
-source secrets.env
-: "${STEP_CA_KEY_PASSWORD:?not set in secrets.env}"
+SECRETS=../../homelab-private/ca/secrets.env
+[[ -f $SECRETS ]] || { echo "$SECRETS missing - see README.md"; exit 1; }
+# shellcheck disable=SC1090
+source "$SECRETS"
+: "${STEP_CA_KEY_PASSWORD:?not set in $SECRETS}"
 # openssl reads this out of the environment (-passin/-passout env:), and
 # sourcing a file does not export. Without this it fails at key generation.
 export STEP_CA_KEY_PASSWORD

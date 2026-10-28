@@ -1,3 +1,2 @@
-secrets.env
 intermediate/private/*
 !intermediate/private/.gitkeep
