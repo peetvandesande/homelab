@@ -178,7 +178,7 @@ Pool names are **case-sensitive and exact** — `Non-Production`, not
 | `Non-Production` | 200-299 †     | 192.168.8.70-.79 †    |
 
 † Inferred from the existing pattern, not yet confirmed — Production is using
-.60/.61 in practice, and Non-Production is currently empty with no range ever
+.60-.62 in practice, and Non-Production is currently empty with no range ever
 written down. Confirm before relying on these.
 
 Three things to be aware of:
@@ -234,6 +234,9 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   **`ruby.peetvandesande.com`** is overridden to ruby's dummy0 addresses
   192.168.254.254 and `fd33:5692:1834:254::254`, so the LAN reaches ruby's
   nginx admin pages over the tunnel, where they are allowed.
+  **`git.` and `n8n.peetvandesande.com`** go the other way: publicly they are
+  ruby, which reverse-proxies them home, and inside they resolve to forgejo
+  and moby directly. See "Public services" below.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `dns/scripts/deploy.sh`.
@@ -300,6 +303,34 @@ bind mount, not lenora's NFS export: an unprivileged LXC cannot mount NFS.
 Reach for a container on moby when a service ships as an image and wants
 nothing from the host; reach for an LXC when it wants to look like a machine.
 
+**n8n** is the first stack the repo owns there (`moby/root/opt/stacks/n8n`,
+converged by `moby/scripts/deploy.sh`), behind moby's host nginx on
+192.168.8.27:443. The n8n that stayed on the old moby was not migrated.
+
+## Public services
+
+Two lab services are reachable from the internet, each by **one name that
+works from both sides**:
+
+| Name | Origin | Public via ruby |
+|---|---|---|
+| `git.peetvandesande.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; git over SSH is LAN/VPN only |
+| `n8n.peetvandesande.com` | n8n on moby | webhooks, forms and their assets; the editor only from `home-lan-allow.conf` ranges |
+
+Publicly each name is a CNAME to ruby, whose nginx terminates TLS with a Let's
+Encrypt certificate and proxies over wg1 to the origin, verifying the origin's
+lab-CA certificate. Inside the lab the same name is split-horizon to the
+origin itself (`dns/CLAUDE.md` invariant 5), whose lab certificate carries it
+as a SAN – so the LAN never round-trips via OVH, and a device that does not
+trust the lab CA warns on the LAN only. The services have to know themselves
+by one URL (Forgejo's `ROOT_URL`, n8n's `WEBHOOK_URL`), which is why it is
+this rather than separate `.home` and public names.
+
+The ruby half lives with each service (`forgejo/ruby/`, `moby/ruby/`) and is
+installed from ruby's clone with that service's `scripts/install-ruby.sh`; the
+shared work is `shared/install-ruby-vhost.sh`. Neither service has a backup
+yet.
+
 ## Mail
 
 `hermes` (VM 109, `hermes.home`) runs **mailcow** for the Proxmox labs, so
@@ -332,7 +363,7 @@ each other's public side with blackbox exporters, scraped over the tunnels –
 end to end and every lab certificate – `prometheus/CLAUDE.md` invariant 7. Loki (`loki.home`) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
 systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
-thirteen hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
+fourteen hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
 instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
@@ -349,7 +380,7 @@ copy. Today it masks `openipmi.service`, which was the fleet's only failed unit
 and made the `systemd-unit-failed` alert useless — see `fleet/CLAUDE.md`.
 
 **Automatic security patching lives in `apt/`** — unattended-upgrades on all
-thirteen enrolled hosts, restricted to the Debian security origin, which is what
+fourteen enrolled hosts, restricted to the Debian security origin, which is what
 keeps Proxmox, Docker and mailcow upgrades a manual act. Nothing is restarted
 or rebooted unattended; that gap is published as a metric instead. There is
 deliberately **no apt cache or proxy**: the bandwidth it would save is a
@@ -388,7 +419,7 @@ prometheus-pve-exporter on 127.0.0.1:9221 is not running.
 ## TLS
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS
-off the lab's own CA (`ca/`). Thirteen hosts are enrolled — all eleven containers,
+off the lab's own CA (`ca/`). Fourteen hosts are enrolled — all twelve containers,
 the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
 **not enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
 `homeassistant/`.
@@ -413,10 +444,10 @@ the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
   One place keeps the IP on purpose: `homelab-tls-renew`, because renewing
   every certificate in the lab should not depend on DNS being up.
 - **Per-service TLS config lives in that service's own top-level directory**
-  (`grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`, `loki/`, `moby/`,
-  `navidrome/`, `prometheus/`), one per container or VM. `node-exporter/` and
-  `alloy/` are the exceptions: one service on thirteen hosts, so one directory
-  rather than thirteen copies.
+  (`forgejo/`, `grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`, `loki/`,
+  `moby/`, `navidrome/`, `prometheus/`), one per container or VM. `node-exporter/` and
+  `alloy/` are the exceptions: one service on fourteen hosts, so one directory
+  rather than fourteen copies.
 - **The Home Assistant VM is the one host that cannot renew itself.** HAOS has
   no step-cli and no openssl, and `/ssl` is read-only to the core container, so
   a timer on lenora drives it over the guest agent. The key is still generated
