@@ -47,6 +47,12 @@ server {
     proxy_ssl_server_name         on;
     proxy_ssl_name                ntfy.sogode.com;
 
+    # Not public, like every vhost install-ruby-vhost.sh puts here. ntfy's web
+    # app answers 200 for any path, so close it explicitly.
+    location = /metrics {
+        return 404;
+    }
+
     location / {
         proxy_pass https://$moby;
         proxy_http_version 1.1;
