@@ -70,8 +70,9 @@ printf '%s\n' "$SMTP_PASSWD" | $SSH "root@$HOST" '
     echo "   generated $env"
   fi
   read -r pass
-  # The sandbox service secrets, generated once alongside the others.
-  for k in SANDBOX_API_KEY SANDBOX_REGISTRATION_TOKEN SANDBOX_RUNNER_KEY; do
+  # The sandbox, task-runner and SearXNG secrets, generated once alongside
+  # the others.
+  for k in SANDBOX_API_KEY SANDBOX_REGISTRATION_TOKEN SANDBOX_RUNNER_KEY N8N_RUNNERS_AUTH_TOKEN SEARXNG_SECRET; do
     grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 32)" >> "$env"; echo "   generated $k"; }
   done
   { grep -v "^N8N_SMTP_PASS=" "$env"; printf "N8N_SMTP_PASS=%s\n" "$pass"; } > "$env.new"

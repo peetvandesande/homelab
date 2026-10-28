@@ -117,6 +117,10 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   on moby – which works in this unprivileged LXC with `nesting` and
   `keyctl`. Its three secrets are generated into `.env` once. Bump its tag
   with n8n's, following that file.
+- **Task runners and SearXNG** complete that reference stack. Code nodes run
+  in the `runners` container (same tag as n8n – bump them together), which
+  dials n8n's broker on 5679 inside the stack; SearXNG is Instance AI's web
+  search, internal only, with `searxng-settings.yml` enabling its JSON API.
 - **Upgrades are a tag bump** in `compose.yaml` and a deploy. n8n migrates its
   database on start; read the release notes first.
 - **`/metrics`** goes through nginx, allowed to Prometheus by both its

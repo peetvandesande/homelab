@@ -132,6 +132,10 @@ $SSH "root@$HOST" 'docker exec n8n-n8n-1 wget -qO- http://sandbox-api:8080/healt
   && pass "n8n reaches sandbox-api by name" || bad "n8n reaches sandbox-api by name" "same compose network?"
 $SSH "root@$HOST" 'docker exec n8n-sandbox-runner-1-1 docker info -f "{{.ServerVersion}}"' >/dev/null 2>&1 \
   && pass "the sandbox runner's inner Docker is up" || bad "the sandbox runner's inner Docker is up" "docker logs n8n-sandbox-runner-1-1"
+$SSH "root@$HOST" 'docker exec n8n-n8n-1 wget -qO- "http://searxng:8080/search?q=n8n&format=json"' 2>/dev/null | grep -q '"query"' \
+  && pass "SearXNG answers n8n in JSON" || bad "SearXNG answers n8n in JSON" "docker logs n8n-searxng-1"
+$SSH "root@$HOST" 'docker logs n8n-n8n-1 2>&1' | grep -q 'Registered runner "launcher-javascript"' \
+  && pass "the task runners reached n8n's broker" || bad "the task runners reached n8n's broker" "docker logs n8n-runners-1"
 $SSH "root@$HOST" 'docker ps --filter label=com.docker.compose.project=n8n --format "{{.Ports}}" | grep -E "0\.0\.0\.0|\[::\]"' >/dev/null 2>&1 \
   && bad "nothing in the n8n stack is published beyond loopback" "a port is on the wildcard" \
   || pass "nothing in the n8n stack is published beyond loopback"
