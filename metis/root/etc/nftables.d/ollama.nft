@@ -1,0 +1,11 @@
+# Ollama (:11434) for moby only - both n8n stacks egress as moby's address.
+# Included from /etc/nftables.conf.
+table inet ollama {
+  chain input {
+    type filter hook input priority 0; policy accept;
+    tcp dport 11434 iifname "lo" accept
+    tcp dport 11434 ip saddr 192.168.8.27 accept
+    tcp dport 11434 ip6 saddr fd33:5692:1834:1000:be24:11ff:fe13:54b8 accept
+    tcp dport 11434 drop
+  }
+}

@@ -354,6 +354,14 @@ default**: mail for a domain hermes does not host bounces. A domain that really
 must go out is routed via ruby with a mailcow transport map. See
 `hermes/CLAUDE.md`.
 
+## GPU
+
+`metis` (VM 110, `metis.home`, `ollama.home`) has the **Quadro P2200**
+passed through and runs Ollama for the job search pipelines on moby. The card
+used to be uc1-worker-1's; it can be attached to one running VM at a time, so
+`gpu_worker` in `uc1-lab/terraform.tfvars` stays false while metis has it.
+See `metis/CLAUDE.md`.
+
 ## Monitoring
 
 Prometheus (`prometheus.home`) is used for **all** monitoring; Grafana

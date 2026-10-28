@@ -69,6 +69,7 @@ zones:
           - { name: pistis,     data: 192.168.8.55, data6: 'fd33:5692:1834:1000:be24:11ff:fe04:f703', comment: 'step-ca private CA' }
           - { name: loki,       data: 192.168.8.56, data6: 'fd33:5692:1834:1000:be24:11ff:fe5e:a645', comment: 'log store' }
           - { name: hermes,     data: 192.168.8.57, data6: 'fd33:5692:1834:1000:be24:11ff:fe1b:5d14', comment: 'mailcow VM 109 - mail for the labs' }
+          - { name: metis,      data: 192.168.8.58, data6: 'fd33:5692:1834:1000:be24:11ff:fe6e:7a19', comment: 'Ollama VM 110 on the P2200 - job search embeddings' }
           - { name: moby,       data: 192.168.8.27, data6: 'fd33:5692:1834:1000:be24:11ff:fe13:54b8', comment: 'Docker host - outside the .50-.59 range' }
           # No data6 on these two: .73 and .74 are extra IPv4 addresses on
           # moby's eth0, applied by a unit because Proxmox rewrites interface
@@ -100,6 +101,7 @@ zones:
           - { name: ca,  type: CNAME, data: pistis.home. }
           - { name: pve, type: CNAME, data: lenora.home. }
           - { name: n8n, type: CNAME, data: moby.home., comment: 'stack on moby, behind its nginx' }
+          - { name: ollama, type: CNAME, data: metis.home., comment: 'Ollama on metis, for both n8n stacks' }
       # The lab zones below are children of home., served by this same server
       # out of the gsqlite3 backend. The delegation is what makes that a real
       # cut in the tree: without it `pdnsutil check-zone openstack.home` errors
