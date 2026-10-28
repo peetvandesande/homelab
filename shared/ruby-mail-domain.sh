@@ -44,6 +44,11 @@ txt=""
 if command -v rspamadm >/dev/null; then
   dump=$(rspamadm configdump dkim_signing 2>/dev/null || true)
   path=$(sed -n 's/^[[:space:]]*path = "\(.*\)";$/\1/p' <<<"$dump" | head -1)
+  # rspamd signs with the registrable domain by default, so a subdomain's mail
+  # looks for its parent's key and goes out unsigned when there is none.
+  if [[ $DOMAIN == *.*.* ]] && grep -Eq '^[[:space:]]*use_esld = true;' <<<"$dump"; then
+    bad "rspamd signs with use_esld = true, so mail from $DOMAIN looks for ${DOMAIN#*.}'s key - set use_esld = false; in /etc/rspamd/local.d/dkim_signing.conf and restart rspamd"
+  fi
   if [[ $path == *'$domain'* && $path == *'$selector'* ]]; then
     key=${path//\$domain/$DOMAIN}; key=${key//\$selector/$SELECTOR}
     if [[ -s $key ]]; then
