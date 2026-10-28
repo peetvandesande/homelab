@@ -91,9 +91,22 @@ q() { dig +short +time=3 +tries=1 @127.0.0.1 "$@" | tr -d '"' | tr '\n' ' ' | se
 [[ $(q "$DOMAIN" AAAA) == "$PUBLIC6" ]] && ok "AAAA -> $PUBLIC6" || bad "AAAA is '$(q "$DOMAIN" AAAA)', want $PUBLIC6"
 [[ $(q "$DOMAIN" MX) == "10 $MX." ]] && ok "MX -> $MX" || bad "MX is '$(q "$DOMAIN" MX)', want 10 $MX."
 q "$DOMAIN" TXT | grep -q 'v=spf1 mx -all' && ok "SPF: v=spf1 mx -all" || bad "SPF is '$(q "$DOMAIN" TXT)'"
+# Whitespace is insignificant in a DKIM record, and long ones come back as
+# several strings, so both sides are compared with it removed. The answer
+# from the authoritative server shows whether a miss is the record or this resolver's
+# cache of an earlier, negative answer.
 dk=$(q "$SELECTOR._domainkey.$DOMAIN" TXT | tr -d ' ')
-if [[ -n $txt && $dk == "$(tr -d ' ' <<<"$txt")" ]]; then ok "DKIM $SELECTOR._domainkey matches the key"
-else bad "DKIM $SELECTOR._domainkey is '${dk:0:40}...', want the key above"; fi
+want=$(tr -d ' ' <<<"$txt")
+if [[ -n $txt && $dk == "$want" ]]; then ok "DKIM $SELECTOR._domainkey matches the key"
+else
+  ns=$(dig +short "${DOMAIN#*.}" NS | head -1)
+  auth=$(dig +short +norec +time=3 +tries=1 "@$ns" "$SELECTOR._domainkey.$DOMAIN" TXT | tr -d '" \n')
+  bad "DKIM $SELECTOR._domainkey does not match the key"
+  echo "     want:          ${want:-<no key>}"
+  echo "     this resolver: ${dk:-<nothing>}"
+  echo "     $ns: ${auth:-<nothing>}"
+  [[ -n $auth && $auth == "$want" ]] && echo "     the authority has it right - flush the cache: sudo rndc flushname $SELECTOR._domainkey.$DOMAIN internal"
+fi
 dm=$(q "_dmarc.$DOMAIN" TXT)
 org=${DOMAIN#*.}
 [[ -n $dm ]] && ok "DMARC: $dm" || ok "DMARC: none of its own, so $org's applies: $(q "_dmarc.$org" TXT)"
