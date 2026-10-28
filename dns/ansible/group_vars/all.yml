@@ -100,6 +100,7 @@ zones:
           - { name: ca,  type: CNAME, data: pistis.home. }
           - { name: pve, type: CNAME, data: lenora.home. }
           - { name: n8n, type: CNAME, data: moby.home., comment: 'stack on moby, behind its nginx' }
+          - { name: n8n-sandbox, type: CNAME, data: moby.home., comment: 'sandbox stack on moby, LAN/VPN only' }
       # The lab zones below are children of home., served by this same server
       # out of the gsqlite3 backend. The delegation is what makes that a real
       # cut in the tree: without it `pdnsutil check-zone openstack.home` errors

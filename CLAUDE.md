@@ -308,7 +308,8 @@ nothing from the host; reach for an LXC when it wants to look like a machine.
 
 **n8n** is the first stack the repo owns there (`moby/root/opt/stacks/n8n`,
 converged by `moby/scripts/deploy.sh`), behind moby's host nginx on
-192.168.8.27:443, built fresh rather than migrated.
+192.168.8.27:443, built fresh rather than migrated. **n8n-sandbox** beside it
+is a disposable second instance at `n8n-sandbox.home`, LAN and VPN only.
 
 ## Public services
 

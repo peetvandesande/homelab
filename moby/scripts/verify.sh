@@ -59,7 +59,7 @@ echo "== node-exporter"
 https_ok "node-exporter on $HOST:9100" "https://$HOST:9100/metrics"
 
 echo "== scraped by prometheus"
-for job in node alloy docker traefik n8n; do
+for job in node alloy docker traefik n8n n8n-sandbox; do
   $CURL "https://$PROM:9090/api/v1/targets" 2>/dev/null | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -123,6 +123,19 @@ grep -q 'not registered' <<<"$body" && pass "webhooks reach n8n via ruby" \
   || bad "webhooks reach n8n via ruby" "${body:0:80} - is moby/scripts/install-ruby.sh installed on ruby?"
 code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$N8N:443:145.239.73.18" "https://$N8N/" 2>/dev/null) || code=000
 [[ $code == 403 ]] && pass "the editor is closed via ruby (403)" || bad "the editor is closed via ruby" "http=$code"
+
+echo "== n8n sandbox"
+SBX=n8n-sandbox.home
+$SSH "root@$HOST" 'cd /opt/stacks/n8n-sandbox && docker compose ps --status running -q | wc -l' 2>/dev/null | grep -qx 1 \
+  && pass "the sandbox is running" || bad "the sandbox is running" "docker compose ps in /opt/stacks/n8n-sandbox"
+https_ok "$SBX" "https://$SBX/healthz"
+https_ok "sandbox /metrics refused off Prometheus" "https://$SBX/metrics" 403
+if nc -z -G 2 "$HOST" 5679 2>/dev/null; then bad "the sandbox's 5679 is loopback-only" "reachable from the LAN"
+else pass "the sandbox's 5679 is loopback-only"; fi
+# Production stays the default for any other name on moby's address.
+code=$(curl -sS --max-time 8 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}' https://moby.home/healthz 2>/dev/null) || code=000
+[[ $code == 200 ]] && curl -sS --max-time 8 --cacert "$CA_ROOT" https://moby.home/healthz 2>/dev/null | grep -q ok \
+  && pass "moby.home still answers with production n8n" || bad "moby.home still answers with production n8n" "http=$code"
 
 echo "== logs in loki"
 n=$($CURL -G "https://$LOKI:3100/loki/api/v1/query" \
