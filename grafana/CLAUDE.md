@@ -82,7 +82,7 @@ Three are provisioned:
 | uid | Title | Covers |
 |---|---|---|
 | `homelab-dns` | DNS stack | themis/delphi/pythia, per-feed blocks, the VPN-domain shunt and its sync |
-| `homelab-fleet` | Fleet | all thirteen hosts, scrape health, log shipping |
+| `homelab-fleet` | Fleet | all fourteen hosts, scrape health, log shipping |
 | `homelab-router` | Router and ONT | ONT optics, PLOAM and line errors; WAN, IPv6 prefix, tunnels; Wi-Fi clients, signal and disconnects; the router itself |
 
 `homelab-router` is the first to use `${loki}`: its Wi-Fi disconnect panels

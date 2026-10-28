@@ -35,13 +35,14 @@ FLEET=(
   "192.168.8.54 grafana"
   "192.168.8.55 pistis"
   "192.168.8.56 loki"
-  # Words after the shortname would be extra SANs. moby needed them while it
-  # fronted Home Assistant on .79; the stacks it publishes now carry their own
-  # certificates, so it is back to the plain form.
+  # Words after the shortname are extra SANs. moby's are for the n8n stack its
+  # nginx fronts; forgejo's is the public name it serves inside the lab, by
+  # split-horizon (dns/ansible, "overrides").
   "192.168.8.24 lexie"
-  "192.168.8.27 moby"
+  "192.168.8.27 moby n8n.home n8n.peetvandesande.com"
   "192.168.8.60 jellyfin"
   "192.168.8.61 navidrome"
+  "192.168.8.62 forgejo git.peetvandesande.com"
   "192.168.8.57 hermes"
 )
 

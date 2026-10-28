@@ -1,0 +1,4 @@
+#!/bin/sh
+# Forgejo reads its certificate at start and has no reload, so a renewed one
+# means a restart. Every ~20 days; a second or two of downtime.
+exec systemctl try-restart forgejo

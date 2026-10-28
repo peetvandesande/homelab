@@ -1,5 +1,5 @@
 # Automatic security patching across the fleet: the `apt` job's metrics come
-# from apt/, published through node-exporter's textfile collector on all thirteen
+# from apt/, published through node-exporter's textfile collector on all fourteen
 # hosts. Managed from homelab/grafana.
 #
 # unattended-upgrades is silent by design - it logs and exits - so the failure

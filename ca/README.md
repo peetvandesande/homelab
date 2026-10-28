@@ -46,13 +46,13 @@ whatever pistis is publishing at the time.
 
 ## What holds a certificate today
 
-Thirteen hosts are enrolled — every container, the hermes VM and lenora — and these services
+Fourteen hosts are enrolled — every container, the hermes VM and lenora — and these services
 serve TLS off the G3 intermediate:
 
 | Host | Service | Port |
 |---|---|---|
-| all thirteen | prometheus-node-exporter | 9100 |
-| all thirteen | Grafana Alloy `/metrics` | 12345 |
+| all fourteen | prometheus-node-exporter | 9100 |
+| all fourteen | Grafana Alloy `/metrics` | 12345 |
 | prometheus | Prometheus API | 9090 |
 | grafana | Grafana UI | 3000 |
 | jellyfin | Jellyfin `/metrics` for Prometheus | 8920 (UI is plain HTTP on 8096) |

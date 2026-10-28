@@ -6,7 +6,7 @@
 #
 # Only put a unit here if it should be masked on the WHOLE fleet. A unit that is
 # noise on one host is a per-host decision and does not belong in a file that
-# claims to describe all thirteen.
+# claims to describe all fourteen.
 
 # Ships as a dependency of ipmitool. The unit is an LSB init script that loads
 # the in-band IPMI driver, and there is no /dev/ipmi* on any host - lenora

@@ -1,10 +1,10 @@
 # alloy
 
 Grafana Alloy shipping the systemd journal to Loki (`loki.home:3100`) from
-**all thirteen enrolled hosts** — the eleven containers, the hermes VM and lenora
+**all fourteen enrolled hosts** — the twelve containers, the hermes VM and lenora
 — and serving its own metrics over TLS on `:12345`.
 
-One directory rather than thirteen, for the same reason as `node-exporter/`: one
+One directory rather than fourteen, for the same reason as `node-exporter/`: one
 service replicated, not a per-container concern.
 
 ## Working on this
@@ -12,7 +12,7 @@ service replicated, not a per-container concern.
 `root/` mirrors the host filesystem and is the source of truth; the same four
 files go to every host. `scripts/deploy.sh` installs the pinned package where
 missing, pushes them and proves each host is serving TLS *and* landing lines
-in Loki. `scripts/verify.sh` checks all thirteen. `scripts/deploy.sh <ip>` does
+in Loki. `scripts/verify.sh` checks all fourteen. `scripts/deploy.sh <ip>` does
 one host, for bringing a new container in.
 
 Hosts must be enrolled first (`ca/scripts/enrol.sh`) — the listener and the

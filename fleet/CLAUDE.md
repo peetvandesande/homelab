@@ -4,7 +4,7 @@ Host hygiene that applies to **every enrolled host** and belongs to no single
 service: today, the units that are masked everywhere.
 
 It exists because the alternative was worse. `openipmi.service` was failed on
-all thirteen hosts, which made the `systemd-unit-failed` alert in `grafana/`
+all thirteen hosts at the time, which made the `systemd-unit-failed` alert in `grafana/`
 useless — it had to exclude the one thing that was actually failing. Masking it
 by hand fixed the symptom but nothing reapplied it, so a newly built container
 would quietly bring it back.
@@ -54,7 +54,7 @@ directory owns, so run it whenever.
    failure than a stale line in a file.
 
    For the same reason deploy does **not** report units that are masked but
-   unlisted. That set is pre-existing baseline, not drift, and printing thirteen
+   unlisted. That set is pre-existing baseline, not drift, and printing fourteen
    copies of it on every run only teaches you to stop reading the output.
 
 4. **A failed unit that is not in `masked-units` is a WARN, not a FAIL.** It is

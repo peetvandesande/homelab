@@ -1,9 +1,9 @@
 # apt
 
-Unattended **security** upgrades on all thirteen enrolled hosts, and the metrics
+Unattended **security** upgrades on all fourteen enrolled hosts, and the metrics
 that say whether they are still happening.
 
-One directory rather than thirteen, because this is one concern replicated — the
+One directory rather than fourteen, because this is one concern replicated — the
 same shape as `node-exporter/` and `alloy/`, and the same exception to the
 one-directory-per-container rule.
 
@@ -15,7 +15,7 @@ have broken that shape rather than fitting into it.
 ## Why this exists at all
 
 The question that started it was whether a local apt cache would save
-bandwidth. It would not — thirteen minimal Debian hosts on a stable release pull
+bandwidth. It would not — fourteen minimal Debian hosts on a stable release pull
 tens of MB of security updates a month between them, which is nothing against a
 fibre line, and the real traffic is Docker image pulls on moby, which an apt
 proxy does not touch. What was actually missing was not a cache but *any*
@@ -102,14 +102,14 @@ for every one of them. Finish the fleet first, then deploy `grafana/`.
    `apt_services_need_restart`. A replaced `libssl` leaves every running
    process on the old copy, so *installed* is not *effective* — the alert says
    so after a week and repeats until someone acts. Setting needrestart to `a`
-   would close the gap by restarting services mid-run on thirteen hosts, which is
+   would close the gap by restarting services mid-run on fourteen hosts, which is
    the one thing this directory refuses to do on a timer.
 
 5. **The DNS stack shares a randomised upgrade window with everything else, by
    choice.** `apt-daily-upgrade.timer` has a 60-minute randomised delay, so a
    `dnsdist` or `pdns-recursor` security upgrade can restart themis and delphi
    in the same hour. Per-host `OnCalendar` drop-ins would stagger them, at the
-   cost of host-specific files in a directory that otherwise treats all thirteen
+   cost of host-specific files in a directory that otherwise treats all fourteen
    identically. Themis failing over to Delphi is designed behaviour, `dns/`
    already treats a few seconds of LAN DNS as acceptable, and
    `dns-component-down` in `grafana/` reports it if that judgement was wrong.
