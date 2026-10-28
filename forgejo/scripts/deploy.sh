@@ -9,9 +9,17 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
 HOST=192.168.8.62
+[[ -f secrets.env ]] || { echo "secrets.env missing - see CLAUDE.md, Mail"; exit 1; }
+# shellcheck disable=SC1091
+source secrets.env
+[[ -n "${SMTP_PASSWD:-}" ]] || { echo "SMTP_PASSWD unset in secrets.env"; exit 1; }
 
 require_enrolled "$HOST"
 push "$HOST" root
+# push() has just installed app.ini with its placeholder; overwrite it with
+# the substituted copy. Over stdin, so the password is on no command line.
+sed "s|@@SMTP_PASSWD@@|${SMTP_PASSWD}|" root/etc/forgejo/app.ini \
+  | $SSH "root@$HOST" 'umask 027; cat > /etc/forgejo/app.ini'
 $SSH "root@$HOST" '
   set -e
   usermod -aG tlscert git
