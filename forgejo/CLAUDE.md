@@ -17,7 +17,8 @@ scripts/bootstrap.sh     create CT 303 on lenora and install (see its header)
 scripts/deploy.sh        push root/, generate secrets once, restart
 scripts/verify.sh        LAN, both families, SSH, ruby, monitoring
 scripts/install-ruby.sh  on ruby: sudo ~/homelab/forgejo/scripts/install-ruby.sh
-ruby/                    the public vhost it installs
+scripts/install-ruby-ssh.sh  on ruby, over the VPN: ruby's public :22 to forgejo
+ruby/                    the public vhost and stream proxy they install
 ```
 
 Order for a rebuild: router reservation for the MAC in `bootstrap.sh`, then
@@ -60,8 +61,7 @@ ssh root@forgejo.home runuser -u git -- forgejo admin user create \
 4. **SSH is OpenSSH asking Forgejo, not Forgejo's built-in server.**
    `sshd_config.d/forgejo.conf` runs `forgejo keys` per login as `git`, so a
    key added in the UI works on the next push and there is no
-   `authorized_keys` to regenerate. It only works on the LAN and VPN: off
-   them `git.peetvandesande.com:22` is ruby's own sshd. Two Debian 13 details
+   `authorized_keys` to regenerate. Two Debian 13 details
    in `deploy.sh`: sshd is socket-activated, so a **reload kills it** (the
    re-exec cannot bind `:22`, which the socket holds) – restart instead; and
    `sshd -t` needs `/run/sshd`, which only exists while sshd runs.
@@ -80,6 +80,16 @@ ssh root@forgejo.home runuser -u git -- forgejo admin user create \
    ruby's tunnel and dummy ranges, so `X-Forwarded-For` is believed from
    ruby and from nothing on the LAN.
 
+8. **ruby's public :22 is this sshd.** `install-ruby-ssh.sh` moves ruby's
+   own sshd onto its VPN addresses and puts an nginx stream proxy on the
+   public ones, so `git.peetvandesande.com:22` is the same sshd and host key
+   from everywhere. Every outside connection therefore arrives from ruby's
+   tunnel addresses – the same ranges as invariant 7 – and
+   `sshd_config.d/forgejo.conf` lets only `git` log in from them. The cost:
+   sshd here logs ruby, not the client. ruby itself is administered over
+   the VPN only (`ssh 192.168.254.254`); OVH's KVM console is the way in if
+   the tunnels are down.
+
 ## Not done
 
 - **No backup.** Repositories, LFS and attachments are under
@@ -87,5 +97,3 @@ ssh root@forgejo.home runuser -u git -- forgejo admin user create \
   `/etc/forgejo/secrets`. All three go together.
 - **No mail.** hermes delivers nothing outside the labs, so password resets
   and notifications are off (`[mailer] ENABLED = false`).
-- **git over SSH from outside** would need a port on ruby forwarded over wg1.
-  HTTPS covers it today.

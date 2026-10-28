@@ -226,6 +226,7 @@ DNS, mail submission and ManageSieve on ruby are open to **everything on the VPN
 | Postfix submission/smtps | `192.168.204.254`, `[fd33:5692:1834:204::254]` | SMTP AUTH from every source; the VPN is deliberately absent from `mynetworks` |
 | Dovecot ManageSieve | `192.168.204.254`, `192.168.254.254` and their IPv6 twins | TLS and auth from every source |
 | Dovecot IMAPS | `*, ::` | auth |
+| OpenSSH | the wg0 and dummy0 addresses, both families | keys; the public :22 is an nginx stream proxy to Forgejo (`forgejo/CLAUDE.md` invariant 8) |
 | nftables | n/a | the `$WGIFS` input rules |
 | nginx admin pages on `ruby.peetvandesande.com` (postfixadmin, rspamd, webchat, reports, `nginx_status`) | all addresses | `allow` list in `/etc/nginx/snippets/home-lan-allow.conf`: `172.31.1.0/24`, `192.168.0.0/16`, `fd33:5692:1834::/48`. Home reaches them over wg1 because the lab's DNS resolves the name to ruby's dummy0 |
 

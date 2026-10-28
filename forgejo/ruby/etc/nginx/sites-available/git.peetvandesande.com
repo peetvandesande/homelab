@@ -8,8 +8,8 @@
 # Proxied, not cached: Forgejo is the single origin. When wgclient1 or home is
 # down this answers 502, which is the truth.
 #
-# HTTPS only. git over SSH does not come through here - :22 on this name is
-# ruby's own sshd - so off the LAN Forgejo is cloned over HTTPS.
+# git over SSH does not come through here: ruby's public :22 is a stream
+# proxy to forgejo (stream.d/), installed by forgejo/scripts/install-ruby-ssh.sh.
 
 server {
     listen 80;
@@ -27,9 +27,9 @@ server {
 }
 
 server {
-    # `listen ... http2`, not `http2 on;`, which nginx before 1.25.1 rejects.
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name git.peetvandesande.com;
 
     ssl_certificate     /etc/letsencrypt/live/git.peetvandesande.com/fullchain.pem;

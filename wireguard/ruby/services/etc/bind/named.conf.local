@@ -169,6 +169,22 @@ view "wireguard" {
         notify no;
     };
 
+    zone "git.peetvandesande.com" {
+        // The lab's public services, answered with the lab's own addresses
+        // as on the LAN - ../../CLAUDE.md, "Public services".
+        type primary;
+        file "/etc/bind/wireguard/git.peetvandesande.com";
+        notify no;
+    };
+
+    zone "n8n.peetvandesande.com" {
+        // The lab's public services, answered with the lab's own addresses
+        // as on the LAN - ../../CLAUDE.md, "Public services".
+        type primary;
+        file "/etc/bind/wireguard/n8n.peetvandesande.com";
+        notify no;
+    };
+
     zone "204.168.192.in-addr.arpa" {
         type primary;
         file "/etc/bind/wireguard/204.168.192.in-addr.arpa";

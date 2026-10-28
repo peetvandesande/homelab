@@ -78,8 +78,14 @@ systemctl reload nginx
 echo "== verify"
 fail=0
 for a in "$PUBLIC4" "[$PUBLIC6]"; do
-  code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
-           --resolve "$NAME:443:${a//[\[\]]/}" "https://$NAME/" 2>/dev/null) || code=000
+  # A reload returns before the new workers serve, so the first check can
+  # still meet the old config. Give it ten seconds.
+  for _ in {1..10}; do
+    code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
+             --resolve "$NAME:443:${a//[\[\]]/}" "https://$NAME/" 2>/dev/null) || code=000
+    [[ $code != 000 ]] && break
+    sleep 1
+  done
   case $code in
     000) echo "!! https://$NAME/ on $a: no TLS with a valid public certificate"; fail=1 ;;
     *)   echo "   https://$NAME/ on $a -> $code" ;;

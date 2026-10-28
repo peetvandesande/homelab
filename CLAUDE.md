@@ -287,8 +287,8 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 Container workloads that are not worth an LXC run on `moby` (CT 108,
 `moby.home`) — Docker Engine with compose v2, one directory per stack under
 `/opt/stacks`. See `moby/CLAUDE.md`. Nextcloud, Traefik and XWiki moved here
-from the old moby at 192.168.1.25 (a machine this repo does not manage) in
-September 2026; the rest of that host's stacks are still there.
+from the old moby at 192.168.1.25 in September 2026; that machine has since
+been retired, and nothing else from it was kept.
 
 Moby also holds **192.168.8.73 and .74** as extra addresses on `eth0`, one
 per published stack, carried over so the migrated compose files did not have
@@ -305,7 +305,7 @@ nothing from the host; reach for an LXC when it wants to look like a machine.
 
 **n8n** is the first stack the repo owns there (`moby/root/opt/stacks/n8n`,
 converged by `moby/scripts/deploy.sh`), behind moby's host nginx on
-192.168.8.27:443. The n8n that stayed on the old moby was not migrated.
+192.168.8.27:443, built fresh rather than migrated.
 
 ## Public services
 
@@ -314,7 +314,7 @@ works from both sides**:
 
 | Name | Origin | Public via ruby |
 |---|---|---|
-| `git.peetvandesande.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; git over SSH is LAN/VPN only |
+| `git.peetvandesande.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
 | `n8n.peetvandesande.com` | n8n on moby | webhooks, forms and their assets; the editor only from `home-lan-allow.conf` ranges |
 
 Publicly each name is a CNAME to ruby, whose nginx terminates TLS with a Let's
@@ -322,14 +322,18 @@ Encrypt certificate and proxies over wg1 to the origin, verifying the origin's
 lab-CA certificate. Inside the lab the same name is split-horizon to the
 origin itself (`dns/CLAUDE.md` invariant 5), whose lab certificate carries it
 as a SAN – so the LAN never round-trips via OVH, and a device that does not
-trust the lab CA warns on the LAN only. The services have to know themselves
+trust the lab CA warns on the LAN only. VPN clients get the same inside
+answer from the tunnel's DNS (ruby's and jennie's BIND,
+`wireguard/install-public-overrides.sh`), so they too reach the origin
+directly and n8n's editor is open to them. The services have to know themselves
 by one URL (Forgejo's `ROOT_URL`, n8n's `WEBHOOK_URL`), which is why it is
 this rather than separate `.home` and public names.
 
 The ruby half lives with each service (`forgejo/ruby/`, `moby/ruby/`) and is
 installed from ruby's clone with that service's `scripts/install-ruby.sh`; the
-shared work is `shared/install-ruby-vhost.sh`. Neither service has a backup
-yet.
+shared work is `shared/install-ruby-vhost.sh`. Because ruby's public :22 is
+Forgejo's (`forgejo/CLAUDE.md` invariant 8), **ruby itself takes SSH over the
+VPN only**. Neither service has a backup yet.
 
 ## Mail
 

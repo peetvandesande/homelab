@@ -29,9 +29,9 @@ server {
 }
 
 server {
-    # `listen ... http2`, not `http2 on;`, which nginx before 1.25.1 rejects.
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name n8n.peetvandesande.com;
 
     ssl_certificate     /etc/letsencrypt/live/n8n.peetvandesande.com/fullchain.pem;

@@ -72,6 +72,11 @@ code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$NAME:44
   || bad "https://$NAME/ via ruby" "http=$code - is forgejo/scripts/install-ruby.sh installed on ruby?"
 code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$NAME:443:$RUBY4" "https://$NAME/metrics" 2>/dev/null) || code=000
 [[ $code == 404 ]] && pass "/metrics is not served via ruby (404)" || bad "/metrics is not served via ruby" "http=$code"
+# ruby's public :22 is forgejo's sshd, end to end: same host key as on the LAN.
+want=$(ssh-keyscan -T 5 -t ed25519 "$HOST" 2>/dev/null | awk '{print $3}')
+got=$(ssh-keyscan -T 8 -t ed25519 "$RUBY4" 2>/dev/null | awk '{print $3}')
+[[ -n $want && $got == "$want" ]] && pass "ruby :22 is forgejo's sshd (host key matches)" \
+  || bad "ruby :22 is forgejo's sshd" "${got:+another host key - ruby's own sshd is public}${got:-nothing} - forgejo/scripts/install-ruby-ssh.sh"
 
 echo "== monitored"
 for job in node alloy forgejo; do
