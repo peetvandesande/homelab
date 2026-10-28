@@ -97,7 +97,9 @@ q "$DOMAIN" TXT | grep -q 'v=spf1 mx -all' && ok "SPF: v=spf1 mx -all" || bad "S
 # cache of an earlier, negative answer.
 dk=$(q "$SELECTOR._domainkey.$DOMAIN" TXT | tr -d ' ')
 want=$(tr -d ' ' <<<"$txt")
-if [[ -n $txt && $dk == "$want" ]]; then ok "DKIM $SELECTOR._domainkey matches the key"
+# Only the public key has to match: a DNS editor may add tags such as t=s.
+pkey() { sed -n 's/.*p=\([^;]*\).*/\1/p' <<<"$1"; }
+if [[ -n $txt && -n $dk && $(pkey "$dk") == "$(pkey "$want")" ]]; then ok "DKIM $SELECTOR._domainkey matches the key"
 else
   ns=$(dig +short "${DOMAIN#*.}" NS | head -1)
   auth=$(dig +short +norec +time=3 +tries=1 "@$ns" "$SELECTOR._domainkey.$DOMAIN" TXT | tr -d '" \n')
@@ -105,7 +107,7 @@ else
   echo "     want:          ${want:-<no key>}"
   echo "     this resolver: ${dk:-<nothing>}"
   echo "     $ns: ${auth:-<nothing>}"
-  [[ -n $auth && $auth == "$want" ]] && echo "     the authority has it right - flush the cache: sudo rndc flushname $SELECTOR._domainkey.$DOMAIN internal"
+  [[ -n $auth && $(pkey "$auth") == "$(pkey "$want")" ]] && echo "     the authority has it right - flush the cache: sudo rndc flushname $SELECTOR._domainkey.$DOMAIN internal"
 fi
 dm=$(q "_dmarc.$DOMAIN" TXT)
 org=${DOMAIN#*.}
