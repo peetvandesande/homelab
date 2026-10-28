@@ -8,8 +8,8 @@ It also carries **192.168.8.73 and .74** as extra addresses on `eth0`, because
 the stacks that came from the old moby publish their ports on them.
 
 Running here: **nextcloud** (.73), **traefik** (.74) and **xwiki** (behind
-traefik), which came from the old moby (192.168.1.25, a machine this repo has
-never managed) on 21 September 2026 and are host-owned; and **n8n**, the one
+traefik), which came from the old moby (192.168.1.25, since retired) on
+21 September 2026 and are host-owned; and **n8n**, the one
 stack this repo owns, behind the host nginx on .27 as `n8n.peetvandesande.com`
 (built 28 October 2026).
 
@@ -100,7 +100,8 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   split-horizon to moby, off it ruby proxies to moby's nginx over wg1
   (`ruby/`, installed on ruby with `scripts/install-ruby.sh`). Through ruby
   only webhooks, forms and their assets are public; the editor and APIs are
-  limited to `snippets/home-lan-allow.conf`. On the LAN everything is open.
+  limited to `snippets/home-lan-allow.conf`. On the LAN everything is open,
+  and VPN clients count as the LAN: the tunnel's DNS gives them moby too.
 - **One proxy hop, both ways.** moby's nginx trusts `X-Forwarded-For` from
   ruby's ranges (`real_ip`) and passes the real client on, so
   `N8N_PROXY_HOPS=1` is right whether a request came via ruby or not.
@@ -140,58 +141,26 @@ now has neither a mountpoint nor a passed-through device. The dongle is
 — a VM takes it as a `qm set --usb0 host=10c4:ea60` passthrough, not a `dev`
 entry.
 
-## What came from the old moby, and what did not
+## What came from the old moby
 
-`scripts/import-stack.sh [--stop] [--up] <stack>` does one stack at a time
-from the workstation: it copies `/opt/stacks/<stack>`, finds the stack's
-volumes by their `com.docker.compose.project` label, streams each through a
-throwaway container (rather than reading `/var/lib/docker/volumes`, which the
-engine owns) and compares entry counts on both sides. It refuses to overwrite
-an existing stack directory or a non-empty volume here.
+Nextcloud (~22G of volumes), Traefik and XWiki moved here on 21 September 2026,
+host to host, along with `/var/backups/sylvie`, which the xwiki backup
+containers write to by absolute path. The old moby (192.168.1.25) has since
+been retired, so there is no rollback and nothing more to fetch: gotenberg,
+baserow and the old n8n went with it (n8n was rebuilt here fresh).
 
-The September 2026 move did not use it: 22G of Nextcloud data through the
-workstation would have been slow, so the copy ran host-to-host over a
-throwaway key, which the script deliberately does not set up. Use the script
-for the next one; it is the same commands.
+What the move left behind, still true:
 
-Moved: `nextcloud` (~22G of volumes), `traefik`, `xwiki`, plus
-`/var/backups/sylvie`, which the xwiki backup containers write to by absolute
-path. The stacks are stopped but intact on .25, and `/etc/network/interfaces`
-there has .73 and .74 commented out rather than deleted, so the old host is
-still a rollback.
-
-Four things this move left behind:
-
-- **`gotenberg` and `baserow` are no longer proxied.** Traefik's compose
-  file joined their networks, which do not exist here, and Traefik refuses to
-  start on a missing external network — so those entries are commented out
-  in `/opt/stacks/traefik/docker-compose.yml` (the original is beside it as
-  `docker-compose.yml.from-old-moby`). gotenberg is still running on .25 with
-  no way in. Re-add the line when its stack follows it here. **n8n is not
-  coming**: it was rebuilt fresh on 28 October 2026, and its commented-out
-  `n8n_default` lines and the `n8n.lan` certificate in `dynamic/tls.yml` were
-  removed that day (backups beside them, `*.bak-2026-10-28-n8n`). The new
-  stack's network is also called `n8n_default`, so uncommenting the old line
-  would have wired traefik into it. The old n8n on .25 still exists – .25 is
-  unreachable from the 192.168.8.0/24 LAN.
 - **Nextcloud went from 33.0.3 to 34.0.4 on the way.** The compose file tracks
   `nextcloud:stable-fpm-alpine`, so the first start here pulled the current
-  stable and ran its upgrade. It completed clean — `needsDbUpgrade` is false
-  — but it was not an intended part of the move. Pin the tag if that matters.
-- **`.lan` names still do not resolve from this lab's DNS.** Traefik routes by
-  `Host:`, and `nextcloud.lan` and the rest were answered by the Pi-hole on
-  .78, which stayed behind. `dns/` now has `nextcloud.home` (.73) and
-  `traefik.home` (.74), which is not the same name a browser bookmark uses.
-- **The old host's static routes did not come across.** Its network config
-  sends 172.31.1.1/32, 192.168.254.254/32 and 192.168.204.0/24 via sylvie
-  (192.168.1.24). Nothing in these three stacks obviously needs them, so they
-  were not copied; if something reaches for a host over there, that is why.
-
-Two more things worth knowing:
-
-- **Published ports answer on .73 and .74, not .25.** Anything on the LAN
-  pointing at the old host — bookmarks, the router, another stack's config —
-  needs updating.
+  stable and ran its upgrade. It completed clean, but it was not an intended
+  part of the move. Pin the tag if that matters.
+- **`.lan` names do not resolve from this lab's DNS.** Traefik routes by
+  `Host:`, and `nextcloud.lan` and the rest were answered by a Pi-hole that
+  went with the old LAN. `dns/` has `nextcloud.home` (.73) and `traefik.home`
+  (.74), which is not the same name a browser bookmark uses.
+- **The old host's static routes did not come across** (172.31.1.1/32,
+  192.168.254.254/32 and 192.168.204.0/24 via sylvie). The router routes
+  those now.
 - **`xwiki-app-backup` has no `restart:` policy**, so it does not come back
-  after a reboot. It was not running on the old host either. Left as it is
-  rather than quietly fixed.
+  after a reboot. Left as it is rather than quietly fixed.
