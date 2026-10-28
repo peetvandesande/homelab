@@ -2,9 +2,9 @@
 # Alert responder on lexie (192.168.8.24): receive Grafana's webhook, have
 # Claude investigate read-only, push the finding to Home Assistant.
 #
-# Needs secrets.env (git-ignored, mode 600) with HA_WEBHOOK_ID, the same id as
-# grafana/secrets.env. RESPONDER_TOKEN is generated on the first run and
-# appended; grafana/scripts/deploy.sh reads it from here.
+# Needs homelab-private/responder/secrets.env (mode 600) with HA_WEBHOOK_ID,
+# the same id as grafana's. RESPONDER_TOKEN is generated on the first run and
+# appended; grafana/scripts/deploy.sh reads it from there.
 #
 # Claude must be logged in as the responder user once, by hand - see CLAUDE.md.
 set -euo pipefail
@@ -13,14 +13,15 @@ cd "$(dirname "$0")/.."
 source ../ca/scripts/lib.sh
 HOST=192.168.8.24
 
-[[ -f secrets.env ]] || { echo "secrets.env missing - see CLAUDE.md"; exit 1; }
-if ! grep -q '^RESPONDER_TOKEN=' secrets.env; then
-  echo "RESPONDER_TOKEN=$(openssl rand -hex 32)" >> secrets.env
+SECRETS=../../homelab-private/responder/secrets.env
+[[ -f $SECRETS ]] || { echo "$SECRETS missing - see CLAUDE.md"; exit 1; }
+if ! grep -q '^RESPONDER_TOKEN=' "$SECRETS"; then
+  echo "RESPONDER_TOKEN=$(openssl rand -hex 32)" >> "$SECRETS"
   echo "   generated RESPONDER_TOKEN"
 fi
-# shellcheck disable=SC1091
-source secrets.env
-[[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in secrets.env"; exit 1; }
+# shellcheck disable=SC1090
+source "$SECRETS"
+[[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in $SECRETS"; exit 1; }
 
 $SSH "root@$HOST" '
   set -e

@@ -220,11 +220,11 @@ tree set in the UI.
 
 12. **The webhook id is a secret, substituted at deploy time.** It is the only
     credential an HA webhook has, so the file carries `@@HA_WEBHOOK_ID@@` and
-    `deploy.sh` fills it from `secrets.env` (git-ignored, mode 600:
+    `deploy.sh` fills it from `homelab-private/grafana/secrets.env` (mode 600:
     `HA_WEBHOOK_ID=...`, plus `HEALTHCHECKS_PING_URL` below), sending the
     substituted copy over stdin and leaving it `0640 root:grafana`. The same id goes into the HA automation, which is
     pasted into HA's UI by hand; the automation also sets `local_only`.
-    `deploy.sh` refuses to run without `secrets.env`.
+    `deploy.sh` refuses to run without it.
 
 13. **This path cannot report a home outage.** HA reaches the phone through the
     companion app's push relay, over the home internet connection, and Grafana,
@@ -236,7 +236,7 @@ To test the HA side without waiting for a real alert, post a minimal payload
 from grafana's container (it is on the LAN, which `local_only` requires):
 
 ```sh
-. grafana/secrets.env
+. ../homelab-private/grafana/secrets.env
 ssh root@grafana "curl -sS -X POST -H 'Content-Type: application/json' \
   https://192.168.8.90/api/webhook/$HA_WEBHOOK_ID -d '{\"commonLabels\":{\"alertname\":\"Test\"},
   \"alerts\":[{\"status\":\"firing\",\"labels\":{\"alertname\":\"Test\",\"severity\":\"warning\"},
@@ -262,5 +262,5 @@ there, not here.
     `execErrState` are `OK`, and the contact point has `disableResolveMessage:
     true` - a resolve is a POST as well, and Healthchecks.io would take it as
     a ping. The ping URL is the check's only credential (anyone holding it can
-    fake the heartbeat), so it is substituted from `secrets.env` like the
+    fake the heartbeat), so it is substituted from that file like the
     webhook id.

@@ -8,15 +8,17 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/lib.sh
 HOST=192.168.8.54
-[[ -f secrets.env ]] || { echo "secrets.env missing - see CLAUDE.md, Alerting"; exit 1; }
-# shellcheck disable=SC1091
-source secrets.env
-[[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in secrets.env"; exit 1; }
+SECRETS=../../homelab-private/grafana/secrets.env
+RESPONDER_SECRETS=../../homelab-private/responder/secrets.env
+[[ -f $SECRETS ]] || { echo "$SECRETS missing - see CLAUDE.md, Alerting"; exit 1; }
+# shellcheck disable=SC1090
+source "$SECRETS"
+[[ -n "${HA_WEBHOOK_ID:-}" ]] || { echo "HA_WEBHOOK_ID unset in $SECRETS"; exit 1; }
 [[ "${HEALTHCHECKS_PING_URL:-}" == https://hc-ping.com/* ]] \
-  || { echo "HEALTHCHECKS_PING_URL unset or not an hc-ping.com URL in secrets.env"; exit 1; }
-[[ -f ../responder/secrets.env ]] || { echo "responder/secrets.env missing - run responder/scripts/deploy.sh first"; exit 1; }
-RESPONDER_TOKEN=$(sed -n 's/^RESPONDER_TOKEN=//p' ../responder/secrets.env)
-[[ -n "$RESPONDER_TOKEN" ]] || { echo "RESPONDER_TOKEN unset in responder/secrets.env"; exit 1; }
+  || { echo "HEALTHCHECKS_PING_URL unset or not an hc-ping.com URL in $SECRETS"; exit 1; }
+[[ -f $RESPONDER_SECRETS ]] || { echo "$RESPONDER_SECRETS missing - run responder/scripts/deploy.sh first"; exit 1; }
+RESPONDER_TOKEN=$(sed -n 's/^RESPONDER_TOKEN=//p' "$RESPONDER_SECRETS")
+[[ -n "$RESPONDER_TOKEN" ]] || { echo "RESPONDER_TOKEN unset in $RESPONDER_SECRETS"; exit 1; }
 
 require_enrolled "$HOST"
 push "$HOST" root

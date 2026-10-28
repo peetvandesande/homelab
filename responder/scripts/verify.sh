@@ -3,7 +3,7 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
 # shellcheck disable=SC1091
-source secrets.env
+source ../../homelab-private/responder/secrets.env
 HOST=192.168.8.24
 R="ssh -o BatchMode=yes root@$HOST"
 fail=${fail:-0}

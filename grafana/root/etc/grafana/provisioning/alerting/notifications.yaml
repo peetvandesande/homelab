@@ -8,7 +8,7 @@
 # warnings as ordinary ones. HA does the formatting, so Grafana sends its
 # standard webhook payload untemplated.
 #
-# @@HA_WEBHOOK_ID@@ is substituted by scripts/deploy.sh from secrets.env. The
+# @@HA_WEBHOOK_ID@@ is substituted by scripts/deploy.sh from homelab-private. The
 # webhook id is the only credential an HA webhook has, so it stays out of the
 # repo and the deployed file is 0640 root:grafana. The automation also sets
 # local_only, so the URL is useless from outside the LAN.
@@ -54,7 +54,7 @@ contactPoints:
   # The alert responder on lexie (homelab/responder): an AI agent that
   # investigates read-only and pushes its finding to the phone. TLS off the lab
   # CA (an IP SAN, as with Home Assistant above) and a bearer token; @@RESPONDER_TOKEN@@ is substituted by
-  # scripts/deploy.sh from responder/secrets.env. Which alerts it acts on is
+  # scripts/deploy.sh from homelab-private. Which alerts it acts on is
   # decided there, not here (responder/root/etc/responder/allowed-alerts).
   - orgId: 1
     name: responder

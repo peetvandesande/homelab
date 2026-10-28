@@ -74,8 +74,9 @@ than fought.
 This repo is public. Besides the gitignored `secrets.env` files, secrets with no
 deploy script to template them live outside git in `~/projects/homelab-private/`:
 WireGuard keys and filled configs, the Orange WAN credentials, and the mail
-passwords for Forgejo and n8n (`forgejo/secrets.env`, `n8n/secrets.env`),
-which their deploy scripts read from there.
+passwords for Forgejo and n8n, and Grafana's and the responder's alerting
+secrets – each in `<service>/secrets.env` there, read by that service's
+deploy script.
 
 ## Storage
 

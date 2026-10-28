@@ -1,7 +1,7 @@
 # Grafana alerts -> iPhone. A reference copy: Home Assistant is configured in
 # its own UI, so this is pasted into a new automation there
 # (Settings -> Automations -> Create -> Edit in YAML), with the placeholder
-# replaced by HA_WEBHOOK_ID from homelab/grafana/secrets.env. Keep the two in
+# replaced by HA_WEBHOOK_ID from homelab-private/grafana/secrets.env. Keep the two in
 # step: change it here, paste it there. HA drops these comments and reformats
 # the rest on save; copying its version back is fine, as long as the comments
 # stay. Change the actions in YAML mode: picking an action in the visual
@@ -31,7 +31,7 @@ description: >-
   homelab/homeassistant/automations/grafana-alerts.yaml.
 triggers:
   - trigger: webhook
-    webhook_id: <HA_WEBHOOK_ID from grafana/secrets.env>
+    webhook_id: <HA_WEBHOOK_ID from homelab-private/grafana/secrets.env>
     allowed_methods:
       - POST
     local_only: true

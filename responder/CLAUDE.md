@@ -7,9 +7,9 @@ the existing Home Assistant webhook as a warning titled `Responder: <alert>`.
 
 `root/` mirrors lexie's filesystem. `scripts/deploy.sh` pushes it,
 `scripts/hosts.sh` creates the matching unprivileged account on the fleet, and
-`scripts/verify.sh` checks it. `secrets.env` (git-ignored) holds `HA_WEBHOOK_ID`
-and the generated `RESPONDER_TOKEN`; `grafana/scripts/deploy.sh` reads the
-token from here.
+`scripts/verify.sh` checks it. `homelab-private/responder/secrets.env` holds
+`HA_WEBHOOK_ID` and the generated `RESPONDER_TOKEN`; `grafana/scripts/deploy.sh`
+reads the token from there.
 
 ## First-time setup
 
