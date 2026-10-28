@@ -128,6 +128,15 @@ recursor:
       recurse: false
       forwarders:
         - 192.168.8.52
+    # Forgejo and n8n: public via ruby, local direct. Each needs its addNTA().
+    - zone: git.peetvandesande.com.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
+    - zone: n8n.peetvandesande.com.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
 
   lua_config_file: /etc/powerdns/recursor.lua
   lua_dns_script: /etc/powerdns/policy.lua
