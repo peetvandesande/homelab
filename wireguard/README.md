@@ -250,7 +250,7 @@ Home hosts reach ruby over IPv6 from their **ULA** address (see [Home LANs and t
 **Start order:** Postfix and Dovecot bind specific addresses, which must exist when they start, so both wait for systemd-networkd to finish configuring them (`ruby/services/etc/systemd/`):
 
 - **Dovecot** waits for `systemd-networkd-wait-online@wg0:routable` and `@dummy0:routable`.
-- **Postfix** waits for wg0 the same way. Before, it was only ordered after `network.target`, which waits for no interface, so it could fail to bind `192.168.204.254` at boot.
+- **Postfix** waits for wg0 the same way. Before, it was only ordered after `network.target`, which waits for no interface, so it could fail to bind `192.168.204.254` at boot. The drop-in is on `postfix.service`: Debian 13 runs the main instance as that unit and never starts `postfix@-`, where it sat until 30 October 2026 doing nothing.
 
 ### Docker's IPv6 forward policy is DROP
 

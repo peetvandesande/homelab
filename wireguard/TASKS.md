@@ -163,7 +163,7 @@ Clients drop for a few seconds; home ↔ ruby is down until 4.5. Have 4.1 ready 
   ```bash
   cd ~/wg/ruby/services
   sudo install -m 644 etc/systemd/system/dovecot.service.d/dovecot-local-deps.conf /etc/systemd/system/dovecot.service.d/
-  sudo install -D -m 644 etc/systemd/system/postfix@-.service.d/local-deps.conf /etc/systemd/system/postfix@-.service.d/local-deps.conf
+  sudo install -D -m 644 etc/systemd/system/postfix.service.d/local-deps.conf /etc/systemd/system/postfix.service.d/local-deps.conf
   sudo systemctl daemon-reload
   sudo install -m 644 -o root -g bind etc/bind/named.conf.options etc/bind/named.conf.local /etc/bind/
   sudo named-checkconf && sudo rndc reconfig
@@ -707,9 +707,9 @@ Start-order drop-ins. These change nothing until the next restart:
 
 ```bash
 sudo install -m 644 etc/systemd/system/dovecot.service.d/dovecot-local-deps.conf /etc/systemd/system/dovecot.service.d/
-sudo install -D -m 644 etc/systemd/system/postfix@-.service.d/local-deps.conf /etc/systemd/system/postfix@-.service.d/local-deps.conf
+sudo install -D -m 644 etc/systemd/system/postfix.service.d/local-deps.conf /etc/systemd/system/postfix.service.d/local-deps.conf
 sudo systemctl daemon-reload
-systemctl show -p After dovecot postfix@- | grep -o 'systemd-networkd-wait-online@[^ ]*'
+systemctl show -p After dovecot postfix | grep -o 'systemd-networkd-wait-online@[^ ]*'
 ```
 
 BIND (picks up the new address without restarting):
@@ -872,7 +872,7 @@ uci commit network && /etc/init.d/network reload
 ```bash
 cd ~/wg/ruby/services
 for f in $(cd orig && find etc -type f); do sudo cp "orig/$f" "/$f"; done
-sudo rm /etc/systemd/system/postfix@-.service.d/local-deps.conf
+sudo rm /etc/systemd/system/postfix.service.d/local-deps.conf
 sudo systemctl daemon-reload
 sudo named-checkconf && sudo rndc reconfig
 sudo postfix check && sudo systemctl restart postfix

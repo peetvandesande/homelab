@@ -107,7 +107,7 @@ smtp      inet  n       -       y       -       -       smtpd
 # Postfix binds only that address, so 587/465 are never reachable on ens3.
 #
 # The address must exist when Postfix starts, or the bind fails and master
-# exits. postfix@-.service.d/local-deps.conf orders Postfix after
+# exits. postfix.service.d/local-deps.conf orders Postfix after
 # systemd-networkd has configured wg0.
 #
 # Do NOT bind these to 2001:41d0:305:2100::1:3a0e under any circumstances.
