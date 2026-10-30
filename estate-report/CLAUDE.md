@@ -19,7 +19,12 @@ It covers the previous Monday-to-Monday week:
   forwarding and rejection; rspamd's verdicts; senders by account. Postfix
   comes from the journal (`SYSLOG_FACILITY=2`), rspamd from
   `/var/log/rspamd/rspamd.log*` and the journal.
-- **ruby** – key units, failed units, mail queue, disk, pending security
+- **Web on ruby** – nginx requests and bandwidth (response bodies) per site
+  and per day, split into internet, tunnel and monitoring traffic; status
+  classes; the busiest clients and user agents. Read from
+  `/var/log/nginx/*access.log*`, rotated and compressed files included; the
+  site name comes from the file name.
+- **ruby** – log rotation and the size of `/var/log`, key units, failed units, mail queue, disk, pending security
   upgrades, reboot required, Postfix's certificate. ruby is not in the lab's
   Prometheus, so this is read on the host.
 - **The lab** – from `prometheus.home` over wg1: per-host availability,

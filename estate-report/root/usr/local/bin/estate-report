@@ -17,6 +17,7 @@ so a quiet week and a broken report never look the same.
   estate-report --week-ending 2026-10-26
 """
 import argparse
+import calendar
 import collections
 import datetime as dt
 import glob
@@ -43,6 +44,7 @@ CONF = {
     # Scrape jobs known to be down, reported but not counted as issues.
     "IGNORE_JOBS": "pve",
     "RSPAMD_LOGS": "/var/log/rspamd/rspamd.log*",
+    "NGINX_LOGS": "/var/log/nginx/*access.log*",
 }
 CONF.update({k: os.environ[k] for k in CONF if os.environ.get(k)})
 
@@ -65,7 +67,7 @@ def table(rows, headers, indent="  "):
         return [indent + "(none)"]
     rows = [[str(c) for c in r] for r in rows]
     w = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
-    num = [all(re.fullmatch(r"[-\d,.%]+|–", r[i]) for r in rows) for i in range(len(headers))]
+    num = [all(re.fullmatch(r"-?[\d,]+(\.\d+)?%?|–", r[i]) for r in rows) for i in range(len(headers))]
 
     def line(cells):
         return indent + "  ".join(c.rjust(w[i]) if num[i] else c.ljust(w[i])
@@ -328,6 +330,112 @@ def mail_section(s):
     return out
 
 
+# ---------------------------------------------------------------- web
+
+# nginx's combined format: ip - user [30/Oct/2026:10:48:17 +0000] "GET / HTTP/2.0" 200 287 "ref" "ua"
+COMBINED = re.compile(r'^(\S+) \S+ \S+ \[(\d\d)/(\w{3})/(\d{4}):(\d\d):(\d\d):(\d\d) ([+-]\d{4})\] '
+                      r'"(?:\S+ (\S+)[^"]*|[^"]*)" (\d{3}) (\d+|-) "[^"]*" "([^"]*)"')
+MONTHS = {m: i for i, m in enumerate(calendar.month_abbr) if m}
+INTERNAL = re.compile(r"^(127\.|::1$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|fd)")
+
+
+def human(b):
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if b < 1024 or unit == "TiB":
+            return f"{b:.0f} {unit}" if unit == "B" else f"{b:.1f} {unit}"
+        b /= 1024
+
+
+def vhost_of(path):
+    """ntfy.sogode.com.access.log, sogode.com-https-access.log.2.gz -> the name."""
+    name = re.sub(r"\.log(\.\d+)?(\.gz)?$", "", os.path.basename(path))
+    name = re.sub(r"(-https?)?[-.]access$", "", name)
+    return "(default server)" if name in ("access", "") else name
+
+
+def web_stats(since, until, tz):
+    paths = sorted(glob.glob(CONF["NGINX_LOGS"]))
+    hosts = collections.defaultdict(lambda: {"req": 0, "bytes": 0, "ips": set(), "4xx": 0,
+                                             "5xx": 0, "probe": 0, "internal": 0})
+    days = collections.defaultdict(lambda: [0, 0])
+    status = collections.Counter()
+    clients = collections.Counter()
+    agents = collections.Counter()
+    for path in paths:
+        h = hosts[vhost_of(path)]
+        opener = gzip.open if path.endswith(".gz") else open
+        with opener(path, "rt", errors="replace") as f:
+            for line in f:
+                m = COMBINED.match(line)
+                if not m:
+                    continue
+                ip, d, mon, y, hh, mm, ss, off, url, code, size, ua = m.groups()
+                t = calendar.timegm((int(y), MONTHS.get(mon, 1), int(d), int(hh), int(mm), int(ss)))
+                t -= (1 if off[0] == "+" else -1) * (int(off[1:3]) * 3600 + int(off[3:]) * 60)
+                if not since <= t < until:
+                    continue
+                b = int(size) if size != "-" else 0
+                h["req"] += 1
+                h["bytes"] += b
+                h["ips"].add(ip)
+                status[code[0] + "xx"] += 1
+                if code[0] in "45":
+                    h[code[0] + "xx"] += 1
+                if "Blackbox Exporter" in ua:
+                    h["probe"] += 1
+                elif INTERNAL.match(ip):
+                    h["internal"] += 1
+                else:
+                    clients[ip] += 1
+                    agents[ua[:70] or "-"] += 1
+                day = dt.datetime.fromtimestamp(t, tz).date()
+                days[day][0] += 1
+                days[day][1] += b
+    return dict(files=len(paths), hosts={k: v for k, v in hosts.items() if v["req"]},
+                days=days, status=status, clients=clients, agents=agents)
+
+
+def web_section(w):
+    out = ["WEB ON RUBY (nginx)", ""]
+    if not w["hosts"]:
+        issue(f"no nginx requests found for the week in {w['files']} log file(s)")
+        out.append("  No requests logged for the week.")
+        return out
+    hosts = w["hosts"]
+    req = sum(h["req"] for h in hosts.values())
+    byt = sum(h["bytes"] for h in hosts.values())
+    probe = sum(h["probe"] for h in hosts.values())
+    internal = sum(h["internal"] for h in hosts.values())
+    out += table([
+        ["Requests", n(req)],
+        ["  from the internet", n(req - probe - internal)],
+        ["  over the tunnels (LAN, VPN)", n(internal)],
+        ["  monitoring probes", n(probe)],
+        ["Bandwidth served (response bodies)", human(byt)],
+        ["Distinct client addresses", n(len(set().union(*(h["ips"] for h in hosts.values()))))],
+        ["Responses 2xx / 3xx / 4xx / 5xx",
+         " / ".join(n(w["status"][c]) for c in ("2xx", "3xx", "4xx", "5xx"))],
+    ], ["Week", "Value"])
+
+    rows = []
+    for name, h in sorted(hosts.items(), key=lambda kv: -kv[1]["req"]):
+        rows.append([name, n(h["req"]), human(h["bytes"]), n(len(h["ips"])),
+                     n(h["4xx"]), n(h["5xx"])])
+        if h["req"] - h["probe"] >= 100 and h["5xx"] / h["req"] > 0.05:
+            issue(f"web: {name} answered {100 * h['5xx'] / h['req']:.0f}% of requests with 5xx")
+    out += ["", "By site, busiest first"]
+    out += table(rows, ["Site", "Requests", "Bandwidth", "Clients", "4xx", "5xx"])
+
+    out += ["", "By day"]
+    out += table([[f"{d:%a %-d %b}", n(c), human(b)] for d, (c, b) in sorted(w["days"].items())],
+                 ["Day", "Requests", "Bandwidth"])
+    out += ["", "Busiest internet clients (top 10)"]
+    out += table([[ip, n(c)] for ip, c in w["clients"].most_common(10)], ["Address", "Requests"])
+    out += ["", "Commonest user agents from the internet (top 10)"]
+    out += table([[ua, n(c)] for ua, c in w["agents"].most_common(10)], ["User agent", "Requests"])
+    return out
+
+
 # ---------------------------------------------------------------- ruby itself
 
 def run(*cmd):
@@ -363,6 +471,13 @@ def ruby_section():
     rows.append(["Mail queue", f"{len(queue)} ({q['deferred']} deferred, {q['hold']} held)"])
     if q["deferred"] > 20 or q["hold"]:
         issue(f"ruby: mail queue holds {q['deferred']} deferred, {q['hold']} held")
+
+    rotate = run("systemctl", "is-active", "logrotate.timer")
+    logs = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk("/var/log")
+               for f in fs if os.path.isfile(os.path.join(d, f)))
+    rows.append(["/var/log", f"{human(logs)}, logrotate.timer {rotate or 'missing'}"])
+    if rotate != "active":
+        issue("ruby: logrotate.timer is not active, so no log is being rotated")
 
     du = shutil.disk_usage("/")
     pct = 100 * du.used / du.total
@@ -549,6 +664,7 @@ def main():
             syslog_file(args.postfix_log) if args.postfix_log
             else journal(since, until, "SYSLOG_FACILITY=2"),
             rspamd_lines(since, until)))),
+        ("web", lambda: web_section(web_stats(since, until, tz))),
         ("ruby", ruby_section),
         ("lab", lambda: lab_section(Prom(CONF["PROM_URL"], CONF["LAB_CA"], until), until - since)),
     ):
