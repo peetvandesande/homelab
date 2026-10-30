@@ -1,0 +1,14 @@
+[Unit]
+Description=Weekly estate report by mail
+Wants=network-online.target
+After=network-online.target postfix@-.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/estate-report
+ExecStart=/usr/local/bin/estate-report
+# Root only to read the journal, rspamd's log and the mail queue; it changes
+# nothing, and sendmail's maildrop is the one place it writes.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes

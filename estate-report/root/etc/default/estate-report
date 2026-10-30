@@ -1,0 +1,12 @@
+# Read by estate-report.service. install.sh writes this once and never
+# overwrites it, so local changes stay.
+REPORT_TO=@@REPORT_TO@@
+# Defaults to REPORT_TO; set it if that address should not be the sender.
+#REPORT_FROM=
+#REPORT_TZ=Europe/Paris
+#PROM_URL=https://prometheus.home:9090
+# Units on ruby that must be active. One that is not installed is listed, not
+# counted as an issue.
+#RUBY_UNITS=postfix@- dovecot rspamd named nginx postsrsd prometheus-blackbox-exporter
+# Scrape jobs known to be down: shown, but not counted as issues.
+#IGNORE_JOBS=pve

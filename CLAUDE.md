@@ -384,6 +384,10 @@ fourteen hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
 instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
+A **weekly report** goes out from ruby every Monday morning, covering mail
+on ruby per domain, ruby itself and the lab's week from Prometheus, with the
+issues listed first – `estate-report/`.
+
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
 `/etc/prometheus/prometheus.yml` on prometheus directly will be overwritten by the
 next deploy.
