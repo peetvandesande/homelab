@@ -462,7 +462,7 @@ def ruby_section():
     rows = []
 
     up = float(open("/proc/uptime").read().split()[0])
-    rows.append(["Up for", f"{up / 86400:.1f} days"])
+    rows.append(["Up for", f"{up / 86400:.1f} days" if up >= 86400 else f"{up / 3600:.1f} hours"])
 
     for unit in CONF["RUBY_UNITS"].split():
         props = dict(l.split("=", 1) for l in
@@ -613,7 +613,8 @@ def lab_section(prom, window):
     now = []
     for expr, what in (
         ('node_systemd_unit_state{job="node",state="failed"} == 1', "unit failed"),
-        ('node_systemd_unit_state{job="node",state="activating"} == 1', "unit stuck starting"),
+        ('min_over_time(node_systemd_unit_state{job="node",state="activating"}[15m]) == 1',
+         "unit stuck starting for 15 min or more"),
         ('apt_reboot_required{job="node"} == 1', "reboot required"),
         ('apt_upgrades_pending{job="node",origin="security"} > 0', "security upgrades pending"),
         ('apt_services_need_restart{job="node"} > 0', "services need restart after patching"),
