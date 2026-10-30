@@ -7,6 +7,11 @@
 # the internet. So each site has its own module carrying the Host header and
 # TLS server name, and redirects are not followed - following one would
 # resolve a name.
+#
+# HTTP probes use HEAD wherever the status is the whole check: a GET of
+# sogode.com's front page is 72 KB, every 2 minutes over each family. Two stay
+# GET: Forgejo answers HEAD on /api/healthz with 404, and the n8n webhook
+# probes match the body, which HEAD does not return.
 modules:
   icmp:
     prober: icmp
@@ -34,6 +39,7 @@ modules:
     prober: http
     timeout: 10s
     http:
+      method: HEAD
       headers:
         Host: sogode.com
       tls_config:
@@ -46,6 +52,7 @@ modules:
     prober: http
     timeout: 10s
     http:
+      method: HEAD
       headers:
         Host: ruby.peetvandesande.com
       tls_config:
@@ -68,6 +75,7 @@ modules:
     prober: http
     timeout: 10s
     http:
+      method: HEAD
       headers:
         Host: ca.peetvandesande.com
       no_follow_redirects: true
@@ -79,6 +87,7 @@ modules:
     prober: http
     timeout: 10s
     http:
+      method: HEAD
       headers:
         Host: peetvandesande.com
       tls_config:
@@ -123,6 +132,7 @@ modules:
     prober: http
     timeout: 10s
     http:
+      method: HEAD
       headers:
         Host: n8n.peetvandesande.com
       tls_config:
@@ -151,6 +161,7 @@ modules:
     prober: http
     timeout: 10s
     http:
+      method: HEAD
       headers:
         Host: n8n.sogode.com
       tls_config:
