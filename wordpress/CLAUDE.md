@@ -1,16 +1,20 @@
 # wordpress
 
 sogode.com's WordPress on ruby: a container on `localhost:19080` behind ruby's
-nginx. The vhost file also carries social.sogode.com (static) and the
-mta-sts and marketing subdomains.
+nginx. The vhost file also carries social.sogode.com, a static site whose
+root is `/var/www/social.sogode.com`, and short links on sogode.com that
+redirect to YouTube, Outlook bookings and documents under social's `/docs/`.
 
 ```
 ruby/etc/nginx/sites-available/sogode.com   the vhost, as live on ruby
 scripts/install-ruby.sh                     sudo ~/homelab/wordpress/scripts/install-ruby.sh
 ```
 
-The file was taken from ruby on 30 October 2026 unchanged, apart from the
-login restriction. Edit it here, not on ruby: the install replaces the live
+The file was taken from ruby on 30 October 2026. Since then: the login
+restriction; social.sogode.com on IPv6, which its AAAA already promised; the
+HTTP redirect keeps the path; uploads up to 500M; the short links restored
+from the 3 August version; and the mta-sts and marketing server blocks
+removed, as none of those names has a DNS record. Edit it here, not on ruby: the install replaces the live
 file whole (showing the diff and keeping a dated backup), so a hand edit on
 ruby is lost at the next install.
 

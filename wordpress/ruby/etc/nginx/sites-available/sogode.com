@@ -22,8 +22,7 @@ server {
 	server_name sogode.com www.sogode.com;
 
 	location / {
-		#return 302 https://www.linkedin.com/company/sogode/;
-		return 302 https://sogode.com/;
+		return 301 https://$host$request_uri;
 	}
 
 	location /.well-known/acme-challenge/ {
@@ -51,7 +50,10 @@ server {
 	# # OCSP stapling
 	# ssl_stapling on;
 	# ssl_stapling_verify on;
-	
+
+	# WordPress media uploads; nginx's default of 1M refuses them with 413.
+	client_max_body_size 500M;
+
 	location / {
 # 		# Temporary redirect to LinkedIn, unless over WireGuard
 # 		if ($wg_client = 0) {
@@ -88,6 +90,44 @@ server {
 			proxy_pass http://localhost:19080;
 		}
 	}
+
+	# Short links. The documents live on social.sogode.com, under
+	# /var/www/social.sogode.com/docs/.
+	location /alkira {
+		return 301 https://www.youtube.com/watch?v=oXq8WdtEtOo;
+	}
+
+	location /webinars/alkira-en-france {
+		return 301 https://www.youtube.com/watch?v=oXq8WdtEtOo;
+	}
+
+	location /bookings/peet {
+		return 302 https://outlook.office.com/bookwithme/user/2666996c806641ca8e144d88f10c836d%40sogode.com?anonymous&isanonymous=true;
+	}
+
+	location = /meet/peet {
+		return 302 https://outlook.office.com/bookwithme/user/2666996c806641ca8e144d88f10c836d%40sogode.com?anonymous&isanonymous=true;
+	}
+
+	location ~ /wp-content/uploads/2024/0[34]/resume\.(docx|pdf) {
+		return 301 https://social.sogode.com/docs/resume.$1;
+	}
+
+	location ~ /docs/resume\.(docx|pdf) {
+		return 301 https://social.sogode.com/docs/resume.$1;
+	}
+
+	location = /docs/service_offerings.png {
+		return 301 https://social.sogode.com/docs/service_offerings.png;
+	}
+
+	location /howto/new-aws-account {
+		return 301 https://youtu.be/75V22PeMqP4;
+	}
+
+	location /howto/install-opentofu-terraform-on-windows {
+		return 301 https://youtu.be/TdgG55bDTac;
+	}
 }
 
 server {
@@ -112,6 +152,7 @@ server {
 	# SSL configuration
 	#
 	listen 443 ssl;
+	listen [::]:443 ssl;
 	http2 on;
 
 	server_name social.sogode.com;
@@ -142,122 +183,6 @@ server {
 	# Keep logging the requests to parse later (or to pass to firewall utilities such as fail2ban)
 	location ~ /\. {
 		deny all;
-	}
-
-	location = /favicon.ico {
-		log_not_found off;
-		access_log off;
-	}
-
-	location = /robots.txt {
-		allow all;
-		log_not_found off;
-	}
-}
-
-server {
-	listen 80;
-	listen [::]:80;
-	server_name mta-sts.sogode.com;
-
-	location /.well-known {
-		alias /var/www/mta-sts/sogode.com;
-	}
-
-	location /.well-known/acme-challenge/ {
-		alias /var/www/letsencrypt/$server_name/acme-challenge/;
-	}
-
-	location = /favicon.ico {
-		log_not_found off;
-		access_log off;
-	}
-
-	location = /robots.txt {
-		allow all;
-		log_not_found off;
-	}
-}
-
-server {
-	listen 80;
-	listen [::]:80;
-	server_name marketing.sogode.com;
-
-	location /.well-known/acme-challenge/ {
-		alias /var/www/letsencrypt/$server_name/acme-challenge/;
-		index index.html;
-	}
-
-	location /.well-known/ {
-		alias /var/www/mta-sts/$server_name/;
-	}
-}
-
-server {
-	listen 80;
-	listen [::]:80;
-	server_name mta-sts.marketing.sogode.com;
-
-	location /.well-known/acme-challenge/ {
-		alias /var/www/letsencrypt/$server_name/acme-challenge/;
-	}
-
-	location /.well-known/ {
-		alias /var/www/mta-sts/marketing.sogode.com/;
-	}
-}
-
-server {
-	listen 443 ssl;
-	http2 on;
-	server_name mta-sts.marketing.sogode.com;
-
-	ssl_certificate /etc/letsencrypt/live/sogode.com/fullchain.pem; # managed by Certbot
-	ssl_certificate_key /etc/letsencrypt/live/sogode.com/privkey.pem; # managed by Certbot
-	ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
-	# HSTS (ngx_http_headers_module is required) (63072000 seconds)
-	add_header Strict-Transport-Security "max-age=63072000" always;
-	
-	# # OCSP stapling
-	# ssl_stapling on;
-	# ssl_stapling_verify on;
-	
-	client_body_buffer_size 512k;
-
-	location /.well-known/ {
-		alias /var/www/mta-sts/marketing.sogode.com/;
-	}
-
-}
-
-server {
-	listen 443 ssl;
-	http2 on;
-	server_name mta-sts.sogode.com;
-
-	access_log /var/log/nginx/mta-sts.sogode.com-https-access.log;
-	error_log  /var/log/nginx/mta-sts.sogode.com-https-error.log;
-
-	ssl_certificate /etc/letsencrypt/live/sogode.com/fullchain.pem; # managed by Certbot
-	ssl_certificate_key /etc/letsencrypt/live/sogode.com/privkey.pem; # managed by Certbot
-	ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
-	# HSTS (ngx_http_headers_module is required) (63072000 seconds)
-	add_header Strict-Transport-Security "max-age=63072000" always;
-	
-	# # OCSP stapling
-	# ssl_stapling on;
-	# ssl_stapling_verify on;
-	
-	# The settings allows you to optimize the HTTP2 bandwidth.
-	# See https://blog.cloudflare.com/delivering-http-2-upload-speed-improvements/
-	# for tuning hints
-	client_body_buffer_size 512k;
-
-	location /.well-known {
-		alias /var/www/mta-sts/sogode.com;
 	}
 
 	location = /favicon.ico {
