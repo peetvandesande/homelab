@@ -7,6 +7,6 @@ REPORT_TO=@@REPORT_TO@@
 #PROM_URL=https://prometheus.home:9090
 # Units on ruby that must be active. One that is not installed is listed, not
 # counted as an issue.
-#RUBY_UNITS=postfix@- dovecot rspamd named nginx postsrsd prometheus-blackbox-exporter
+#RUBY_UNITS=postfix dovecot rspamd named nginx postsrsd prometheus-blackbox-exporter
 # Scrape jobs known to be down: shown, but not counted as issues.
 #IGNORE_JOBS=pve

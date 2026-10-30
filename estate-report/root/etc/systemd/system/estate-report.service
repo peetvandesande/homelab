@@ -1,7 +1,7 @@
 [Unit]
 Description=Weekly estate report by mail
 Wants=network-online.target
-After=network-online.target postfix@-.service
+After=network-online.target postfix.service
 
 [Service]
 Type=oneshot

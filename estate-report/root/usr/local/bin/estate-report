@@ -40,7 +40,7 @@ CONF = {
     "REPORT_TZ": "Europe/Paris",
     "PROM_URL": "https://prometheus.home:9090",
     "LAB_CA": "/etc/estate-report/lab-root.crt",
-    "RUBY_UNITS": "postfix@- dovecot rspamd named nginx postsrsd prometheus-blackbox-exporter",
+    "RUBY_UNITS": "postfix dovecot rspamd named nginx postsrsd prometheus-blackbox-exporter",
     # Scrape jobs known to be down, reported but not counted as issues.
     "IGNORE_JOBS": "pve",
     "RSPAMD_LOGS": "/var/log/rspamd/rspamd.log*",
@@ -73,6 +73,16 @@ def table(rows, headers, indent="  "):
         return indent + "  ".join(c.rjust(w[i]) if num[i] else c.ljust(w[i])
                                   for i, c in enumerate(cells)).rstrip()
     return [line(headers), indent + "  ".join("-" * x for x in w)] + [line(r) for r in rows]
+
+
+SECOND_LEVEL = {"co", "com", "org", "net", "ac", "gov", "edu"}
+
+
+def org_domain(dom):
+    """bounce.linkedin.com -> linkedin.com, email1.hsbc.co.uk -> hsbc.co.uk."""
+    labels = dom.split(".")
+    keep = 3 if len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in SECOND_LEVEL else 2
+    return ".".join(labels[-keep:])
 
 
 def domain(addr):
@@ -134,9 +144,11 @@ DELIVERY = re.compile(r"to=<([^>]*)>,(?: orig_to=<[^>]*>,)? relay=([^,]+),.*? st
 CLIENT = re.compile(r"^client=([^,]+)(?:, .*?sasl_username=(\S+))?")
 QFROM = re.compile(r"^from=<([^>]*)>, size=\d+, nrcpt=")
 REJECT = re.compile(r"(?:NOQUEUE|[0-9A-Za-z]{5,20}): (milter-)?reject: \S+ from \S*\[[^\]]*\](?::\d+)?: "
-                    r"(\d)\d\d (?:\d\.\d+\.\d+ )?(.*?)(?:; from=<([^>]*)> to=<([^>]*)>|$)")
+                    r"(?:(\d)\d\d )?(?:(\d)\.\d+\.\d+ )?(.*?)(?:; from=<([^>]*)> to=<([^>]*)>|$)")
 RSPAMD = re.compile(r"qid: <([^>]*)>.*?\(default: [TFS] \(([^)]+)\): \[(-?[\d.]+)/")
-SUBMISSION = {"submission", "submission6", "smtps", "smtps6"}
+SUBMISSION = {"submission", "submission6", "smtps", "smtps6", "rc-sub"}
+# master.cf names the port-25 smtpd postfix/public.
+PUBLIC = {"", "public"}
 MAILBOX_AGENTS = {"lmtp", "local", "virtual", "pipe"}
 
 
@@ -169,7 +181,8 @@ def mail_stats(lines, rspamd):
 
         r = REJECT.search(msg)
         if r:
-            is_milter, klass, text, frm, to = r.groups()
+            is_milter, code, dsn, text, frm, to = r.groups()
+            klass = code or dsn
             if is_milter:
                 milter["rejected" if klass == "5" else "deferred (4xx)"] += 1
             else:
@@ -177,7 +190,7 @@ def mail_stats(lines, rspamd):
             if to:
                 reject_rcpt_dom[domain(to)] += 1
             continue
-        if agent == "smtpd" and not instance and msg.startswith("connect from"):
+        if agent == "smtpd" and instance in PUBLIC and msg.startswith("connect from"):
             connections += 1
             continue
 
@@ -223,10 +236,11 @@ def mail_stats(lines, rspamd):
         if agent in MAILBOX_AGENTS and status == "sent":
             received[domain(rcpt)] += 1
             if o == "inbound":
-                senders_in[domain(sender.get(qid, ""))] += 1
+                senders_in[org_domain(domain(sender.get(qid, "")))] += 1
             continue
         bucket = {"submitted": sent, "inbound": forwarded}.get(o, system)
-        bucket[domain(rcpt)][status] += 1
+        dest = domain(rcpt) if o != "local" else org_domain(domain(rcpt))
+        bucket[dest][status] += 1
         if o == "submitted":
             by_account[account.get(qid, "?")] += 1
     delayed = sum(1 for k in deferred if final.get(k, (None, ""))[1] == "sent")
@@ -303,9 +317,9 @@ def mail_section(s):
     out += ["", "Forwarded, by destination domain"]
     out += table(per_domain(s["forwarded"]), ["Domain", "Total", "Sent", "Deferred", "Failed"])
     if s["system"]:
-        out += ["", "System mail (local, bounces, reports), by destination domain"]
+        out += ["", "System mail (bounces, notifications, local), by destination domain"]
         out += table(per_domain(s["system"], 10), ["Domain", "Total", "Sent", "Deferred", "Failed"])
-    out += ["", "Received from the internet, by sender domain (top 15)"]
+    out += ["", "Received from the internet, by sender's organisation (top 15)"]
     out += table([[d, n(c)] for d, c in s["senders_in"].most_common(15)], ["Domain", "Recipients"])
 
     out += ["", "Filtering"]
