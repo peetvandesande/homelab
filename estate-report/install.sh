@@ -20,7 +20,7 @@ install -m 0644 root/etc/systemd/system/estate-report.{service,timer} /etc/syste
 
 systemctl daemon-reload
 systemctl enable --quiet --now estate-report.timer
-systemctl list-timers --no-pager estate-report.timer | head -2
+systemctl list-timers --no-pager estate-report.timer
 
 echo "== last week's report, printed rather than sent"
 set -a; . /etc/default/estate-report; set +a
