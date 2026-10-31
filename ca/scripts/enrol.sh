@@ -81,8 +81,8 @@ enrol_one() { # enrol_one <ip> <name> [extra sans...]
 
   # The G3 intermediate goes in the store too. Most servers here send a full
   # chain because host.crt *is* leaf+intermediate, but .NET is not one of them:
-  # Jellyfin loads the PKCS#12 with X509Certificate2, which takes only the
-  # first certificate, so Kestrel offered a bare leaf and every client failed
+  # Jellyfin, when it served HTTPS, loaded its PKCS#12 with X509Certificate2,
+  # which takes only the first certificate, so Kestrel offered a bare leaf and every client failed
   # with "unable to verify the first certificate". With the intermediate in the
   # store, .NET builds the chain itself and sends it. Harmless elsewhere - it
   # is already trusted transitively through the root.

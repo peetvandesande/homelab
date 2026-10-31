@@ -2,25 +2,16 @@
 <!--
   Managed from homelab/jellyfin - edit there, not on 192.168.8.60.
 
-  Jellyfin will not take a PEM pair: CertificatePath must be a PKCS#12 bundle.
-  /etc/homelab-tls/jellyfin.pfx is built from host.crt and host.key by the
-  post-renew hook, which therefore has to run at enrolment AND after every
-  renewal, or Jellyfin keeps serving the old certificate until it expires.
-
-  CertificatePassword is empty on purpose. Jellyfin stores it in cleartext in
-  this very file, so a password here protects the bundle from nobody while
-  adding a second thing to keep in sync.
-
-  The UI is plain HTTP on 8096, deliberately: media streaming is LAN-only.
-  RequireHttps stays off so nothing is ever redirected to 8920. HTTPS stays
-  enabled on 8920 purely so Prometheus can scrape /metrics over TLS; the two
-  ports are served side by side by the same process.
+  Plain HTTP only, deliberately: media streaming is LAN-only, so the UI and
+  /metrics both go over 8096 unencrypted. EnableHttps and RequireHttps are
+  off and there is no certificate, so nothing listens on 8920 and nothing is
+  ever redirected there.
 -->
 <NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <BaseUrl />
-  <EnableHttps>true</EnableHttps>
+  <EnableHttps>false</EnableHttps>
   <RequireHttps>false</RequireHttps>
-  <CertificatePath>/etc/homelab-tls/jellyfin.pfx</CertificatePath>
+  <CertificatePath />
   <CertificatePassword />
   <InternalHttpPort>8096</InternalHttpPort>
   <InternalHttpsPort>8920</InternalHttpsPort>
@@ -30,9 +21,8 @@
   <EnableUPnP>false</EnableUPnP>
   <EnableIPv4>true</EnableIPv4>
   <!-- On since the lab's IPv6 rollout. Kestrel then binds :: as well as
-       0.0.0.0 for both 8096 and 8920, so jellyfin.home answers over either
-       family. Nothing about invariant 1 changes: 8096 is still plain HTTP
-       over IPv6 too, and 8920 still exists only for Prometheus. -->
+       0.0.0.0 on 8096, so jellyfin.home answers over either family - still
+       plain HTTP. -->
   <EnableIPv6>true</EnableIPv6>
   <EnableRemoteAccess>true</EnableRemoteAccess>
   <LocalNetworkSubnets />

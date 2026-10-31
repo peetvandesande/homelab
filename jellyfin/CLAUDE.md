@@ -1,7 +1,6 @@
 # Jellyfin
 
-CT 300, **192.168.8.60**. UI on plain HTTP `:8096`; HTTPS on `:8920` exists
-only for Prometheus.
+CT 300, **192.168.8.60**. Plain HTTP on `:8096`, UI and `/metrics` alike.
 
 ## Working on this
 
@@ -13,37 +12,21 @@ here.
 
 ## Invariants
 
-1. **8096 is deliberately plain HTTP, and `RequireHttps` is off.** Media
-   streaming is LAN-only, so the UI is not encrypted and nothing redirects to
-   8920. (`RequireHttps` never applied to LAN clients anyway – Jellyfin only
-   enforces it for addresses it considers remote – but leaving it on invited
-   someone to "fix" that.)
+1. **8096 is deliberately plain HTTP, and there is no HTTPS listener.** Media
+   streaming is LAN-only, so the UI is not encrypted. `EnableHttps` and
+   `RequireHttps` are both off and `CertificatePath` is empty, so nothing
+   listens on 8920. Prometheus scrapes `/metrics` on 8096 over plain HTTP too.
+   If the scrape ever needs to be TLS, put an nginx in front for `/metrics`
+   rather than turning HTTPS back on in Jellyfin – that meant a PKCS#12 bundle
+   rebuilt on every renewal, and .NET serving a bare leaf unless the G3
+   intermediate was in the system store.
 
-2. **8920 stays HTTPS so Prometheus can scrape `/metrics` over TLS.** Both
-   ports are served side by side by the same process, so this costs nothing.
-   `verify.sh` checks the chain on 8920 for that reason alone.
+2. **The host stays enrolled in the CA** because node-exporter on `:9100`
+   still serves the lab certificate. Jellyfin itself no longer reads the key,
+   so it is not in `tlscert` and has no `post-renew.d` hook; `deploy.sh`
+   removes both, and the old `jellyfin.pfx`, from a host that still has them.
 
-3. **Jellyfin needs a PKCS#12 bundle, not a PEM pair.** `/etc/homelab-tls/
-   jellyfin.pfx` is built from `host.crt` and `host.key` by
-   `post-renew.d/20-jellyfin`, which therefore must run at enrolment *and*
-   after every renewal – otherwise Jellyfin keeps serving the old certificate
-   until it expires. `deploy.sh` runs the hook explicitly before restarting,
-   because Jellyfin fails to start if `CertificatePath` points at nothing.
-
-4. **The G3 intermediate must be in the system trust store.** .NET loads the
-   bundle with `X509Certificate2`, which takes only the *first* certificate –
-   so Kestrel served a bare leaf and every client failed with "unable to verify
-   the first certificate", even though the PFX contained the chain. With the
-   intermediate in the store, .NET builds and sends the chain itself.
-   `ca/scripts/enrol.sh` installs it everywhere. This was found the hard way.
-
-5. **`CertificatePassword` is empty on purpose.** Jellyfin stores it in
-   cleartext in `network.xml`, so a password protects the bundle from nobody
-   while adding a second thing to keep in sync.
-
-6. **`EnableIPv6` is on**, since the lab's IPv6 rollout. Kestrel then binds
-   `::` as well as `0.0.0.0` on both ports, so `jellyfin.home` answers over
-   either family. It changes nothing above: 8096 is still plain HTTP over IPv6
-   too, and 8920 still exists only for Prometheus, which now scrapes it by
-   name. Jellyfin rewrites `network.xml` from its own UI, so this is one of the
-   settings the warning at the top is about.
+3. **`EnableIPv6` is on**, since the lab's IPv6 rollout. Kestrel then binds
+   `::` as well as `0.0.0.0`, so `jellyfin.home` answers over either family,
+   still plain HTTP. Jellyfin rewrites `network.xml` from its own UI, so this
+   is one of the settings the warning at the top is about.

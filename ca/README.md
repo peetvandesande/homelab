@@ -55,7 +55,6 @@ serve TLS off the G3 intermediate:
 | all fourteen | Grafana Alloy `/metrics` | 12345 |
 | prometheus | Prometheus API | 9090 |
 | grafana | Grafana UI | 3000 |
-| jellyfin | Jellyfin `/metrics` for Prometheus | 8920 (UI is plain HTTP on 8096) |
 | themis | dnsdist DoT / DoH | 853 / 443 |
 | themis/delphi/pythia | PowerDNS metrics, via nginx | 8083 / 8082 / 8081 |
 | loki | Loki API and `/metrics` | 3100 |

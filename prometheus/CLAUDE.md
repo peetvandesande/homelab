@@ -52,14 +52,13 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    enrolled but not listed here is unmonitored; a host listed here but not
    enrolled fails its scrape the moment node-exporter goes TLS.
 
-5. **Every scrape job is TLS except `navidrome`, `traefik`, `blackbox`,
+5. **Every scrape job is TLS except `jellyfin`, `navidrome`, `traefik`, `blackbox`,
    `outside-*` and the broken `pve`.** `blackbox` is this host's own exporter
    on 127.0.0.1:9115 (invariant 7). The `outside-*` blackbox exporters on ruby and jennie
    listen only on their dummy0 address, reachable only through WireGuard, and
-   neither server holds a lab certificate - `outside/CLAUDE.md`. Navidrome has one listener for both UI and `/metrics`, and the UI is
-   deliberately plain HTTP because media streaming is LAN-only — see
-   `navidrome/CLAUDE.md`. Jellyfin keeps `:8920` HTTPS alongside its plain UI
-   for exactly this scrape. The `dns` job reaches nginx, not the PowerDNS
+   neither server holds a lab certificate - `outside/CLAUDE.md`. Jellyfin and Navidrome each serve `/metrics` on the same listener as
+   their UI, and the UIs are deliberately plain HTTP because media streaming
+   is LAN-only — see `jellyfin/CLAUDE.md` and `navidrome/CLAUDE.md`. The `dns` job reaches nginx, not the PowerDNS
    webservers directly — none of those can serve TLS, so each backend binds
    loopback behind an nginx that allows only .53. The target addresses are
    unchanged. A 403 from anywhere else is that ACL working. The `docker` job

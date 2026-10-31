@@ -230,11 +230,12 @@ Each of these was found by something breaking.
 
 1. **The G3 intermediate must be in each host's system trust store**, not just
    `host.crt`. Most servers here send a full chain because `host.crt` *is*
-   leaf+intermediate — but .NET is not one of them. Jellyfin loads its PKCS#12
-   with `X509Certificate2`, which takes only the first certificate, so Kestrel
-   served a bare leaf and every client failed with "unable to verify the first
-   certificate". With the intermediate in the store, .NET builds and sends the
-   chain itself.
+   leaf+intermediate — but .NET is not one of them. Jellyfin, when it still
+   served HTTPS, loaded its PKCS#12 with `X509Certificate2`, which takes only
+   the first certificate, so Kestrel served a bare leaf and every client
+   failed with "unable to verify the first certificate". With the intermediate
+   in the store, .NET builds and sends the chain itself. Nothing on .NET serves
+   TLS today; keep it for the next one.
 
 2. **Group membership alone does not get a sandboxed unit access to the key.**
    Debian's `prometheus.service` sets `PrivateUsers=true`, which puts it in a

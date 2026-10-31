@@ -140,14 +140,11 @@ scrape_configs:
       - target_label: __address__
         replacement: 127.0.0.1:9221
 
-  # Jellyfin's UI is plain HTTP on 8096 (LAN-only media); 8920 is the same
-  # process serving HTTPS alongside it, kept purely so this scrape can be TLS.
+  # Plain HTTP on purpose: Jellyfin serves the UI and /metrics on 8096, and
+  # the UI is deliberately unencrypted (homelab/jellyfin).
   - job_name: jellyfin
-    scheme: https
-    tls_config:
-      ca_file: /etc/homelab-tls/root_ca.crt
     static_configs:
-      - targets: ['jellyfin.home:8920']
+      - targets: ['jellyfin.home:8096']
 
   # Plain HTTP on purpose: Navidrome has one listener serving both the UI and
   # /metrics, and the UI is deliberately unencrypted (homelab/navidrome).

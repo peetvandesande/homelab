@@ -491,8 +491,8 @@ The Proxmox web GUI (lenora:8006) is on the CA too — see `proxmox/CLAUDE.md`.
 Only `pveproxy-ssl.*` was replaced; `pve-ssl.*` stays on Proxmox's internal CA
 because the cluster API depends on it.
 
-Still plain HTTP, deliberately: the media UIs. Streaming is LAN-only, so
-Jellyfin's :8096 and Navidrome's :4533 are unencrypted. Their metrics scrapes
-stay TLS where the service can offer it – Jellyfin serves :8920 alongside for
-Prometheus; Navidrome has a single listener, so its scrape is plain too. See
+Still plain HTTP, deliberately: the media services. Streaming is LAN-only, so
+Jellyfin's :8096 and Navidrome's :4533 are unencrypted, and their metrics
+scrapes are plain too – each serves `/metrics` on the same listener as its UI.
+Both hosts stay enrolled for node-exporter. See
 `jellyfin/CLAUDE.md` and `navidrome/CLAUDE.md`.

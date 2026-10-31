@@ -29,19 +29,19 @@ while read -r job inst health err; do
 done < /tmp/hl-targets.txt
 
 echo "== scrapes that must be TLS actually are"
-for j in node jellyfin prometheus loki; do
+for j in node prometheus loki; do
   if grep -q "\"$j\"" <<<"$($CURL "https://$HOST:9090/api/v1/status/config" 2>/dev/null)"; then :; fi
 done
 # Anchored to indented config lines: an unanchored grep also matches the
 # explanatory comment at the top of the file and reports five.
-# Every job except `pve`, `navidrome` and `traefik` should be https. pve
-# targets a local exporter that was never migrated (and is not running);
-# navidrome is plain HTTP on purpose, its single listener also being the
-# deliberately unencrypted UI; traefik is a stack migrated from the old moby
-# that carries its own certificates. The blackbox jobs carry no scheme. So 11
-# is the correct answer.
+# Every job except `pve`, `jellyfin`, `navidrome` and `traefik` should be
+# https. pve targets a local exporter that was never migrated (and is not
+# running); jellyfin and navidrome are plain HTTP on purpose, /metrics sharing
+# a listener with the deliberately unencrypted UI; traefik is a stack migrated
+# from the old moby that carries its own certificates. The blackbox jobs carry
+# no scheme. So 10 is the correct answer.
 n=$(ssh -o BatchMode=yes root@$HOST "grep -cE '^[[:space:]]+scheme: https' /etc/prometheus/prometheus.yml" 2>/dev/null)
-if [[ "$n" == 11 ]]; then pass "11 jobs configured with scheme: https (prometheus, node, alloy, jellyfin, dns, loki, docker, grafana, forgejo, n8n, n8n-sogode)"
-else bad "11 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
+if [[ "$n" == 10 ]]; then pass "10 jobs configured with scheme: https (prometheus, node, alloy, dns, loki, docker, grafana, forgejo, n8n, n8n-sogode)"
+else bad "10 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail
