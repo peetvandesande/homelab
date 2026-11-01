@@ -256,6 +256,10 @@ fix.
 | Main VPN | `wgclient1` | `0x1000` | 1001 | `:2153` | 192.168.204.254 | `dst_net4399` |
 | UK | `wgclient2` | `0x2000` | 1002 | `:2253` | 1.0.0.1 | `dst_net6611` |
 
+A third rule, `appletv_uk`, sends all of one device's traffic into
+`wgclient2` by source MAC. It is off unless switched on from Home Assistant -
+`appletv-uk/CLAUDE.md`.
+
 Each tunnel gets its **own dnsmasq instance**, marked into that tunnel and
 resolving through it. That is what makes a CDN hand back edges in the right
 country, and it is why the DNS shunt on Themis targets `:2253` rather than

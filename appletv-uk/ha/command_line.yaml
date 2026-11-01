@@ -1,0 +1,27 @@
+# Managed from homelab/appletv-uk - edit there, deploy with its
+# scripts/deploy.sh, which overwrites this file.
+#
+# The Apple TV's internet: on is the UK (jennie, over the router's wgclient2),
+# off is France (the home line). The key in /config/.ssh is authorised on the
+# router with a forced command, so all it can do is run appletv-uk; the verb
+# after the host reaches it as SSH_ORIGINAL_COMMAND. Switching takes about
+# 25 seconds while GL rebuilds its rules, hence the long timeout.
+- switch:
+    name: Apple TV UK
+    unique_id: appletv_uk
+    icon: mdi:television-play
+    command_on: >-
+      ssh -i /config/.ssh/appletv_uk -o BatchMode=yes -o ConnectTimeout=5
+      -o UserKnownHostsFile=/config/.ssh/known_hosts -o StrictHostKeyChecking=yes
+      root@192.168.8.1 on
+    command_off: >-
+      ssh -i /config/.ssh/appletv_uk -o BatchMode=yes -o ConnectTimeout=5
+      -o UserKnownHostsFile=/config/.ssh/known_hosts -o StrictHostKeyChecking=yes
+      root@192.168.8.1 off
+    command_state: >-
+      ssh -i /config/.ssh/appletv_uk -o BatchMode=yes -o ConnectTimeout=5
+      -o UserKnownHostsFile=/config/.ssh/known_hosts -o StrictHostKeyChecking=yes
+      root@192.168.8.1 status
+    value_template: '{{ value == "on" }}'
+    command_timeout: 90
+    scan_interval: 300

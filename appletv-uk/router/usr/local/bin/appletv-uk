@@ -1,0 +1,45 @@
+#!/bin/sh
+# Switch the Apple TV's internet between France (the home line) and the UK
+# (jennie, over wgclient2). Managed from homelab/appletv-uk - edit there,
+# deploy with its scripts/deploy.sh. Run as the forced command of Home
+# Assistant's key in /etc/dropbear/authorized_keys, which passes the verb in
+# SSH_ORIGINAL_COMMAND; from a shell, give it as $1.
+#
+#   appletv-uk on | off | status
+#
+# It flips route_policy.appletv_uk, the GL device rule that marks every packet
+# from the Apple TV's MAC into the UK tunnel, and has GL rebuild its rules.
+# Prints "on" or "off" - the state the rule is in afterwards.
+#
+# Kept in /usr/local/bin/, which /etc/sysupgrade.conf preserves.
+
+RULE=route_policy.appletv_uk
+MAC=34:fd:6a:26:4c:83
+
+state() {
+	[ "$(uci -q get $RULE.enabled)" = 1 ] && echo on || echo off
+}
+
+set_state() { # set_state 0|1
+	uci -q get $RULE >/dev/null || { echo "no $RULE on the router" >&2; exit 1; }
+	[ "$(uci -q get $RULE.enabled)" = "$1" ] && return
+	uci set $RULE.enabled="$1"
+	uci commit route_policy
+	# What the GL UI runs on a policy change, minus the network reload it does
+	# not need: rules and marks only, so the tunnels stay up.
+	rtp2.sh not_reload_network >/dev/null 2>&1
+	# A connection keeps the route it started on, so drop the Apple TV's
+	# tracked connections and let the apps reconnect on the new path.
+	for ip in $(awk -v m="$MAC" 'tolower($2) == m { print $3 }' /tmp/dhcp.leases) \
+	          $(ip -6 neigh show | awk -v m="$MAC" 'tolower($5) == m { print $1 }'); do
+		conntrack -D -s "$ip" >/dev/null 2>&1
+	done
+}
+
+case "${SSH_ORIGINAL_COMMAND:-$1}" in
+	on)     set_state 1 ;;
+	off)    set_state 0 ;;
+	status) ;;
+	*)      echo "usage: appletv-uk on|off|status" >&2; exit 2 ;;
+esac
+state
