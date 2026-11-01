@@ -1,16 +1,19 @@
 # homeassistant
 
 TLS for the Home Assistant VM (302, **192.168.8.90**) off the lab CA, and the
-renewal that keeps it alive. Home Assistant itself is configured in its own
-GUI and `configuration.yaml`; this directory owns only the certificate.
+renewal that keeps it alive, plus the radio search card. Home Assistant itself
+is configured in its own GUI and `configuration.yaml`; this directory owns only
+the certificate and the files it pushes into `/config/www`.
 
 ```
 scripts/issue.sh    first issue, and recovery after an expiry
 scripts/deploy.sh   install the renewal driver, VM metrics and timers on lenora
 scripts/verify.sh   smoke test TLS and the renewal path
+scripts/deploy-card.sh  push the radio search card into /config/www
 haos/ha-tls.py      runs inside the core container - CSR, renew, info
 lenora/             the renewal driver, the VM metrics collector, their timers
 automations/        reference copies of automations other directories rely on
+www/                dashboard cards, served by HA as /local/
 ```
 
 `automations/grafana-alerts.yaml` is the one exception to "HA's own config is
@@ -125,6 +128,34 @@ files out of `/ssl`.
 
 `/ssl` also holds `root_ca.crt`, put there by `issue.sh` so renewal can verify
 the CA rather than trusting it blindly.
+
+## Radio search card
+
+The built-in media browser only lets you drill into Radio Browser one country,
+language or tag at a time, with no search, and it lives in the frontend image,
+so a patch would not survive an update. `www/radio-search-card.js` replaces it
+on a dashboard: a search box, a category (tag) and a country filter, and a
+picker for the `media_player` to play on. It talks to the radio-browser.info
+API **from the browser**, not from HA, and plays with
+`media_player.play_media` on the station's stream URL.
+
+```sh
+scripts/deploy-card.sh            # push it; prints the resource URL
+scripts/deploy-card.sh --restart  # first time only, see below
+```
+
+HA serves `/local/` only if `/config/www` existed at startup, and it did not
+before this card, so the first deploy needs a core restart. After that the
+card is registered once by hand as a JavaScript module resource (Settings >
+Dashboards > ⋮ > Resources) with the `?v=` the script prints – bump it after
+each change, or browsers keep the old copy – and added to a dashboard:
+
+```yaml
+type: custom:radio-search-card
+country: NL          # optional default filter
+entities: [...]      # optional, narrows the player picker
+limit: 50            # optional
+```
 
 ## Resolver
 
