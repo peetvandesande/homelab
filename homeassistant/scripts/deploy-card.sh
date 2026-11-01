@@ -5,8 +5,9 @@
 #   scripts/deploy-card.sh [--restart]
 #
 # HA only serves /local/ if /config/www existed when it started, so the first
-# deploy into a fresh /config needs a core restart. --restart does that; without
-# it the script just says so.
+# deploy into a fresh /config needs a real core restart - a quick reload from the
+# UI is not enough. The script checks that HA actually serves the card;
+# --restart restarts core if it does not, and without it the script just says so.
 #
 # The dashboard resource is registered by hand (Settings > Dashboards >
 # Resources). Its ?v= has to change for browsers to drop a cached copy, so the
@@ -35,21 +36,26 @@ sys.exit(int(d.get("exitcode") or 0))
 '
 }
 
-fresh=0
-qexec "test -d $CONFIG/www" >/dev/null 2>&1 || fresh=1
-
 echo "== pushing $CARD"
 b64=$(base64 < "$CARD" | tr -d '\n')
 qexec "mkdir -p $CONFIG/www && echo $b64 | base64 -d > $CONFIG/www/radio-search-card.js.new \
   && mv $CONFIG/www/radio-search-card.js.new $CONFIG/www/radio-search-card.js" >/dev/null
 
-if (( fresh )); then
+URL=https://homeassistant.home/local/radio-search-card.js
+served() {
+  [[ $(curl -s -o /dev/null -w '%{http_code}' --cacert ../ca/rootca/certs/root.crt "$URL") == 200 ]]
+}
+
+if ! served; then
   if (( RESTART )); then
-    echo "== /config/www is new - restarting Home Assistant core"
+    echo "== HA does not serve /local/ yet - restarting core"
     qexec "ha core restart" >/dev/null
+    for _ in $(seq 1 30); do served && break; sleep 5; done
+    served || { echo "!! still not served after the restart: $URL" >&2; exit 1; }
   else
-    echo "!! /config/www did not exist before - HA will not serve /local/ until"
-    echo "   core restarts. Re-run with --restart, or restart it from the UI."
+    echo "!! HA does not serve $URL - /config/www is probably newer than"
+    echo "   HA's last start. Re-run with --restart (a quick reload is not enough)."
+    exit 1
   fi
 fi
 

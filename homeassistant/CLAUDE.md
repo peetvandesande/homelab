@@ -145,7 +145,9 @@ scripts/deploy-card.sh --restart  # first time only, see below
 ```
 
 HA serves `/local/` only if `/config/www` existed at startup, and it did not
-before this card, so the first deploy needs a core restart. After that the
+before this card, so the first deploy needs a real core restart – a quick
+reload from the UI does not do it, and the card then 404s while its resource
+is registered. The script checks the URL is served and says so. After that the
 card is registered once by hand as a JavaScript module resource (Settings >
 Dashboards > ⋮ > Resources) with the `?v=` the script prints – bump it after
 each change, or browsers keep the old copy – and added to a dashboard:
