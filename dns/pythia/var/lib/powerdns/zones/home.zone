@@ -9,7 +9,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026102803  ; serial
+                2026102804  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -38,6 +38,8 @@ loki        IN  A   192.168.8.56     ; log store
 loki        IN  AAAA fd33:5692:1834:1000:be24:11ff:fe5e:a645 ; log store
 hermes      IN  A   192.168.8.57     ; mailcow VM 109 - mail for the labs
 hermes      IN  AAAA fd33:5692:1834:1000:be24:11ff:fe1b:5d14 ; mailcow VM 109 - mail for the labs
+metis       IN  A   192.168.8.58     ; Ollama VM 110 on the P2200 - job search embeddings
+metis       IN  AAAA fd33:5692:1834:1000:be24:11ff:fe6e:7a19 ; Ollama VM 110 on the P2200 - job search embeddings
 moby        IN  A   192.168.8.27     ; Docker host - outside the .50-.59 range
 moby        IN  AAAA fd33:5692:1834:1000:be24:11ff:fe13:54b8 ; Docker host - outside the .50-.59 range
 ; .73 and .74 are extra addresses on moby, one per published stack.
@@ -66,6 +68,7 @@ dns         IN  CNAME themis.home.
 ca          IN  CNAME pistis.home.
 pve         IN  CNAME lenora.home.
 n8n         IN  CNAME moby.home.       ; stack on moby, behind its nginx
+ollama      IN  CNAME metis.home.      ; Ollama on metis, for both n8n stacks
 
 ; --- delegations ----------------------------------------------------
 openstack   IN  NS  pythia.home.     ; openstack.home - the Proxmox lab, api backend

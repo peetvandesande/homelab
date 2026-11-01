@@ -11,7 +11,7 @@ $TTL 3600
 $ORIGIN 8.168.192.in-addr.arpa.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026102801  ; serial
+                2026102802  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -29,6 +29,7 @@ $ORIGIN 8.168.192.in-addr.arpa.
 55      IN  PTR pistis.home.
 56      IN  PTR loki.home.
 57      IN  PTR hermes.home.
+58      IN  PTR metis.home.
 27      IN  PTR moby.home.
 ; .73 and .74 are extra addresses on moby, one per published stack.
 73      IN  PTR nextcloud.home.
