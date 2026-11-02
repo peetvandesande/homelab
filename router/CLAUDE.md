@@ -199,6 +199,15 @@ of them is obvious from the router's own UI.
     DHCPv4 option, which is Themis anyway. `README.md` "Themis is advertised
     over IPv6 too".
 
+13. **`/etc/nftables.d/20-orange-pcp.nft` stays, and the WAN map stays
+    `0:6 6:6`.** Orange polices upstream data at PCP 6 to ~5 Mbit/s, and the
+    map tags everything the router's CPU sends PCP 6 – which includes both
+    WireGuard tunnels. The nft chain moves that traffic to PCP 0 while raw-socket
+    DHCP and ARP keep PCP 6 through the map. Remove the file and tunnel uploads
+    fall to ~4 Mbit/s with second-long latency for the whole house; change the
+    map to `0:0` and the next DHCP exchange goes unanswered. `ORANGE.md`,
+    "Upload at CoS 6 is held to ~5 Mbit/s".
+
 ## Backups
 
 The device keeps `/etc/config/<name>.bak-<date>-<reason>` files from previous

@@ -58,6 +58,11 @@ than fought.
   the router's own view says so, because the SFP port never loses carrier, so
   `wan-watchdog/` probes out of the WAN device and runs `ifup` when it is up
   but dead. `router/ORANGE.md`, "A dead session behind a live interface".
+- **Orange holds upstream data tagged PCP 6 to ~5 Mbit/s.** The WAN map tags
+  everything the router's CPU sends PCP 6 (DHCP needs it), which until
+  2 November 2026 capped both WireGuard tunnels' uploads at ~4 Mbit/s and gave
+  the whole house second-long latency while one ran. An nft chain on the router
+  moves that traffic to PCP 0 – `router/CLAUDE.md` invariant 13.
 - **`router/` documents it; it holds no config.** The device's settings live in
   `uci`, written by the GL.iNet web UI, so a mirror here would be a second
   source of truth that always loses. What `router/` records is the part

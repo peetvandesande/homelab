@@ -43,8 +43,8 @@ stick is reached by IP.
 
 `wan_dev` is an 8021q device on `eth1`, VID 832, with the **Livebox's WAN MAC
 cloned** and `egress_qos_mapping '0:6 6:6'` – a plain option, not a list. It
-marks all WAN traffic CoS 6, which Orange requires for DHCP and accepts for
-everything else.
+marks WAN traffic CoS 6 by default, which Orange requires for DHCP. Data must
+**not** leave as CoS 6 – see "Upload at CoS 6 is held to ~5 Mbit/s" below.
 
 `wan` (DHCPv4):
 
@@ -201,6 +201,64 @@ A live WAN with zero RX bytes is the signature, and `wan-receiving-nothing` in
 `grafana/` alerts on exactly that. `ont-downstream-sync-lost` catches the LODS
 that precedes it, which the `for: 2m` on "ONT not operational" is too slow to
 see.
+
+## Upload at CoS 6 is held to ~5 Mbit/s
+
+Orange accepts upstream data frames tagged 802.1p PCP 6 but polices them to
+about 5 Mbit/s – PCP 6 is for control traffic. With the map above, everything
+the router's **CPU** sends out of `eth1.832` went at PCP 6: its own
+connections, and both WireGuard tunnels' encapsulated packets. Until
+2 November 2026 that capped every upload through wg1 and wg3 at ~4.2 Mbit/s,
+and because the queue builds in the MediaTek driver's TX ring (invisible to
+`tc`, no drops), the whole house saw 250 ms–1.5 s of latency whenever a tunnel
+upload ran – SSH to ruby or jennie included. LAN traffic never showed it:
+`mtkhnat` offloads forwarded flows, and the PPE builds its own VLAN tag at
+PCP 0, so speed tests from a client were always fine.
+
+The tell is a router-originated upload, which offload cannot help:
+
+```sh
+dd if=/dev/urandom of=/tmp/up.bin bs=1M count=40
+curl -4 -s -o /dev/null -w '%{speed_upload}\n' -X POST --data-binary @/tmp/up.bin https://speed.cloudflare.com/__up
+```
+
+~700 kB/s means the throttle is back; ~90 MB/s is healthy.
+
+The fix leaves the map alone and moves the router's own IP traffic to a
+priority the map does not name, which leaves as PCP 0.
+`/etc/nftables.d/20-orange-pcp.nft` (fw4 includes it in `table inet fw4`, and
+firewall4's keep list preserves the directory across Keep-Settings upgrades):
+
+```nft
+chain orange_pcp_output {
+	type filter hook output priority mangle; policy accept;
+	oifname "eth1.832" meta priority set 0:1 counter
+	oifname "eth1.832" udp dport { 67, 547 } meta priority set 0:6 counter
+	oifname "eth1.832" meta l4proto { icmp, ipv6-icmp, igmp } meta priority set 0:6 counter
+}
+```
+
+Why it is shaped this way:
+
+- **The map stays `0:6 6:6`.** udhcpc sends DISCOVER/REQUEST on a raw socket
+  and ARP is not IP; neither passes netfilter, so both carry priority 0 and
+  need the map to give them PCP 6. Changing the map to `0:0` would leave the
+  next DHCP exchange untagged, and Orange ignores it.
+- **`output` only, not `postrouting`.** Forwarded traffic is left exactly as it
+  was, so nothing changes for offloaded LAN flows.
+- **Control goes back to 6** for whatever does pass netfilter: unicast DHCP
+  renewals, odhcp6c, ICMP and ND.
+
+Verified after the change with a forced renewal of both (`kill -USR1` on
+udhcpc and odhcp6c) and `tcpdump -Q out -e -i eth1`: WireGuard at `p 0`, ICMP
+at `p 6`, both leases renewed. Rates: router upload 731/543 Mbit/s (v4/v6),
+home→jennie over wg3 452 Mbit/s, home→ruby over wg1 797 Mbit/s.
+
+What it does not cover: forwarded traffic the PPE does not offload still
+leaves at PCP 6, and so at ~5 Mbit/s – a flow's first packets, and anything
+that stays on the CPU path. Turning `mtkhnat` off shows how much that is:
+every upload drops to ~5 Mbit/s. If offload is ever disabled, or something
+forwarded is found slow, the same rule belongs in a `postrouting` chain too.
 
 ## Tooling traps on this hardware
 
