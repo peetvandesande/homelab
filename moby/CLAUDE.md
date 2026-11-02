@@ -86,7 +86,10 @@ of the metrics names the certificate and will not start without it.
    a port with specific ones – so nginx names .27, and has a wait-for-address
    drop-in (`nginx.service.d`) because a specific address can lose the
    cold-boot race. If it does, nginx fails whole and the engine metrics on
-   9323 go with it. IPv6 is `[::]`, which nginx makes v6-only, so it never
+   9323 go with it. The drop-in **replaces** the packaged `ExecStartPre`
+   rather than appending to it: that is `nginx -t`, which opens the
+   listeners itself, so an appended wait never got to run – nginx stayed
+   down for 15 hours after the boot of 1 November 2026. IPv6 is `[::]`, which nginx makes v6-only, so it never
    collides. n8n (production) is the `default_server` on .27:443, so `moby.home` answers
    with it.
 
