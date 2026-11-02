@@ -442,3 +442,20 @@ ip neigh del <ipv4> dev br-lan; ping -c2 -W1 <ipv4> >/dev/null; ip neigh show <i
 | Parental controls | `enable=0` | the lab's `kids` policy set does this, per device, with its own feeds |
 | GL site-to-site | `enable=0` | the tunnels are plain WireGuard clients with hand-written policy |
 | Force-DNS redirect | chain empty | would hijack clients' queries to Themis back to the router |
+
+## CAKE on wgclient2
+
+`/etc/hotplug.d/iface/30-wgclient2-cake` puts CAKE on the tunnel to jennie each
+time it comes up, just below what that path carries, so interactive SSH (DSCP
+EF) gets ahead of bulk traffic – `wireguard/README.md` "SSH under load". It is
+listed in `/etc/sysupgrade.conf` so a Keep-Settings upgrade keeps it. To paste
+back:
+
+```sh
+#!/bin/sh
+[ "$ACTION" = ifup ] && [ "$INTERFACE" = wgclient2 ] || exit 0
+tc qdisc replace dev wgclient2 root cake bandwidth 440mbit overhead 80 diffserv4
+```
+
+`tc qdisc show dev wgclient2` should say `cake ... bandwidth 440Mbit diffserv4`;
+`noqueue` means the script did not run. wgclient1 (to ruby) has none on purpose.

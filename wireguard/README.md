@@ -286,6 +286,37 @@ SSH on jennie is VPN-only since 2 November 2026, after a boot's worth of interne
 
 ***
 
+## SSH under load
+
+OVH caps jennie at ~480 Mbit/s each way (~460 through a tunnel), and a saturated
+tunnel to it queues at that cap, where nothing can be prioritised: SSH to jennie
+went from ~75 ms to ~200 ms per round trip while a transfer ran, measured on
+2 November 2026. ruby has the headroom and barely notices (wg1 is left alone).
+
+So every sender into a jennie tunnel shapes just below the cap with CAKE, which
+moves the queue somewhere it can be sorted. `diffserv4` puts DSCP EF in its top
+tin, and OpenSSH marks interactive sessions EF by default (scp and sftp get CS1,
+the bulk tin) – which only works if the client does not override `IPQoS`.
+
+| Where | Interface | Shaper | Covers |
+|---|---|---|---|
+| jennie | `wg0`, `wg2`, `wg3` | 440 Mbit/s + 80 B overhead, diffserv4 | jennie → clients, ruby, home |
+| jennie | `ens3` | 460 Mbit/s, besteffort | the exit's own uploads, so they cannot queue the tunnels |
+| ruby | `wg2` | 440 Mbit/s + 80 B overhead, diffserv4 | ruby → jennie, incl. ruby's clients reaching jennie |
+| router | `wgclient2` | the same | home → jennie |
+
+The 80 bytes are WireGuard over IPv6 (40 + 8 UDP + 32), so the rate is what goes
+on the wire. On jennie and ruby the shapers are networkd drop-ins
+(`*/services/etc/systemd/network/10-netplan-<if>.network.d/cake.conf`), which
+netplan's generated `.network` files pick up; on the router a hotplug script,
+`router/README.md` "CAKE on wgclient2".
+
+Measured with the router half alone: a saturating home → jennie upload left SSH
+at 74–81 ms and ping at 26 ms (idle: ~75 / 25), for 395 rather than 456 Mbit/s.
+Not covered: what a road-warrior client sends, which queues on its own network.
+
+***
+
 ## Clients
 
 ### Clients on ruby
