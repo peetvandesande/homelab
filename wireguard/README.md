@@ -282,7 +282,7 @@ jennie had no firewall. `jennie/nftables.conf` follows ruby's conventions (inet 
 
 The forward chain can use a drop policy here, unlike on ruby, because jennie has no Docker. If Docker is ever installed, its IPv6 FORWARD policy is drop as on ruby, and jennie would need a copy of `wg-docker-user.service`, also allowing IPv6 `wg+ → ens3`. Anything else jennie serves publicly needs a rule under "Public services".
 
-SSH on jennie is VPN-only since 2 November 2026, after a boot's worth of internet password guessing. sshd still listens on every address – the firewall is what closes it, so there is no bind to race at boot. `/etc/ssh/sshd_config` is Debian's stock file; jennie's own settings, a key plus a TOTP code, are all in `jennie/services/etc/ssh/sshd_config.d/10-jennie.conf`. cloud-init's `50-cloud-init.conf` (`PasswordAuthentication yes`) was deleted: cloud-init writes it only on an instance's first boot, and if it ever returned, `AuthenticationMethods` would still demand a key first.
+SSH on jennie is VPN-only since 2 November 2026, after a boot's worth of internet password guessing. sshd still listens on every address – the firewall is what closes it, so there is no bind to race at boot. Login is a key plus a TOTP code (`AuthenticationMethods publickey,keyboard-interactive`, `PasswordAuthentication no`), set in jennie's own `/etc/ssh/sshd_config`; cloud-init's `50-cloud-init.conf` was deleted, since drop-ins are read first and its `PasswordAuthentication yes` won.
 
 ***
 
