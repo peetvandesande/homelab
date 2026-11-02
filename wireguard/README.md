@@ -275,12 +275,14 @@ jennie had no firewall. `jennie/nftables.conf` follows ruby's conventions (inet 
 
 | Chain | Policy | Rules |
 |-------|--------|-------|
-| input | drop | loopback; established/related; ICMP and the ICMPv6 essentials; DHCPv4/DHCPv6 replies from OVH; SSH; UDP 51822 from ruby's IPv6 only; UDP 51823 from anywhere (home is dynamic); UDP 51820 (wg0, clients) from anywhere on both families; everything from wg2/wg3; a placeholder for public services |
+| input | drop | loopback; established/related; ICMP and the ICMPv6 essentials; DHCPv4/DHCPv6 replies from OVH; UDP 51822 from ruby's IPv6 only; UDP 51823 from anywhere (home is dynamic); UDP 51820 (wg0, clients) from anywhere on both families; everything from wg0/wg2/wg3, which is the only way SSH gets in; a placeholder for public services |
 | forward | drop | MSS clamping; wg ↔ wg; RFC1918 out of ens3 dropped (as on ruby); wg → ens3; ens3 → wg for established/related only |
 | output | accept | none |
 | nat (`inet wgnat`) | n/a | snat VPN IPv4 sources to `57.129.180.73` and VPN IPv6 (`fd33:5692:1834::/48`) to `2001:41d0:801:2000::180f`, on ens3 only |
 
 The forward chain can use a drop policy here, unlike on ruby, because jennie has no Docker. If Docker is ever installed, its IPv6 FORWARD policy is drop as on ruby, and jennie would need a copy of `wg-docker-user.service`, also allowing IPv6 `wg+ → ens3`. Anything else jennie serves publicly needs a rule under "Public services".
+
+SSH on jennie is VPN-only since 2 November 2026, after a boot's worth of internet password guessing. sshd still listens on every address – the firewall is what closes it, so there is no bind to race at boot. `jennie/services/etc/ssh/sshd_config.d/10-key-and-totp.conf` requires a key plus a TOTP code: the PAM stack checks TOTP only, so the password route it replaces was two codes and no password.
 
 ***
 
