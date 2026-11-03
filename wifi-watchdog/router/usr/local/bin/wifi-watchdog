@@ -1,0 +1,73 @@
+#!/bin/sh
+# wifi-watchdog - run `wifi reload` when a radio's station table goes stale.
+#
+# The failure this exists for: the mt7990 driver leaks a station entry on an
+# MLO teardown, so hostapd keeps listing a client the driver has no record of.
+# That client's link is half-registered and may carry no traffic while still
+# looking associated. The only evidence is the driver's "sta not found" line,
+# logged once per stale entry each time something asks for the station list -
+# router-metrics does, once a minute. `wifi reload` clears it without taking
+# the WAN or the ONT down, which a reboot does. See homelab/wifi-watchdog.
+#
+# Read-only until it acts, and the only thing it ever does is `wifi reload`.
+# State lives in /tmp: a reboot clears the table, and the cooldown with it.
+set -u
+
+WINDOW=600        # seconds of log to count
+THRESHOLD=5       # more than this many lines in WINDOW is a leak; healthy is 0
+COOLDOWN=3600     # never reload more than once an hour
+
+STATE=/tmp/wifi-watchdog.state
+LOCK=/tmp/wifi-watchdog.lock
+
+warn() { logger -t wifi-watchdog -p daemon.warn "$1"; }
+
+# One run at a time: a reload takes long enough for the next cron tick to land
+# on it. flock -n exits without running anything if the lock is held.
+if [ "${WIFI_WATCHDOG_LOCKED:-}" != 1 ]; then
+  export WIFI_WATCHDOG_LOCKED=1
+  exec flock -n "$LOCK" "$0" "$@"
+fi
+
+# Uptime, not wall-clock: the kernel stamps each line with it, so the window
+# needs no date parsing, and it cannot jump when NTP corrects the clock.
+now=$(cut -d. -f1 /proc/uptime)
+
+# One integer: the uptime of the last reload. Parsed rather than sourced - it
+# is a file in a world-writable directory. A value above now is from before a
+# reboot, which already cleared everything.
+last=0
+if [ -r "$STATE" ]; then
+  _l=$(sed -n 1p "$STATE")
+  case "$_l" in ''|*[!0-9]*) ;; *) last=$_l ;; esac
+  [ "$last" -gt "$now" ] && last=0
+fi
+
+# Count only lines newer than both the window and the last reload, so lines
+# from before a reload never count towards the next one.
+since=$((now - WINDOW))
+[ "$last" -gt "$since" ] && since=$last
+
+set -- $(logread | awk -v s="$since" '
+  /sta not found/ && match($0, /\[ *[0-9]+\.[0-9]+\]/) {
+    t = substr($0, RSTART + 1, RLENGTH - 2) + 0
+    if (t > s) {
+      n++
+      if (match($0, /,BN[0-9]+,/)) b[substr($0, RSTART + 1, RLENGTH - 2)] = 1
+    }
+  }
+  END { l = ""; for (k in b) l = l (l == "" ? "" : ",") k; print n + 0, (l == "" ? "-" : l) }')
+count=$1; bands=$2
+
+[ "$count" -gt "$THRESHOLD" ] || exit 0
+
+# Reloaded within the hour and it is back already: reloading every hour would
+# not be a fix. Stay quiet and let the wifi-sta-table-stale alert say so.
+if [ "$last" -ne 0 ] && [ $((now - last)) -lt "$COOLDOWN" ]; then
+  exit 0
+fi
+
+warn "forcing wifi reload: $count 'sta not found' in ${WINDOW}s on $bands"
+wifi reload || warn "wifi reload failed"
+printf '%s\n' "$now" > "$STATE"
+exit 0

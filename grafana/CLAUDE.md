@@ -125,7 +125,7 @@ treats NoData as alerting**, deliberately — a host publishing nothing cannot b
 called patched — so this group must not be provisioned until every host in
 `apt/` has been deployed, or it fires once per host that is still missing.
 
-Forty-nine rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+Fifty rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so
@@ -178,11 +178,12 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
    ignore all of them. Fix the exporter or delete the job; do not "fix" it by
    widening the rule.
 
-11. **Two rules query Loki rather than a metric, because the router cannot
+11. **Three rules query Loki rather than a metric, because the router cannot
     publish one.** It has no node-exporter and so no textfile collector, so a
     fault or a script that lives only on the router has nothing to export to
     and its log line is the only evidence. `wan-watchdog-acting` is the second
-    (`wan-watchdog/CLAUDE.md`); the first is this one.
+    (`wan-watchdog/CLAUDE.md`) and `wifi-watchdog-acting` the third
+    (`wifi-watchdog/CLAUDE.md`); the first is this one.
 
     **`wifi-sta-table-stale` queries Loki because the fault it watches has no
     metric at all.** The mt7990 driver leaks station entries on
@@ -204,6 +205,9 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
     for 9.5 hours and cost an evening of unusable Wi-Fi; the lab had no signal
     for it at all. `wifi reload` on the router clears it without taking the WAN
     and the ONT down, which a reboot does.
+    Since 3 November 2026 `wifi-watchdog/` runs that reload itself when the
+    same threshold is crossed, at most once an hour, so this rule firing means
+    the reload did not hold or the watchdog is not running.
 
 ### Delivery: Home Assistant, then the phone
 

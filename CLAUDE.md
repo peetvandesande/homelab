@@ -58,6 +58,10 @@ than fought.
   the router's own view says so, because the SFP port never loses carrier, so
   `wan-watchdog/` probes out of the WAN device and runs `ifup` when it is up
   but dead. `router/ORANGE.md`, "A dead session behind a live interface".
+- **A second watchdog clears stale Wi-Fi station entries.** The mt7990 driver
+  leaks one on an MLO teardown, leaving a client associated but carrying no
+  traffic; `wifi-watchdog/` spots the driver's `sta not found` lines and runs
+  `wifi reload`, at most once an hour.
 - **Orange holds upstream data tagged PCP 6 to ~5 Mbit/s.** The WAN map tags
   everything the router's CPU sends PCP 6 (DHCP needs it), which until
   2 November 2026 capped both WireGuard tunnels' uploads at ~4 Mbit/s and gave
