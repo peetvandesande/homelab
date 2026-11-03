@@ -82,7 +82,7 @@ for obj in $(ubus list 'hostapd.*' | grep -v '^hostapd\.global$'); do
   second=$(stale_on "$ifc")
   for mac in $first; do
     echo "$second" | grep -qx "$mac" || continue
-    warn "forcing deauth of $mac on $ifc: listed by hostapd, unknown to the driver ($count 'sta not found' in ${WINDOW}s)"
+    warn "forcing deauth of $mac on $ifc: listed by hostapd, unknown to the driver ($count driver misses in ${WINDOW}s)"
     ubus call "hostapd.$ifc" del_client \
       "{\"addr\":\"$mac\",\"reason\":1,\"deauth\":true,\"ban_time\":0}" >/dev/null \
       || warn "del_client $mac on $ifc failed"
@@ -93,6 +93,6 @@ rm -f /tmp/wifi-watchdog.h /tmp/wifi-watchdog.d
 
 # Lines but no stale address: the log is not what it seemed. Say so once per
 # cooldown rather than every minute, and leave the alert to report it.
-[ "$acted" -eq 1 ] || warn "$count 'sta not found' in ${WINDOW}s but no stale station found - nothing done"
+[ "$acted" -eq 1 ] || warn "$count driver misses in ${WINDOW}s but no stale station found - nothing done"
 printf '%s\n' "$now" > "$STATE"
 exit 0

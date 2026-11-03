@@ -63,7 +63,11 @@ Every minute, from cron:
 
 5. **One run at a time, via `flock -n`.**
 
-6. **It depends on `router-metrics` polling.** With nothing asking the driver
+6. **Its own log lines never contain `sta not found`.** `wifi-sta-table-stale`
+   counts that phrase across the router's whole log, so a watchdog repeating it
+   would feed the alert it exists to quiet. They say "driver misses" instead.
+
+7. **It depends on `router-metrics` polling.** With nothing asking the driver
    for its station list, a leak logs nothing and the watchdog never sees it.
    `verify.sh` checks lenora's `homelab-router-metrics.timer` for that reason.
 
