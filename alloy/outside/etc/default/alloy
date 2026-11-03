@@ -1,0 +1,8 @@
+# Read by alloy.service on ruby and jennie. Managed from homelab/alloy/outside.
+#
+# CONFIG_FILE is the directory, so Alloy loads every *.alloy in it. The listen
+# address is left at the package default, 127.0.0.1:12345: these servers have
+# no lab certificate to serve it over TLS, and nothing needs to scrape it.
+CONFIG_FILE="/etc/alloy"
+CUSTOM_ARGS="--disable-reporting"
+RESTART_ON_UPGRADE=true

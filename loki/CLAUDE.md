@@ -39,7 +39,7 @@ the certificate and Loki will not start without it.
 ## Shippers
 
 Every enrolled host runs Grafana Alloy (`alloy/`) and pushes its journal here
-over TLS. So does ruby, over wg1 (`alloy/CLAUDE.md`, "ruby").
+over TLS. So do ruby and jennie, over the tunnels (`alloy/CLAUDE.md`, "ruby and jennie").
 `limits_config.reject_old_samples_max_age` (168h) and Alloy's
 `max_age` (166h) are a pair — change one, change the other.
 

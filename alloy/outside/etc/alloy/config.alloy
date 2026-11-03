@@ -1,11 +1,11 @@
-// Grafana Alloy on ruby: ship ruby's journal to Loki at home over wg1.
-// Managed from homelab/alloy/ruby - edit there, not on ruby; installed by
-// alloy/scripts/install-ruby.sh.
+// Grafana Alloy on @@HOST@@: ship the journal to Loki at home over the
+// tunnel. Managed from homelab/alloy/outside - edit there, not here; installed
+// by alloy/scripts/install-outside.sh, which fills in the host.
 //
-// ruby holds no lab certificate, so unlike the lab hosts Alloy's own HTTP
-// server is not TLS: it stays on the package default, 127.0.0.1:12345, and
-// nothing scrapes it. Whether ruby is shipping is asked of Loki instead
-// (the ruby-logs-quiet alert in grafana/).
+// This server holds no lab certificate, so Alloy's own HTTP server is not
+// TLS: it stays on the package default, 127.0.0.1:12345, and nothing scrapes
+// it. Whether it is shipping is asked of Loki instead (the @@HOST@@-logs-quiet
+// alert in grafana/).
 
 logging {
   level  = "warn"
@@ -17,8 +17,8 @@ logging {
 // the first run backfills a week without the oldest batch being rejected.
 loki.source.journal "host" {
   max_age       = "166h"
-  // Not constants.hostname: the OVH image named the machine vps-5ca50660.
-  labels        = { host = "ruby" }
+  // Not constants.hostname: OVH's images name the machines vps-<hex>.
+  labels        = { host = "@@HOST@@" }
   relabel_rules = loki.relabel.journal.rules
   forward_to    = [loki.write.loki.receiver]
 }
@@ -59,7 +59,7 @@ loki.relabel "journal" {
   }
 }
 
-// loki.home resolves on ruby through the tunnel's BIND and routes over wg1.
+// loki.home resolves through home's DNS and routes over the tunnel to home.
 // Verified against the lab root only, never the system store, and by name
 // against the DNS SAN on Loki's certificate.
 loki.write "loki" {

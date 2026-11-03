@@ -114,7 +114,7 @@ RULE_UIDS=(
   ha-vm-agent-down ha-vm-disk-low ha-vm-down ha-vm-memory-low ha-vm-metrics-stale
   # outside.yaml
   outside-cert-expiring outside-probe-failing outside-vantage-down
-  ruby-logs-quiet
+  jennie-logs-quiet ruby-logs-quiet
   # probes.yaml
   dns-resolution-failing internet-unreachable lab-cert-expiring lab-tls-failing
   tunnel-down

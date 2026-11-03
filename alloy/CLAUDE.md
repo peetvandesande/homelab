@@ -61,25 +61,27 @@ push both need the certificate material. Loki must be up, or deploy refuses.
    A fresh host backfills up to a week; anything older is rejected with a 400
    that Alloy does not retry. Keep the two in step if either changes.
 
-## ruby
+## ruby and jennie
 
-ruby ships its journal here too, over wg1, so its mail logs can be searched
-as `{host="ruby"}` – e.g. `{host="ruby", identifier="postfix/lmtp"} |=
-"orig_to=<jobs@n8n.sogode.com>"`. It is not part of the fleet, and differs
-from it in three ways:
+The two OVH servers ship their journals here too, ruby over wg1 and jennie
+over wg3, as `{host="ruby"}` and `{host="jennie"}` – e.g. ruby's mail with
+`{host="ruby", identifier="postfix/lmtp"} |= "orig_to=<jobs@n8n.sogode.com>"`.
+They are not part of the fleet, and differ from it in three ways:
 
-- **Its own files, in `ruby/`**, installed from ruby's clone with
-  `sudo alloy/scripts/install-ruby.sh`. The fleet `config.alloy` cannot go
-  there: ruby holds no lab certificate, so its listener stays plain on
-  loopback and the push trusts a copy of the lab root in `/etc/alloy`.
-- **`host="ruby"` is set in the config**, not read from the hostname, which
-  OVH's image left as `vps-5ca50660`.
+- **Their own files, in `outside/`**, installed from each server's clone with
+  `sudo alloy/scripts/install-outside.sh`, which tells the two apart by
+  dummy0's address. The fleet `config.alloy` cannot go there: neither holds a
+  lab certificate, so the listener stays plain on loopback and the push trusts
+  a copy of the lab root in `/etc/alloy`.
+- **`host` is set in the config** (`@@HOST@@`, filled by the installer), not
+  read from the hostname, which OVH's images leave as `vps-<hex>`.
 - **Not scraped.** Nothing at home can reach a loopback listener, so the
-  `alloy` target-down rule cannot see ruby. `ruby-logs-quiet` in
-  `grafana/.../alerting/outside.yaml` asks Loki instead, and `verify.sh`
-  checks the same.
+  `alloy` target-down rule cannot see them. `ruby-logs-quiet` and
+  `jennie-logs-quiet` in `grafana/.../alerting/outside.yaml` ask Loki instead,
+  one rule each so a server that never ships is NoData and alerts, and
+  `verify.sh` checks the same.
 
-The package pin is duplicated in `install-ruby.sh`; bump both together.
+The package pin is duplicated in `install-outside.sh`; bump both together.
 
 ## Gotcha
 
