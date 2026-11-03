@@ -186,7 +186,9 @@ groups:
             datasourceUid: "@@PROM_DS_UID@@"
             model:
               editorMode: code
-              expr: 'max by (instance) (max_over_time(probe_success{job="blackbox",kind="tls"}[15m]))'
+              # hermes is excluded: it is switched off whenever no Proxmox lab
+              # is running, so its listeners being unreachable is normal.
+              expr: 'max by (instance) (max_over_time(probe_success{job="blackbox",kind="tls",instance!~"192\\.168\\.8\\.57:.*|hermes\\.home:.*"}[15m]))'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200

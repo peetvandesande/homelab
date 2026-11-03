@@ -648,6 +648,8 @@ groups:
           summary: "{{ $labels.role }} ({{ $labels.instance }}) is not responding"
           description: >-
             node-exporter is unreachable. Either the host is down or its certificate expired - :9100 is TLS everywhere, so a renewal failure looks identical to a dead host.
+        # hermes is excluded: it is switched off whenever no Proxmox lab is
+        # running, so down is its normal state (hermes/CLAUDE.md).
         noDataState: Alerting
         execErrState: Alerting
         isPaused: false
@@ -659,7 +661,7 @@ groups:
             datasourceUid: "@@PROM_DS_UID@@"
             model:
               editorMode: code
-              expr: 'up{job="node"}'
+              expr: 'up{job="node", instance!="hermes.home:9100"}'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -709,7 +711,9 @@ groups:
             datasourceUid: "@@PROM_DS_UID@@"
             model:
               editorMode: code
-              expr: 'up{job=~"alloy|loki|docker|traefik|jellyfin|navidrome|forgejo|n8n|n8n-sogode|prometheus|blackbox"}'
+              # hermes is excluded: it is switched off whenever no Proxmox lab
+              # is running, so its Alloy being unreachable is normal.
+              expr: 'up{job=~"alloy|loki|docker|traefik|jellyfin|navidrome|forgejo|n8n|n8n-sogode|prometheus|blackbox", instance!~"hermes\\.home:.*"}'
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -748,7 +752,9 @@ groups:
           summary: "mailcow {{ $labels.service }} is down or unhealthy"
           description: >-
             Published by homelab-mailcow-textfile on hermes, from docker ps. mailcow's own watchdog restarts what it can; this is for what it could not. ClamAV, Olefy and FTS are skipped but their containers still run idle, so they count too.
-        noDataState: NoData
+        # mailcow runs only on hermes, which is off whenever no lab is running,
+        # so no data is the normal state.
+        noDataState: OK
         execErrState: Alerting
         isPaused: false
         data:

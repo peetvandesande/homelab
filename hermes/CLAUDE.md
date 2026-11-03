@@ -8,6 +8,10 @@ in SOGo at **`https://hermes.home/SOGo/`**. The admin UI is
 It never talks to the internet as a mail server. Labs hand it mail; it keeps
 mail for the domains it hosts and bounces the rest.
 
+**It is off unless a lab is running**, by choice, though `onboot` is still 1.
+Start it with `qm start 109` on lenora before a lab; a stopped hermes is
+normal, not an incident.
+
 ## Working on this
 
 `root/` mirrors the VM filesystem and is the source of truth for what this repo
@@ -118,6 +122,12 @@ so `homelab-mailcow-textfile` publishes `mailcow_container_up{service=...}`
 every minute through the textfile collector, and the `mailcow-container-down`
 rule in `grafana/` watches it. The engine logs to journald, so every
 container's output is in Loki under `{host="hermes"}` with a `container` label.
+
+Because it is usually off, **nothing alerts on hermes being down**: it is
+excluded from `host-down`, `service-target-down` and `lab-tls-failing`, and `mailcow-container-down`
+treats no data as OK. While it runs, a failed mailcow container still alerts.
+`alloy/scripts/verify.sh` and the fleet checks still report it, so expect them
+to fail on hermes while it is off.
 
 ## Updating mailcow
 
