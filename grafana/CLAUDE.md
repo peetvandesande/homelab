@@ -203,11 +203,11 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
 
     This was written after 21 October 2026, when a leak at 12:20 went unnoticed
     for 9.5 hours and cost an evening of unusable Wi-Fi; the lab had no signal
-    for it at all. `wifi reload` on the router clears it without taking the WAN
-    and the ONT down, which a reboot does.
-    Since 3 November 2026 `wifi-watchdog/` runs that reload itself when the
-    same threshold is crossed, at most once an hour, so this rule firing means
-    the reload did not hold or the watchdog is not running.
+    for it at all. Since 3 November 2026 `wifi-watchdog/` clears it itself when
+    the same threshold is crossed, by deauthing just the stale address through
+    hostapd, so this rule firing means that did not hold or the watchdog is not
+    running. `wifi reload` does **not** clear it – it was believed to until it
+    was tried that day.
 
 ### Delivery: Home Assistant, then the phone
 

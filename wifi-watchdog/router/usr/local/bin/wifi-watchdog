@@ -1,29 +1,31 @@
 #!/bin/sh
-# wifi-watchdog - run `wifi reload` when a radio's station table goes stale.
+# wifi-watchdog - remove stale stations from hostapd's client table.
 #
-# The failure this exists for: the mt7990 driver leaks a station entry on an
-# MLO teardown, so hostapd keeps listing a client the driver has no record of.
-# That client's link is half-registered and may carry no traffic while still
-# looking associated. The only evidence is the driver's "sta not found" line,
-# logged once per stale entry each time something asks for the station list -
-# router-metrics does, once a minute. `wifi reload` clears it without taking
-# the WAN or the ONT down, which a reboot does. See homelab/wifi-watchdog.
+# The failure this exists for: the mt7990 driver drops a station on an MLO
+# teardown without hostapd hearing of it, so hostapd keeps listing a client the
+# driver has no record of. That client is half-registered and may carry no
+# traffic while still looking associated. The driver logs "sta not found" once
+# per stale entry each time something asks for the station list -
+# router-metrics does, once a minute. See homelab/wifi-watchdog.
 #
-# Read-only until it acts, and the only thing it ever does is `wifi reload`.
-# State lives in /tmp: a reboot clears the table, and the cooldown with it.
+# The fix is a deauth of that one address through hostapd, which removes the
+# entry and lets the client associate afresh. Nobody else is touched.
+# `wifi reload` does not help: on this firmware it reapplies config and leaves
+# hostapd's table alone (tried 3 November 2026).
+#
+# Read-only until it acts. State lives in /tmp; a reboot clears the table too.
 set -u
 
 WINDOW=600        # seconds of log to count
 THRESHOLD=5       # more than this many lines in WINDOW is a leak; healthy is 0
-COOLDOWN=3600     # never reload more than once an hour
+COOLDOWN=900      # at least this long between actions, so it can never loop
 
 STATE=/tmp/wifi-watchdog.state
 LOCK=/tmp/wifi-watchdog.lock
 
 warn() { logger -t wifi-watchdog -p daemon.warn "$1"; }
 
-# One run at a time: a reload takes long enough for the next cron tick to land
-# on it. flock -n exits without running anything if the lock is held.
+# One run at a time, so a slow sweep and the next cron tick cannot overlap.
 if [ "${WIFI_WATCHDOG_LOCKED:-}" != 1 ]; then
   export WIFI_WATCHDOG_LOCKED=1
   exec flock -n "$LOCK" "$0" "$@"
@@ -33,9 +35,8 @@ fi
 # needs no date parsing, and it cannot jump when NTP corrects the clock.
 now=$(cut -d. -f1 /proc/uptime)
 
-# One integer: the uptime of the last reload. Parsed rather than sourced - it
-# is a file in a world-writable directory. A value above now is from before a
-# reboot, which already cleared everything.
+# One integer: the uptime of the last action. Parsed rather than sourced - it
+# is a file in a world-writable directory. A value above now predates a reboot.
 last=0
 if [ -r "$STATE" ]; then
   _l=$(sed -n 1p "$STATE")
@@ -43,31 +44,55 @@ if [ -r "$STATE" ]; then
   [ "$last" -gt "$now" ] && last=0
 fi
 
-# Count only lines newer than both the window and the last reload, so lines
-# from before a reload never count towards the next one.
+[ "$last" -ne 0 ] && [ $((now - last)) -lt "$COOLDOWN" ] && exit 0
+
+# Count only lines newer than both the window and the last action, so the
+# lines that caused one action never count towards the next.
 since=$((now - WINDOW))
 [ "$last" -gt "$since" ] && since=$last
 
-set -- $(logread | awk -v s="$since" '
+count=$(logread | awk -v s="$since" '
   /sta not found/ && match($0, /\[ *[0-9]+\.[0-9]+\]/) {
-    t = substr($0, RSTART + 1, RLENGTH - 2) + 0
-    if (t > s) {
-      n++
-      if (match($0, /,BN[0-9]+,/)) b[substr($0, RSTART + 1, RLENGTH - 2)] = 1
-    }
+    if (substr($0, RSTART + 1, RLENGTH - 2) + 0 > s) n++
   }
-  END { l = ""; for (k in b) l = l (l == "" ? "" : ",") k; print n + 0, (l == "" ? "-" : l) }')
-count=$1; bands=$2
-
+  END { print n + 0 }')
 [ "$count" -gt "$THRESHOLD" ] || exit 0
 
-# Reloaded within the hour and it is back already: reloading every hour would
-# not be a fix. Stay quiet and let the wifi-sta-table-stale alert say so.
-if [ "$last" -ne 0 ] && [ $((now - last)) -lt "$COOLDOWN" ]; then
-  exit 0
-fi
+# Addresses hostapd lists on an interface that the driver does not.
+stale_on() {
+  ubus call "hostapd.$1" get_clients 2>/dev/null \
+    | jsonfilter -e '@.clients' | grep -oE '"[0-9a-f:]{17}"' | tr -d '"' | sort > /tmp/wifi-watchdog.h
+  iw dev "$1" station dump 2>/dev/null | awk '/^Station/ { print $2 }' | sort > /tmp/wifi-watchdog.d
+  # An empty driver list means iw failed or the radio is mid-restart, not that
+  # every client is stale - never deauth a whole interface on that.
+  [ -s /tmp/wifi-watchdog.d ] || return 0
+  # No comm(1) on the router's busybox.
+  grep -vxF -f /tmp/wifi-watchdog.d /tmp/wifi-watchdog.h
+}
 
-warn "forcing wifi reload: $count 'sta not found' in ${WINDOW}s on $bands"
-wifi reload || warn "wifi reload failed"
+# Two looks a few seconds apart, and only an address stale in both is acted
+# on: a client caught mid-association could otherwise be in one list and not
+# yet the other.
+acted=0
+for obj in $(ubus list 'hostapd.*' | grep -v '^hostapd\.global$'); do
+  ifc=${obj#hostapd.}
+  first=$(stale_on "$ifc")
+  [ -n "$first" ] || continue
+  sleep 3
+  second=$(stale_on "$ifc")
+  for mac in $first; do
+    echo "$second" | grep -qx "$mac" || continue
+    warn "forcing deauth of $mac on $ifc: listed by hostapd, unknown to the driver ($count 'sta not found' in ${WINDOW}s)"
+    ubus call "hostapd.$ifc" del_client \
+      "{\"addr\":\"$mac\",\"reason\":1,\"deauth\":true,\"ban_time\":0}" >/dev/null \
+      || warn "del_client $mac on $ifc failed"
+    acted=1
+  done
+done
+rm -f /tmp/wifi-watchdog.h /tmp/wifi-watchdog.d
+
+# Lines but no stale address: the log is not what it seemed. Say so once per
+# cooldown rather than every minute, and leave the alert to report it.
+[ "$acted" -eq 1 ] || warn "$count 'sta not found' in ${WINDOW}s but no stale station found - nothing done"
 printf '%s\n' "$now" > "$STATE"
 exit 0

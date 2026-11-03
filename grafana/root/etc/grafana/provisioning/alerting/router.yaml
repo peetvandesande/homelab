@@ -329,7 +329,7 @@ groups:
         annotations:
           summary: "A radio's station table holds entries the driver cannot find"
           description: >-
-            hostapd lists a station the mt7990 driver has no record of, so that client's link is half-registered and may pass no traffic while still looking associated. One leaked entry is about 1 error per minute, since router-metrics polls get_clients once a minute and each stale entry fails once per poll; the band is the BN index in the line, BN1 being 5GHz. It leaks on an MLO teardown - look for 'INVALID setup_link_id' around the onset. wifi-watchdog on the router should already have run `wifi reload` (wifi-watchdog-acting says so), which restarts the radios without taking the WAN and the ONT down. It reloads at most once an hour, so this firing means the leak came straight back, or the watchdog is not running - `logread | grep wifi-watchdog`, then wifi-watchdog/scripts/verify.sh. Run `wifi reload` by hand to clear it now; a reboot also works but costs the line. Caused an evening of unusable Wi-Fi on 21 October 2026, undetected for 9.5 hours.
+            hostapd lists a station the mt7990 driver has no record of, so that client's link is half-registered and may pass no traffic while still looking associated. One leaked entry is about 1 error per minute, since router-metrics polls get_clients once a minute and each stale entry fails once per poll; the band is the BN index in the line, BN1 being 5GHz. It leaks on an MLO teardown - look for 'INVALID setup_link_id' around the onset. wifi-watchdog on the router should already have deauthed the stale address through hostapd (wifi-watchdog-acting says so), so this firing means it found nothing to remove, the leak keeps coming back, or the watchdog is not running - `logread | grep wifi-watchdog`, then wifi-watchdog/scripts/verify.sh. By hand: compare `ubus call hostapd.<if> get_clients` with `iw dev <if> station dump` and `ubus call hostapd.<if> del_client '{"addr":"<mac>","reason":1,"deauth":true,"ban_time":0}'` for each address only hostapd lists. `wifi reload` does not clear it; a reboot does but costs the line. Caused an evening of unusable Wi-Fi on 21 October 2026, undetected for 9.5 hours.
         noDataState: OK
         execErrState: OK
         isPaused: false
@@ -548,15 +548,15 @@ groups:
       # wifi-watchdog acting, from its log line - the router has no metric to
       # publish. A fixed leak still tells you it happened.
       - uid: wifi-watchdog-acting
-        title: "Wi-Fi watchdog reloaded the radios"
+        title: "Wi-Fi watchdog removed a stale station"
         condition: B
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "wifi-watchdog found a stale station table and ran wifi reload"
+          summary: "wifi-watchdog removed a station hostapd listed but the driver did not"
           description: >-
-            The watchdog on the router counted more than 5 'sta not found' lines in 10 minutes - the mt7990 driver leaking a station entry on an MLO teardown - and ran `wifi reload`, which drops every Wi-Fi client for a few seconds and clears it. Once is the leak being repaired automatically. It reloads at most once an hour, so if the leak comes straight back, wifi-sta-table-stale fires instead and the radios need a look by hand. `logread | grep wifi-watchdog` on the router has the sequence.
+            The watchdog on the router counted more than 5 'sta not found' lines in 10 minutes - the mt7990 driver dropping a station on an MLO teardown without hostapd hearing of it - and deauthed that one address through hostapd, so the client associates afresh. Nobody else is affected. Once is the leak being repaired automatically; often means the radio keeps leaking. `logread | grep wifi-watchdog` on the router names the address and interface.
         noDataState: OK
         execErrState: OK
         isPaused: false

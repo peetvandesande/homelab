@@ -2,7 +2,7 @@
 # Is the Wi-Fi watchdog installed and triggered, and does it reach Loki? It is
 # silent while the radios are healthy, so these check the mechanism, not the
 # outcome. Nothing here runs the real script: with a leak present it would
-# reload the radios.
+# deauth a client.
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh

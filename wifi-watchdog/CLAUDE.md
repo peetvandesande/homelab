@@ -1,12 +1,12 @@
 # wifi-watchdog
 
-A watchdog on the router (192.168.8.1) that runs `wifi reload` when a radio's
-station table goes stale. The mt7990 driver leaks a station entry on an MLO
-teardown: hostapd keeps listing a client the driver has no record of, so that
-client is associated but may carry no traffic. `wifi reload` clears it without
-taking the WAN and the ONT down, which a reboot does. On 21 October 2026 one
-leak cost an evening of unusable Wi-Fi; `wifi-sta-table-stale` in `grafana/`
-was written after it, and this automates the fix that alert asked for.
+A watchdog on the router (192.168.8.1) that removes stale stations from
+hostapd's client table. The mt7990 driver drops a station on an MLO teardown
+without hostapd hearing of it, so hostapd keeps listing a client the driver
+has no record of, and that client is associated but may carry no traffic. On
+21 October 2026 one leak cost an evening of unusable Wi-Fi;
+`wifi-sta-table-stale` in `grafana/` was written after it, and this clears
+what that alert reports.
 
 ```
 router/usr/local/bin/wifi-watchdog   the watchdog itself
@@ -27,50 +27,66 @@ Every minute, from cron:
    10 lines per 10 minutes and a healthy radio is 0.
 2. **More than 5 is a leak**, the same threshold as `wifi-sta-table-stale`.
    That rule waits 15 minutes before firing, so the watchdog acts first and the
-   alert only fires if the reload did not hold.
-3. **Then `wifi reload`**, logged at warn as `forcing wifi reload: <n> 'sta not
-   found' in 600s on <bands>`. Every Wi-Fi client drops for a few seconds.
-4. **At most once an hour.** A leak that comes straight back is not fixed by
-   reloading on a timer, so the watchdog stays quiet and the alert says so.
+   alert fires only if it did not hold.
+3. **Find the stale addresses**: on each `hostapd.*` interface, the clients
+   `ubus call hostapd.<if> get_clients` lists and `iw dev <if> station dump`
+   does not. Looked at twice, 3 seconds apart; only an address stale both
+   times counts.
+4. **Deauth each one through hostapd** (`del_client`, reason 1, no ban), logged
+   at warn as `forcing deauth of <mac> on <if>`. hostapd drops the entry after
+   its 5-second deauth delay and the client associates afresh. Nobody else is
+   touched.
+5. **Then wait 15 minutes** before acting again, so it can never loop.
 
 ## Invariants
 
-1. **The window is in uptime, not wall-clock.** Each kernel line carries the
-   uptime in brackets, which `/proc/uptime` compares against directly: no date
-   parsing, and an NTP step cannot shift the window.
+1. **`wifi reload` does not fix this, and must not come back as the remedy.**
+   On this firmware it is GL/MediaTek's Lua `/sbin/wifi`, which reapplies
+   config and leaves hostapd's table alone. The first version of this
+   watchdog ran it on 3 November 2026; the stale entry outlived it and
+   `sta not found` carried on every minute. The deauth cleared it at once.
 
-2. **Lines from before the last reload never count.** The window starts at the
-   later of 10 minutes ago and the last reload, so the lines that caused one
-   reload cannot cause the next.
+2. **An empty driver list is skipped, never treated as "all stale".** If `iw`
+   fails or a radio is mid-restart, the station dump is empty and every
+   hostapd client would look stale. `stale_on` returns nothing then. This
+   matters more than it looks: busybox's `grep -vxF -f` with an empty pattern
+   file prints nothing, which hides the case rather than handling it.
 
-3. **State is one integer in `/tmp`, parsed, not sourced** – the uptime of the
-   last reload. A reboot clears it, which is right: a reboot also clears the
-   table. A value above the current uptime is from before a reboot and is
-   ignored.
+3. **The window is in uptime, not wall-clock.** Each kernel line carries the
+   uptime in brackets, which compares directly against `/proc/uptime`: no
+   date parsing, and an NTP step cannot shift the window. Lines from before
+   the last action never count.
 
-4. **One run at a time, via `flock -n`**, so a slow reload and the next cron
-   tick cannot overlap.
+4. **State is one integer in `/tmp`, parsed, not sourced** – the uptime of the
+   last action. A reboot clears it, and clears the table too. A value above
+   the current uptime is from before a reboot and is ignored.
 
-5. **It depends on `router-metrics` polling.** With nothing asking the driver
+5. **One run at a time, via `flock -n`.**
+
+6. **It depends on `router-metrics` polling.** With nothing asking the driver
    for its station list, a leak logs nothing and the watchdog never sees it.
    `verify.sh` checks lenora's `homelab-router-metrics.timer` for that reason.
 
 ## Seeing it act
 
 **`wifi-watchdog-acting`** in `grafana/` counts the `forcing` lines from
-`{host="router", identifier="wifi-watchdog"}`, so a reload that fixed the
-problem still tells you it happened. `verify.sh` sends a marker line and
-asserts it arrives in Loki under that label. It never runs the real script:
-with a leak present, that would reload the radios.
+`{host="router", identifier="wifi-watchdog"}`, so a repaired leak still tells
+you it happened. Lines with no stale address to remove log `nothing done`
+instead, at most once per cooldown, and the stale-table alert carries on.
+`verify.sh` sends a marker line and asserts it arrives in Loki under that
+label. It never runs the real script.
 
 ## Testing it
 
-Run a copy with the reload faked; it reports what it would do against the
-live log and leaves the radios alone:
+Run a copy with the deauth faked, the threshold at 0 and a made-up address
+added to `rai2`'s hostapd list. It should name that address and nothing else:
 
 ```sh
 sed -e 's#^STATE=.*#STATE=/tmp/wd-test.state#' -e 's#^LOCK=.*#LOCK=/tmp/wd-test.lock#' \
-    -e 's#^wifi reload .*#echo FAKE wifi reload#' -e 's#^warn() .*#warn() { echo "WARN: $1"; }#' \
+    -e 's#^THRESHOLD=.*#THRESHOLD=0#' \
+    -e 's#ubus call "hostapd.$ifc" del_client#echo FAKE del_client "$ifc"#' \
+    -e 's#^warn() .*#warn() { echo "WARN: $1"; }#' \
+    -e 's#| sort > /tmp/wifi-watchdog.h#| sort > /tmp/wifi-watchdog.h; [ "$1" = rai2 ] \&\& echo de:ad:be:ef:00:01 >> /tmp/wifi-watchdog.h#' \
     router/usr/local/bin/wifi-watchdog \
   | ssh root@gw 'cat > /tmp/wd-test && chmod +x /tmp/wd-test && /tmp/wd-test; rm -f /tmp/wd-test*'
 ```
