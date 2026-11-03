@@ -36,6 +36,13 @@ for ip in "${FLEET[@]}"; do
   else bad "$ip ($name) ships logs" "no lines with host=\"$name\" in the last hour"; fi
 done
 
+echo "== ruby has shipped lines in the last hour"
+# ruby is outside the lab: no certificate, not scraped, labelled by name in its
+# own config (ruby/etc/alloy/config.alloy). Loki is the only place to ask.
+n=$(awk '$1=="ruby" {print $2}' <<<"$hosts")
+if [[ -n "$n" && "$n" -gt 0 ]]; then pass "ruby shipped $n lines in the last hour"
+else bad "ruby ships logs" "no lines with host=\"ruby\" - sudo alloy/scripts/install-ruby.sh on ruby"; fi
+
 echo "== scraped by prometheus"
 read -r n down < <($CURL "https://192.168.8.53:9090/api/v1/targets" 2>/dev/null \
   | python3 -c '

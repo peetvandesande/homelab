@@ -113,6 +113,63 @@ groups:
                   evaluator:
                     type: lt
                     params: [1]
+      # ruby has no lab certificate, so its Alloy is not scraped and the
+      # target-down rule cannot see it stop. Ask Loki whether lines arrive
+      # instead - the documented exception to thresholding a gauge. A busy
+      # mail server logs every few seconds, so 30 minutes of silence is wrong.
+      - uid: ruby-logs-quiet
+        title: "ruby not shipping logs"
+        condition: B
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No lines from ruby in Loki for 30 minutes"
+          description: >-
+            Alloy on ruby ships its journal to Loki over wg1, and nothing has arrived. If the outside probes of ruby are failing too, ruby itself is down; if the tunnels are down, this follows from that. Otherwise check `systemctl status alloy` and `journalctl -u alloy` on ruby - an Alloy missing the systemd-journal group runs cleanly and ships nothing - then re-run `sudo alloy/scripts/install-ruby.sh` from ruby's clone. Lines are buffered by journal cursor, so nothing is lost once it resumes, up to a week.
+        noDataState: Alerting
+        execErrState: OK
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: "@@LOKI_DS_UID@@"
+            model:
+              datasource:
+                type: loki
+                uid: "@@LOKI_DS_UID@@"
+              editorMode: code
+              expr: 'sum(count_over_time({host="ruby"}[30m]))'
+              queryType: instant
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
       - uid: outside-cert-expiring
         title: "Public certificate expiring"
         condition: B

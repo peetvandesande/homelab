@@ -107,7 +107,8 @@ rules, provisioned from
 folder and read-only in the UI. Nineteen rules in two groups, `dns` and
 `fleet`, plus the heartbeat in `heartbeat.yaml` (see "Heartbeat" below) and
 the `outside` group in `outside.yaml`, which alerts on ruby and jennie probing
-each other's public side (`outside/CLAUDE.md`), and the `probes` group in
+each other's public side (`outside/CLAUDE.md`) and on ruby's logs reaching
+Loki (`alloy/CLAUDE.md`, "ruby"), and the `probes` group in
 `probes.yaml`, on the blackbox exporter at home: internet, tunnels, DNS end to
 end, and lab certificates. `homeassistant-vm.yaml` covers the Home Assistant
 VM's host metrics, collected by lenora over the guest agent
@@ -124,7 +125,7 @@ treats NoData as alerting**, deliberately — a host publishing nothing cannot b
 called patched — so this group must not be provisioned until every host in
 `apt/` has been deployed, or it fires once per host that is still missing.
 
-Forty-eight rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+Forty-nine rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so
