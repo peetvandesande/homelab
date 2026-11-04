@@ -110,6 +110,16 @@ services:
       N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
       # Idle runners exit and are relaunched on demand.
       N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: '15'
+      # Trust the lab CA in Code nodes. The launcher passes its runners only
+      # an allow-list of variables, which has NODE_OPTIONS but not
+      # NODE_EXTRA_CA_CERTS, so Node is told to add the system store to its
+      # bundled roots, and the lab root goes into that store below.
+      NODE_OPTIONS: --use-system-ca
+    volumes:
+      # moby's lab root (ca/scripts/enrol.sh), under its OpenSSL subject hash
+      # in Alpine's /etc/ssl/certs. The name is the root's hash: a new root
+      # needs a new name - openssl x509 -noout -subject_hash -in <root>.
+      - /etc/homelab-tls/root_ca.crt:/etc/ssl/certs/81e70d72.0:ro
 
   # Web search for Instance AI. Internal only.
   searxng:

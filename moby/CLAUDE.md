@@ -129,8 +129,11 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   over TLS: moby's `/etc/homelab-tls/root_ca.crt` is mounted read-only and
   named in `NODE_EXTRA_CA_CERTS`, which adds to Node's public roots. Not the
   image's `/opt/custom-certificates` hook – that sets `SSL_CERT_DIR` to the
-  mounted directory alone, dropping the public roots. Only the `n8n` service
-  has it; Code-node runners make their HTTP calls through n8n.
+  mounted directory alone, dropping the public roots. The `runners` service
+  trusts it differently: its launcher passes the runners only an allow-list
+  of variables, without `NODE_EXTRA_CA_CERTS`, so it gets
+  `NODE_OPTIONS=--use-system-ca` and the root mounted into Alpine's
+  `/etc/ssl/certs` under its subject hash – a new root needs a new name.
 - **Upgrades are a tag bump** in `compose.yaml` and a deploy. n8n migrates its
   database on start; read the release notes first.
 - **`/metrics`** goes through nginx, allowed to Prometheus by both its
