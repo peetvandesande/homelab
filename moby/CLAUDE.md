@@ -125,6 +125,12 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
   in the `runners` container (same tag as n8n – bump them together), which
   dials n8n's broker on 5679 inside the stack; SearXNG is Instance AI's web
   search, internal only, with `searxng-settings.yml` enabling its JSON API.
+- **n8n trusts the lab CA**, so HTTP Request nodes reach `.home` services
+  over TLS: moby's `/etc/homelab-tls/root_ca.crt` is mounted read-only and
+  named in `NODE_EXTRA_CA_CERTS`, which adds to Node's public roots. Not the
+  image's `/opt/custom-certificates` hook – that sets `SSL_CERT_DIR` to the
+  mounted directory alone, dropping the public roots. Only the `n8n` service
+  has it; Code-node runners make their HTTP calls through n8n.
 - **Upgrades are a tag bump** in `compose.yaml` and a deploy. n8n migrates its
   database on start; read the release notes first.
 - **`/metrics`** goes through nginx, allowed to Prometheus by both its

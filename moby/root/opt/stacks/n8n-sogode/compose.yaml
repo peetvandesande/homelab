@@ -178,10 +178,18 @@ services:
       N8N_INSTANCE_AI_SANDBOX_API_URL: http://sandbox-api:8080
       N8N_SANDBOX_SERVICE_URL: http://sandbox-api:8080
       N8N_SANDBOX_SERVICE_API_KEY: ${SANDBOX_API_KEY}
+      # Trust the lab CA as well as Node's bundled public ones, so HTTP
+      # Request nodes and credentials can reach .home services over TLS.
+      # Additive: NODE_EXTRA_CA_CERTS keeps the public roots, where the
+      # image's /opt/custom-certificates hook replaces them. Read at start,
+      # so a new root needs a restart of this container.
+      NODE_EXTRA_CA_CERTS: /etc/homelab-tls/root_ca.crt
       GENERIC_TIMEZONE: Europe/Paris
       TZ: Europe/Paris
     volumes:
       - data:/home/node/.n8n
+      # Installed on moby by ca/scripts/enrol.sh.
+      - /etc/homelab-tls/root_ca.crt:/etc/homelab-tls/root_ca.crt:ro
 
 volumes:
   db:
