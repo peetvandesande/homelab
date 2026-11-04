@@ -17,6 +17,10 @@ HOST=192.168.8.58
 OLLAMA_VERSION=0.12.0
 OLLAMA_SHA256=5c6ea489179d534e2f841956fb62af1c97376bde0b759eb109e4911b82c88301
 MODELS="bge-m3 qwen3:4b"
+# Pinned likewise: nvidia_gpu_exporter, the release tarball and its sha256
+# from the release's checksums.txt.
+GPU_EXPORTER_VERSION=1.15.1
+GPU_EXPORTER_SHA256=71aaae0e00b7fa4a115091973e87eadd332e477d4c6bbebaccc0133bc77df9f6
 
 if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
      "root@$HOST" true >/dev/null 2>&1; then
@@ -80,13 +84,32 @@ id ollama >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin -U -m -d /var/lib/o
 usermod -aG video,render ollama
 REMOTE
 
+echo "== nvidia_gpu_exporter $GPU_EXPORTER_VERSION"
+$SSH "root@$HOST" "V=$GPU_EXPORTER_VERSION SHA=$GPU_EXPORTER_SHA256 bash -s" <<'REMOTE'
+set -euo pipefail
+have=$(/usr/local/bin/nvidia_gpu_exporter --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+if [ "$have" != "$V" ]; then
+  t=$(mktemp -d)
+  curl -fsSL -o "$t/e.tgz" \
+    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v$V/nvidia_gpu_exporter_${V}_linux_x86_64.tar.gz"
+  echo "$SHA  $t/e.tgz" | sha256sum -c --quiet
+  tar -C "$t" -xzf "$t/e.tgz" nvidia_gpu_exporter
+  install -m 0755 "$t/nvidia_gpu_exporter" /usr/local/bin/nvidia_gpu_exporter
+  rm -rf "$t"
+fi
+REMOTE
+
 echo "== config"
 push "$HOST" root
 $SSH "root@$HOST" 'systemctl daemon-reload && nft -c -f /etc/nftables.conf && systemctl restart nftables && systemctl enable --now ollama && systemctl restart ollama'
+# The restart also picks up a new binary from the step above. Skipped by its
+# ConditionPathExists until the host is enrolled; re-run this script after
+# enrol.sh to start it.
+$SSH "root@$HOST" 'systemctl enable nvidia-gpu-exporter && systemctl restart nvidia-gpu-exporter'
 
 echo "== models"
 for m in $MODELS; do
   $SSH "root@$HOST" "ollama list | grep -q '^${m%%:*}' || ollama pull $m"
 done
 $SSH "root@$HOST" 'ollama list'
-echo "== done - next: ca/scripts/enrol.sh 192.168.8.58 metis, node-exporter, alloy, prometheus, then verify.sh"
+echo "== done - next (first run): ca/scripts/enrol.sh 192.168.8.58 metis, this script again, node-exporter, alloy, prometheus, then verify.sh"

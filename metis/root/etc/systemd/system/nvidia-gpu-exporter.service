@@ -1,0 +1,28 @@
+# nvidia_gpu_exporter (utkuozdemir), pinned and installed by
+# scripts/bootstrap.sh. It runs nvidia-smi on each scrape and serves the result
+# on :9835 over TLS, off this host's lab certificate.
+#
+# Until the host is enrolled there is no certificate, and the condition skips
+# the unit instead of letting it fail - a failed unit would fire
+# systemd-unit-failed. Re-run bootstrap.sh after ca/scripts/enrol.sh to start it.
+[Unit]
+Description=NVIDIA GPU exporter for Prometheus
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/homelab-tls/host.crt
+
+[Service]
+DynamicUser=yes
+# host.key is root:tlscert 0640. The /dev/nvidia* nodes are 0666, so the
+# dynamic user needs no device group.
+SupplementaryGroups=tlscert
+ExecStart=/usr/local/bin/nvidia_gpu_exporter --web.listen-address=:9835 --web.config.file=/etc/homelab-tls/nvidia-gpu-exporter-web.yml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

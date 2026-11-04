@@ -40,5 +40,9 @@ code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://$HOST:11434/api/tags"
 echo "== monitoring"
 https_ok "$HOST:9100" "https://$HOST:9100/metrics"
 https_ok "$HOST:12345" "https://$HOST:12345/-/ready"
+https_ok "$HOST:9835" "https://$HOST:9835/metrics"
+util=$(curl -sS -m 8 --cacert "$CA_ROOT" "https://$HOST:9835/metrics" 2>/dev/null \
+       | grep -c '^nvidia_smi_utilization_gpu_ratio{')
+[[ $util -ge 1 ]] && pass "the GPU exporter reports utilisation" || bad "the GPU exporter reports utilisation" "no nvidia_smi_utilization_gpu_ratio - journalctl -u nvidia-gpu-exporter"
 echo
 [[ $fail -eq 0 ]] && echo "all checks passed" || { echo "$fail check(s) failed"; exit 1; }

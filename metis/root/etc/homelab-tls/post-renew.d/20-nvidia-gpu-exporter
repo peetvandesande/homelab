@@ -1,0 +1,4 @@
+#!/bin/sh
+# Re-read the renewed certificate. The exporter has no reload signal for it,
+# so this is a restart - a scrape gap of under a second.
+exec systemctl try-restart nvidia-gpu-exporter

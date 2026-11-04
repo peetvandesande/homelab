@@ -370,6 +370,8 @@ must go out is routed via ruby with a mailcow transport map. See
 passed through and runs Ollama for the job search pipelines on moby. The card
 used to be uc1-worker-1's; it can be attached to one running VM at a time, so
 `gpu_worker` in `uc1-lab/terraform.tfvars` stays false while metis has it.
+Its utilisation, VRAM, temperature and power are in the `homelab-fleet`
+dashboard's "GPU (metis)" row, from `nvidia_gpu_exporter` on metis.
 See `metis/CLAUDE.md`.
 
 ## Monitoring

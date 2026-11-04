@@ -7,14 +7,14 @@ scorer. Built 28 October 2026.
 
 ```
 scripts/create-vm.sh   on lenora: create VM 110 from the Debian 13 cloud image, GPU attached
-scripts/bootstrap.sh   from the workstation: driver, Ollama (pinned), push root/, pull models
+scripts/bootstrap.sh   from the workstation: driver, Ollama and the GPU exporter (pinned), push root/, pull models
 scripts/verify.sh      GPU, Ollama, the embed path from n8n, exposure, monitoring
 ```
 
 From scratch: router reservation for `BC:24:11:6E:7A:19` → `gpu_worker = false`
 in `uc1-lab/terraform.tfvars` and `tofu apply` → `create-vm.sh` →
 `bootstrap.sh` → `dns/ansible` zones → `ca/scripts/enrol.sh 192.168.8.58 metis`
-→ `node-exporter/scripts/deploy.sh 192.168.8.58` →
+→ `bootstrap.sh` again, which starts the GPU exporter now there is a certificate → `node-exporter/scripts/deploy.sh 192.168.8.58` →
 `alloy/scripts/deploy.sh 192.168.8.58` → `prometheus/scripts/deploy.sh` →
 `verify.sh`.
 
@@ -55,3 +55,10 @@ is and makes the card a unit you can hand to one guest or another.
 7. **bge-m3 vectors are 1024-dim** and stored in each pipeline's pgvector
    column of that size. Changing the embedding model means re-embedding every
    job and the profile, not just pulling a new model.
+8. **GPU metrics come from `nvidia_gpu_exporter`** on :9835, over TLS off the
+   host certificate, scraped as the `nvidia-gpu` job and shown in the
+   `homelab-fleet` dashboard's "GPU (metis)" row. It runs `nvidia-smi` per
+   scrape, so it needs no CUDA or NVML library of its own. Pinned like Ollama
+   (`GPU_EXPORTER_VERSION` and `GPU_EXPORTER_SHA256` in `bootstrap.sh`). Its
+   unit carries `ConditionPathExists` on the certificate, so before enrolment
+   it is skipped rather than failed.
