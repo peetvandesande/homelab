@@ -193,37 +193,34 @@ stacks and whose profile, CV, prompts and workflow generator live in the
   on every deploy.
 - **The schema and n8n side are not deployed from here.**
   `sogode-jobsearch/ansible` loads `sql/schema.sql` into both databases and
-  builds each instance's credentials and workflows. The HMAC key that signs the
+  builds each instance's credentials and workflows; on every push, CI does
+  the schema and workflows by itself (through `jobsearch-ci`, below, and
+  the n8n API). The HMAC key that signs the
   links in the emails lives in each database's `settings` table: losing a
   volume invalidates every link already sent, nothing worse.
 - **Embeddings come from metis** (`../metis`, `ollama.home:11434`), allowed
   from moby's address only.
 
-## Forgejo Actions runner
+## CI's way in: jobsearch-ci
 
-`forgejo-runner` (v13.2.0, `/usr/local/bin`, systemd unit
-`forgejo-runner.service`, user `forgejo-runner`) runs **host jobs** for the
-label `moby`, one at a time. Built 5 November 2026 so the job search repos
-deploy on push (`sogode-jobsearch/ci/deploy.sh`).
+The Forgejo runner is on lexie (`../forgejo-runner/`); the one thing it can
+do here is load the job search schema. **`jobsearch-ci`** is a locked system
+account whose only key is that runner's, in `authorized_keys` as
+`restrict,from="192.168.8.24",command="/usr/local/sbin/jobsearch-schema"`:
+from lexie only, no pty or forwarding, and whatever command is asked for,
+`jobsearch-schema` runs instead. That script takes the instance
+(`sogode`|`personal`) from `SSH_ORIGINAL_COMMAND` and pipes stdin into that
+instance's database with `docker exec … psql`.
 
-- **Registered for peet's repositories only** (`--scope peet` in
-  `forgejo/scripts/deploy.sh`), never instance-wide: a job runs as
-  `forgejo-runner` *on this host* with the `docker` group, which is root
-  here. That access is the point – the deploy loads SQL with `docker exec`
-  and reaches n8n on `127.0.0.1:5678`/`:5680` – so who may run jobs is the
-  whole security boundary.
-- **The connection is in `config.yml`, not a `.runner` file**
-  (`create-runner-file` is deprecated in v13). The token is the shared
-  secret `RUNNER_MOBY_SECRET` from `homelab-private/forgejo/secrets.env`,
-  root-only in `/etc/forgejo-runner/token` and handed to the service by
-  `LoadCredential`; the UUID in the config is derived from it, the way
-  Forgejo derives it, by `deploy.sh`. Change the secret in that one file and
-  run forgejo's `deploy.sh`, then this one.
-- **Jobs' secrets live here, not in Forgejo.** `deploy.sh` writes
-  `/etc/forgejo-runner/jobsearch.env` (root:forgejo-runner 0640) from
-  `homelab-private/jobsearch/secrets.env`: both n8n API keys and the Forgejo
-  read token. A rotated key needs a moby `deploy.sh`.
-- `python3-yaml` is installed for the deploy, which reads `instance.yaml`.
+- **The account is in the docker group**, which is root-equivalent here,
+  because the command needs `docker exec` and there is no sudo. The forced
+  command is what stops that from being anything more: never authorise
+  another key for it, or loosen the `command=`.
+- `deploy.sh` reads the key from lexie, so run `forgejo-runner/scripts/deploy.sh`
+  first; without it the step is skipped with a message.
+- The runner itself ran here briefly on 5 November 2026 before moving to
+  lexie. `deploy.sh` removes its remains idempotently; `python3-yaml`,
+  installed for it, was left.
 
 ## Home Assistant is gone
 

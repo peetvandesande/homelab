@@ -1,0 +1,13 @@
+#!/bin/sh
+# The forced command of jobsearch-ci (moby/scripts/deploy.sh): the only thing
+# the Forgejo runner on lexie can do here. Loads the SQL on stdin - the job
+# search's sql/schema.sql, idempotent - into one instance's database.
+#
+#   ssh moby <sogode|personal> < sql/schema.sql      (from lexie's runner)
+set -eu
+inst=${SSH_ORIGINAL_COMMAND:-}
+case $inst in
+  sogode|personal) ;;
+  *) echo "usage: ssh moby <sogode|personal> < schema.sql" >&2; exit 2 ;;
+esac
+exec docker exec -i "jobsearch-$inst-jobsearch-db-1" psql -q -v ON_ERROR_STOP=1 -U jobsearch jobsearch

@@ -104,11 +104,14 @@ together, then `deploy.sh`. Not hermes: it delivers nothing outside the labs.
 ## Actions
 
 Forgejo Actions is on (Forgejo's default; `app.ini` says nothing). The one
-runner is on moby, host mode, label `moby`, registered by `deploy.sh` with
-`forgejo-cli actions register --scope peet` and the shared secret
-`RUNNER_MOBY_SECRET` from `homelab-private/forgejo/secrets.env`
-(`../moby/CLAUDE.md`, "Forgejo Actions runner", for why it is scoped).
-No other runner: a workflow in anyone else's repository just waits.
+runner is on lexie, host mode, label `lexie` (`../forgejo-runner/`),
+registered by `deploy.sh` with `forgejo-cli actions register --scope peet`
+and the shared secret `RUNNER_LEXIE_SECRET` from
+`homelab-private/forgejo/secrets.env`. Scoped to peet's repositories because
+a host-mode job holds whatever the runner account holds
+(`../forgejo-runner/CLAUDE.md`, invariant 1). No other runner: a workflow in
+anyone else's repository just waits. Re-registering with the same secret
+updates the runner in place, which is how it moved from moby to lexie.
 
 ## Not done
 

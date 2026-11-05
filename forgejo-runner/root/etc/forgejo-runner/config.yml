@@ -1,9 +1,10 @@
-# forgejo-runner on moby (moby/scripts/deploy.sh installs it). Host jobs
-# only, under the label `moby`: a job runs as the forgejo-runner user, directly
-# on this host, with docker group membership - root-equivalent here. That is
-# the point (the job search deploy loads SQL with `docker exec` and reaches
-# n8n on 127.0.0.1), and why the runner is registered for peet's repositories
-# only (forgejo/scripts/deploy.sh), not instance-wide.
+# forgejo-runner on lexie (forgejo-runner/scripts/deploy.sh installs it).
+# Host jobs only, under the label `lexie`: a job runs as the forgejo-runner
+# user, directly on lexie. That user has no group beyond its own and no key
+# but one: moby accepts it from lexie only and forces it to
+# /usr/local/sbin/jobsearch-schema (moby/scripts/deploy.sh). Its jobs'
+# secrets are in /etc/forgejo-runner/jobsearch.env. Registered for peet's
+# repositories only (forgejo/scripts/deploy.sh), not instance-wide.
 log:
   level: info
   job_level: info
@@ -14,7 +15,7 @@ runner:
   insecure: false
   fetch_timeout: 30s
   fetch_interval: 5s
-  labels: ["moby:host"]
+  labels: ["lexie:host"]
 cache:
   enabled: false
 host:

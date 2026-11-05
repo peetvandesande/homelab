@@ -216,7 +216,11 @@ Three things to be aware of:
   `fleet/masked-units`.) Its `postfix` listens on loopback only and was left.
 
   **Lexie also runs the alert responder**, a dedicated `responder` account that
-  investigates alerts read-only. `responder/CLAUDE.md`.
+  investigates alerts read-only. `responder/CLAUDE.md`. And the **Forgejo
+  Actions runner**, as its own `forgejo-runner` account: host jobs for peet's
+  repositories, whose only reach beyond lexie is a forced-command key on moby.
+  `forgejo-runner/CLAUDE.md`. Neither runs as `peet`, whose key the lab
+  accepts everywhere.
 - **`homeassistant` (VM 302) is at 192.168.8.90**, pooled into Production
   but outside its range, by choice. It is one of two VMs, with `hermes`:
   Home Assistant OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will
