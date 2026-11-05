@@ -1,0 +1,30 @@
+# forgejo-runner on moby (moby/scripts/deploy.sh installs it). Host jobs
+# only, under the label `moby`: a job runs as the forgejo-runner user, directly
+# on this host, with docker group membership - root-equivalent here. That is
+# the point (the job search deploy loads SQL with `docker exec` and reaches
+# n8n on 127.0.0.1), and why the runner is registered for peet's repositories
+# only (forgejo/scripts/deploy.sh), not instance-wide.
+log:
+  level: info
+  job_level: info
+runner:
+  capacity: 1            # one job at a time: two deploys never overlap
+  timeout: 30m
+  shutdown_timeout: 5m
+  insecure: false
+  fetch_timeout: 30s
+  fetch_interval: 5s
+  labels: ["moby:host"]
+cache:
+  enabled: false
+host:
+  workdir_parent: /var/lib/forgejo-runner/work
+server:
+  # The UUID is derived from the shared secret (the first 16 characters as
+  # bytes, as Forgejo does), so deploy.sh fills it in; the token itself is
+  # the secret, handed over by systemd (LoadCredential in the unit).
+  connections:
+    forgejo:
+      url: https://git.peetvandesande.com/
+      uuid: "@@RUNNER_UUID@@"
+      token_url: file:$CREDENTIALS_DIRECTORY/token

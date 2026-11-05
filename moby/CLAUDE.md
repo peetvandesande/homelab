@@ -199,6 +199,32 @@ stacks and whose profile, CV, prompts and workflow generator live in the
 - **Embeddings come from metis** (`../metis`, `ollama.home:11434`), allowed
   from moby's address only.
 
+## Forgejo Actions runner
+
+`forgejo-runner` (v13.2.0, `/usr/local/bin`, systemd unit
+`forgejo-runner.service`, user `forgejo-runner`) runs **host jobs** for the
+label `moby`, one at a time. Built 5 November 2026 so the job search repos
+deploy on push (`sogode-jobsearch/ci/deploy.sh`).
+
+- **Registered for peet's repositories only** (`--scope peet` in
+  `forgejo/scripts/deploy.sh`), never instance-wide: a job runs as
+  `forgejo-runner` *on this host* with the `docker` group, which is root
+  here. That access is the point – the deploy loads SQL with `docker exec`
+  and reaches n8n on `127.0.0.1:5678`/`:5680` – so who may run jobs is the
+  whole security boundary.
+- **The connection is in `config.yml`, not a `.runner` file**
+  (`create-runner-file` is deprecated in v13). The token is the shared
+  secret `RUNNER_MOBY_SECRET` from `homelab-private/forgejo/secrets.env`,
+  root-only in `/etc/forgejo-runner/token` and handed to the service by
+  `LoadCredential`; the UUID in the config is derived from it, the way
+  Forgejo derives it, by `deploy.sh`. Change the secret in that one file and
+  run forgejo's `deploy.sh`, then this one.
+- **Jobs' secrets live here, not in Forgejo.** `deploy.sh` writes
+  `/etc/forgejo-runner/jobsearch.env` (root:forgejo-runner 0640) from
+  `homelab-private/jobsearch/secrets.env`: both n8n API keys and the Forgejo
+  read token. A rotated key needs a moby `deploy.sh`.
+- `python3-yaml` is installed for the deploy, which reads `instance.yaml`.
+
 ## Home Assistant is gone
 
 It ran here as `/opt/stacks/homeassistant` on **192.168.8.79**, behind the

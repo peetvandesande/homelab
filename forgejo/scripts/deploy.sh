@@ -61,3 +61,15 @@ restart_assert "$HOST" forgejo
 # promises that the host does not provide.
 $SSH "root@$HOST" 'runuser -u git -- /usr/local/bin/forgejo doctor check --config /etc/forgejo/app.ini 2>&1 | tail -5'
 echo "   forgejo restarted"
+
+# The Actions runner on moby (moby/scripts/deploy.sh), registered with the
+# shared secret from homelab-private and scoped to peet's repositories, so
+# nobody else's workflow ever lands on a host-mode runner with docker access.
+# Idempotent: re-registering the same secret updates the runner in place.
+# --secret-stdin is a string flag that wants a value; the value is ignored.
+RUNNER_SECRET=$(sed -n 's/^RUNNER_MOBY_SECRET=//p' "$SECRETS")
+[[ $RUNNER_SECRET =~ ^[0-9a-f]{40}$ ]] || { echo "RUNNER_MOBY_SECRET in $SECRETS must be 40 hex characters"; exit 1; }
+printf '%s' "$RUNNER_SECRET" | $SSH "root@$HOST" \
+  'runuser -u git -- /usr/local/bin/forgejo forgejo-cli actions register --config /etc/forgejo/app.ini \
+     --work-path /var/lib/forgejo --name moby --scope peet --labels moby --secret-stdin=1 >/dev/null'
+echo "   runner moby registered for peet"

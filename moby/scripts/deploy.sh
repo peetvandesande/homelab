@@ -141,3 +141,58 @@ $SSH "root@$HOST" '
   done
 '
 echo "   jobsearch-shared converged"
+
+# Forgejo Actions runner (root/etc/forgejo-runner/config.yml for what it may
+# do and why). It connects with the shared secret that forgejo/scripts/deploy.sh
+# registers on the Forgejo side; both read it from homelab-private. Run
+# forgejo's deploy first, or the runner is refused until it is. The job
+# search deploy (sogode-jobsearch/ci/deploy.sh) gets its n8n API keys and the
+# Forgejo read token from /etc/forgejo-runner/jobsearch.env, rewritten here
+# on every deploy - so Forgejo itself stores no secrets for it.
+RUNNER_VERSION=13.2.0
+RUNNER_SECRET=$(sed -n 's/^RUNNER_MOBY_SECRET=//p' ../../homelab-private/forgejo/secrets.env)
+[[ $RUNNER_SECRET =~ ^[0-9a-f]{40}$ ]] \
+  || { echo "RUNNER_MOBY_SECRET in homelab-private/forgejo/secrets.env must be 40 hex characters"; exit 1; }
+JOBSEARCH_SECRETS=../../homelab-private/jobsearch/secrets.env
+runner_env=""
+for k in SOGODE_N8N_API_KEY PERSONAL_N8N_API_KEY FORGEJO_TOKEN; do
+  v=$(sed -n "s/^$k=//p" "$JOBSEARCH_SECRETS")
+  [[ -n $v ]] || { echo "$k unset in $JOBSEARCH_SECRETS"; exit 1; }
+  runner_env+="$k=$v"$'\n'
+done
+{ printf '%s\n' "$RUNNER_SECRET"; printf '%s' "$runner_env"; } | $SSH "root@$HOST" "v=$RUNNER_VERSION"'
+  set -e
+  read -r secret
+  getent passwd forgejo-runner >/dev/null \
+    || useradd --system --home-dir /var/lib/forgejo-runner --shell /usr/sbin/nologin forgejo-runner
+  install -d -o forgejo-runner -g forgejo-runner -m 0750 /var/lib/forgejo-runner /var/lib/forgejo-runner/work
+  ( umask 027; cat > /etc/forgejo-runner/jobsearch.env.new )
+  chown root:forgejo-runner /etc/forgejo-runner/jobsearch.env.new
+  mv -f /etc/forgejo-runner/jobsearch.env.new /etc/forgejo-runner/jobsearch.env
+
+  # The binary, checked against the release checksum.
+  if ! /usr/local/bin/forgejo-runner --version 2>/dev/null | grep -q "v$v\b"; then
+    url=https://code.forgejo.org/forgejo/runner/releases/download/v$v/forgejo-runner-$v-linux-amd64
+    tmp=$(mktemp)
+    curl -fsSL -o "$tmp" "$url"
+    echo "$(curl -fsSL "$url.sha256" | cut -d" " -f1)  $tmp" | sha256sum -c --quiet
+    install -m 0755 "$tmp" /usr/local/bin/forgejo-runner
+    rm -f "$tmp"
+    echo "   forgejo-runner $v installed"
+  fi
+  # The job search deploy reads instance.yaml.
+  dpkg -s python3-yaml >/dev/null 2>&1 || { apt-get update -q >/dev/null; apt-get install -y -q python3-yaml >/dev/null; }
+
+  # The connection: the token is the secret itself, root-only, handed to the
+  # service by LoadCredential; config.yml gets the UUID derived from it (push
+  # installed it with a placeholder, as forgejo/ does with app.ini).
+  ( umask 077; printf "%s" "$secret" > /etc/forgejo-runner/token )
+  uuid=$(python3 -c "import sys, uuid; print(uuid.UUID(bytes=sys.argv[1][:16].encode()))" "${secret:0:16}")
+  sed -i "s|@@RUNNER_UUID@@|$uuid|" /etc/forgejo-runner/config.yml
+  chown root:forgejo-runner /etc/forgejo-runner/config.yml && chmod 0640 /etc/forgejo-runner/config.yml
+  rm -f /var/lib/forgejo-runner/.runner
+  systemctl daemon-reload
+  systemctl enable forgejo-runner >/dev/null
+'
+restart_assert "$HOST" forgejo-runner
+echo "   forgejo-runner restarted"

@@ -1,0 +1,20 @@
+[Unit]
+Description=Forgejo Actions runner (host jobs, label moby)
+Documentation=file:/etc/forgejo-runner/config.yml
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=forgejo-runner
+Group=forgejo-runner
+# Jobs run `docker exec`; see config.yml for why that is acceptable.
+SupplementaryGroups=docker
+WorkingDirectory=/var/lib/forgejo-runner
+# The shared secret (root-only on disk), readable by the service alone.
+LoadCredential=token:/etc/forgejo-runner/token
+ExecStart=/usr/local/bin/forgejo-runner daemon --config /etc/forgejo-runner/config.yml
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

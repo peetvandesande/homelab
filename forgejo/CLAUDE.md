@@ -101,6 +101,15 @@ so this depends on wg1 like the public side does. The password lives in
 `homelab-private/forgejo/secrets.env` (`SMTP_PASSWD=`) and in the mailbox; change both
 together, then `deploy.sh`. Not hermes: it delivers nothing outside the labs.
 
+## Actions
+
+Forgejo Actions is on (Forgejo's default; `app.ini` says nothing). The one
+runner is on moby, host mode, label `moby`, registered by `deploy.sh` with
+`forgejo-cli actions register --scope peet` and the shared secret
+`RUNNER_MOBY_SECRET` from `homelab-private/forgejo/secrets.env`
+(`../moby/CLAUDE.md`, "Forgejo Actions runner", for why it is scoped).
+No other runner: a workflow in anyone else's repository just waits.
+
 ## Not done
 
 - **No backup.** Repositories, LFS and attachments are under
