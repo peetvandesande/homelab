@@ -47,7 +47,11 @@ Lab hosts sit **below .100** as reservations keyed by MAC. On the LAN only,
 **.240-.254** is for client devices that need a stable address without being lab
 hosts — anything named in a DNS policy set, which stops working the moment its
 address drifts, and the Brother printer (MFC-J4350DW, on Wi-Fi), which moved
-there from a dynamic .195 on 27 October 2026. That is why the LAN pool alone was narrowed from 150: at
+there from a dynamic .195 on 27 October 2026, and the two ESP32-S3 boards,
+`kitchen-loud-esp32-s3` at .243 and `office-loud-esp32-s3` at .244,
+since 6 November 2026. The reservation names were swapped from what the boards
+called themselves before, ahead of the two being repurposed, so a board's own
+hostname may disagree until it is reflashed. That is why the LAN pool alone was narrowed from 150: at
 .100-.249 the range was inside it, and a reservation inside the pool races the
 dynamic allocator. Narrow guest or iot the same way before reserving anything
 above .239 there.
