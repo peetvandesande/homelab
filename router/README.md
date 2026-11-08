@@ -438,6 +438,62 @@ ip neigh del <ipv4> dev br-lan; ping -c2 -W1 <ipv4> >/dev/null; ip neigh show <i
 # REACHABLE is fine; INCOMPLETE/FAILED on an awake client is this
 ```
 
+## Wi-Fi: `Wireless-6G`, for a client that cannot roam between bands
+
+`Wireless-6G` is `rax0`, the standalone 6 GHz interface outside `mld0`, on `lan`
+with SAE only and the same key as `Wireless`. It was enabled on 2026-11-08 for
+the MacBook Air, which is Wi-Fi 6E and so joins `Wireless` on one link at a time
+(`is_mlo_connect=0`) and roams between `rai2` and `rax2`. A network on one band
+leaves it nothing to roam to.
+
+Those roams were failing. On 8 November 13 attempts got `status=53` and none
+got through, with no other client affected in the seven days of logs checked:
+
+1. The client sends an auth to the other band's BSS, and the driver drops it
+   from the old one there and then.
+2. The reassociation offers a cached PMKID and is refused with `status=53`
+   (`Invalid CacheIdx`). A full SAE on one band logs `PMKID Delete` for the
+   other band's entry too, which looks like why the client's cached PMKID is
+   no longer valid.
+3. The client falls back to SAE, and a `reason=2` deauth from the cleanup of
+   the rejected attempt deletes the new entry mid-exchange. Its retries arrive
+   with `wcid=4095` and go unanswered.
+
+The client was off the network for a median of 75 seconds and at most 11
+minutes. It can also be left **associated as far as it knows, with the router
+holding no entry for it**: on the 21:24:56 failure macOS still reported the link
+up at 21:28, the driver logged `PMF_PeerSAQueryReqAction` `Entry is not found` at
+21:26:58, and it stayed dead until Wi-Fi was toggled. `wifi-watchdog` cannot see
+this, because neither hostapd nor the driver still lists the client. A sleeping
+Mac's firmware does this too, so it can wake up already broken.
+
+The failure is in the router and is not fixed, only avoided. Why it began that
+day is not known. To see whether it is happening:
+
+```logql
+{host="router"} |= "send re-assoc resp to" |= "status=53"
+```
+
+Things to know about `rax0`:
+
+- **macOS labels it "Limited Compatibility".** That is Apple's label for any
+  6 GHz network named differently from the 2.4 and 5 GHz ones, and does not mean
+  the link is degraded. Giving it the same name would restore the roaming.
+- **The Mac must have Auto-Join off for `Wireless`**, or it can drift back. macOS
+  uses a different private MAC per network, so the Mac has a different address
+  on this one.
+- **A GL web UI save might turn it off.** The MLO code in
+  `/usr/lib/lua/gl/wifi_mtkwifi7.lua` only touches interfaces in the MLO set, but
+  the compiled `/usr/lib/oui-httpd/rpc/wifi` has a `set_mlo_iface_disabled` that
+  could not be read. Check `uci get wireless.rax0.disabled` after changing MLO
+  settings there.
+- **Applying it needed only `wifi reload`**, which is what the web UI runs. It
+  dropped no clients. There is no `nohup` on this device: to survive the SSH
+  session, use `setsid sh -c "sleep 3; /sbin/wifi reload" </dev/null >/tmp/x 2>&1 &`.
+
+To undo it, restore `/etc/config/wireless.bak-2026-11-08-wireless-6g` and run
+`wifi reload`.
+
 ## Installed but deliberately off
 
 | Feature | State | Why |
