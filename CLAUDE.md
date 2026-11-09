@@ -96,6 +96,10 @@ read by that service's deploy script.
 estate to OpenTofu, Ansible and GitOps and then making it run itself. Check any
 change to that work against it, and finish each task with a checkpoint.
 
+**This repo's primary is Forgejo** (`origin`, private). Every push is checked on
+`talos`, and only a passing run on `main` publishes to GitHub, which is public.
+Push to Forgejo, never to GitHub directly.
+
 ## Storage
 
 Three ZFS mirrors. The pool names and the Proxmox storage IDs are not the same

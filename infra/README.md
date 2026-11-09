@@ -56,7 +56,7 @@ Each task ends with a checkpoint before the next begins.
 |---|---|---|
 | 1 | Repo layout, pinned tools, read-only Ansible reach | Done |
 | 2 | Secrets handling a person can take over | Done |
-| 3 | Forgejo primary, deploy runner, CI that lints and plans only | |
+| 3 | Forgejo primary, deploy runner, CI that lints and plans only | Done |
 | 4 | PBS on sally, guest backups, a tested restore | |
 | 5 | Import all guests into OpenTofu, with a no-change plan | |
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | |
