@@ -1,0 +1,129 @@
+{
+  "uid": "homelab-actions",
+  "title": "Actions",
+  "description": "The audit trail of automated actions, kept for a year.",
+  "schemaVersion": 39,
+  "editable": false,
+  "refresh": "1m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "tags": [
+    "homelab"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "loki",
+        "label": "Loki",
+        "type": "datasource",
+        "query": "loki",
+        "hide": 2,
+        "current": {},
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Finished actions, by outcome",
+      "description": "Over the selected time range.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${loki}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${loki}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (outcome) (count_over_time({identifier=\"homelab-action\"} != \"test:verify\" | json | phase=\"finished\" [$__range]))",
+          "queryType": "instant",
+          "refId": "A",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Actions",
+      "description": "Newest first. A started line with no finished line for the same action is one that died halfway.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "${loki}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 20
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "${loki}"
+          },
+          "editorMode": "code",
+          "expr": "{identifier=\"homelab-action\"} != \"test:verify\" | json | line_format \"{{.phase}} {{.outcome}} | {{.action}} | {{.targets}} | {{.actor}} | {{.commit}} | {{.trigger}} | {{.detail}} {{.url}}\"",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": ""
+        }
+      ]
+    }
+  ]
+}

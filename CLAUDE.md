@@ -401,8 +401,8 @@ See `metis/CLAUDE.md`.
 ## Monitoring
 
 Prometheus (`prometheus.home`) is used for **all** monitoring; Grafana
-(`grafana.home`) for dashboards and alerting. Three dashboards are provisioned
-from `grafana/` — `homelab-dns`, `homelab-fleet` and `homelab-router` — with
+(`grafana.home`) for dashboards and alerting. Four dashboards are provisioned
+from `grafana/` — `homelab-dns`, `homelab-fleet`, `homelab-router` and `homelab-actions` — with
 the alert rules in groups `dns`, `fleet` and one per concern beside them. The
 router and the ONT in it cannot run node-exporter, so lenora collects both into
 its textfile collector – `router-metrics/`. Alerts are delivered to

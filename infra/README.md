@@ -81,6 +81,9 @@ the targets, the outcome and a link to the run. Query it in Grafana with
 `{identifier="homelab-action"}`. A `started` line with no matching `finished` line is
 an action that died halfway. If the entry cannot be written, the action does not run.
 
+The `homelab-actions` dashboard shows it, Loki keeps it for a year, and
+`infra/scripts/verify-action-log.sh`, run on `talos`, proves the path end to end.
+
 ## Kept out of the automation
 
 These change the router, the ONT or Home Assistant OS, so a person runs them, from
@@ -116,7 +119,7 @@ Each task ends with a checkpoint before the next begins.
 | 11 | lenora, metis, hermes, watchdogs (hermes's role first runs when a lab next has it on) | Done |
 | 12 | ruby and jennie, run by a person; router documented; lexie and talos | Done |
 | 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | Done |
-| 14 | Action log for the audit trail | |
+| 14 | Action log for the audit trail | Done |
 | 15 | Runbook engine in shadow mode | |
 | 16 | Runbooks go live one at a time | |
 | 17 | The responder gains authority to act | |
