@@ -2,5 +2,6 @@
 enrol_ca_source: "{{ role_path }}/../../../../ca"
 enrol_ca_url: https://192.168.8.55:8443
 enrol_step_version: 0.30.6-1
+enrol_step_url: "https://github.com/smallstep/cli/releases/download/v0.30.6/step-cli_{{ enrol_step_version }}_amd64.deb"
 enrol_step_sha256: 5845c181251ffe43ca2331bc171e0b92324a71be9cf4ef76cd6fbbba4f2a3cc6
 enrol_fqdn: "{{ inventory_hostname }}.home"

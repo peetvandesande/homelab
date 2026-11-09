@@ -24,13 +24,15 @@
     append: true
   notify: Restart node-exporter
 
+# 0755: every job that writes here runs as root, and the two DNS jobs set this
+# mode themselves on each run.
 - name: Create the textfile collector directory
   ansible.builtin.file:
     path: /var/lib/node_exporter/textfile
     state: directory
     owner: root
     group: prometheus
-    mode: "0775"
+    mode: "0755"
 
 - name: Create the TLS drop-in directory
   ansible.builtin.file:

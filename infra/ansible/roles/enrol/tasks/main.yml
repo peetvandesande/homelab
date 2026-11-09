@@ -18,7 +18,7 @@
 
     - name: Download the pinned package
       ansible.builtin.get_url:
-        url: "https://github.com/smallstep/cli/releases/download/v{{ enrol_step_version | regex_replace('-.*$', '') }}/step-cli_{{ enrol_step_version }}_amd64.deb"
+        url: "{{ enrol_step_url }}"
         dest: /tmp/step-cli.deb
         checksum: "sha256:{{ enrol_step_sha256 }}"
         mode: "0644"
