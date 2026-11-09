@@ -6,6 +6,8 @@
 # sally. The encryption key is made on lenora and copied to the private cache,
 # from which infra/scripts/vault.py import puts it in Bitwarden. Without that
 # key the backups cannot be read, so run the import straight after a first run.
+# On a rebuilt lenora, run vault.py pull first: the key in the cache is reused,
+# and a new one would make every existing backup unreadable.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
@@ -38,6 +40,11 @@ push "$LENORA" lenora
 $SSH "root@$LENORA" 'install -d -m 0755 /var/lib/homelab-backup; chmod +x /usr/local/bin/homelab-backup-hook /usr/local/bin/homelab-backup-restore-test'
 
 if ! $SSH "root@$LENORA" 'pvesm status --storage sally >/dev/null 2>&1'; then
+  key=autogen
+  if [[ -s $KEY_COPY ]]; then
+    $SSH "root@$LENORA" 'umask 077; cat > /root/sally.enc.new' < "$KEY_COPY"
+    key=/root/sally.enc.new
+  fi
   # The token is shown once, when it is made, and goes straight to lenora.
   $SSH "root@$SALLY" "store=$STORE auth='$AUTH' token='$TOKEN'"'
     set -e
@@ -49,20 +56,28 @@ if ! $SSH "root@$LENORA" 'pvesm status --storage sally >/dev/null 2>&1'; then
     $pm acl update "/datastore/$store" DatastoreBackup --auth-id "$auth" >/dev/null
     $pm acl update "/datastore/$store" DatastoreBackup --auth-id "$token" >/dev/null
     printf "%s\n" "$value"
-  ' | $SSH "root@$LENORA" "store=$STORE token='$TOKEN'"'
+  ' | $SSH "root@$LENORA" "store=$STORE token='$TOKEN' key=$key"'
     set -e
     read -r value
     # No fingerprint: certificates renew, and lenora trusts the lab root.
     pvesm add pbs sally --server sally.home --datastore "$store" --username "$token" \
-      --password "$value" --encryption-key autogen --content backup --prune-backups keep-all=1
+      --password "$value" --encryption-key "$key" --content backup --prune-backups keep-all=1
+    rm -f /root/sally.enc.new
   '
   echo "   storage added"
 fi
 
-mkdir -p "$(dirname "$KEY_COPY")"
-( umask 077; $SSH "root@$LENORA" 'cat /etc/pve/priv/storage/sally.enc' > "$KEY_COPY" )
-[[ -s $KEY_COPY ]] || { echo "could not copy the encryption key"; exit 1; }
-echo "   encryption key copied to the private cache; run infra/scripts/vault.py import"
+if [[ -s $KEY_COPY ]]; then
+  # Never replace a saved key: it is what reads the existing backups.
+  $SSH "root@$LENORA" 'cat /etc/pve/priv/storage/sally.enc' | cmp -s - "$KEY_COPY" \
+    || { echo "lenora's encryption key differs from the saved one; stopping"; exit 1; }
+  echo "   encryption key matches the saved copy"
+else
+  mkdir -p "$(dirname "$KEY_COPY")"
+  ( umask 077; $SSH "root@$LENORA" 'cat /etc/pve/priv/storage/sally.enc' > "$KEY_COPY" )
+  [[ -s $KEY_COPY ]] || { echo "could not copy the encryption key"; exit 1; }
+  echo "   encryption key copied to the private cache; run infra/scripts/vault.py import"
+fi
 
 $SSH "root@$LENORA" "guests=$GUESTS"'
   set -e
