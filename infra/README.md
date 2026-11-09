@@ -59,14 +59,14 @@ Each task ends with a checkpoint before the next begins.
 | 3 | Forgejo primary, deploy runner, CI that lints and plans only | Done |
 | 4 | PBS on sally, guest backups, a tested restore | |
 | 5 | Import all guests into OpenTofu, with a no-change plan | Done |
-| 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | |
+| 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | Done |
 | 7 | CA and enrolment | |
 | 8 | Prometheus, Loki, Grafana | |
 | 9 | DNS stack | |
 | 10 | Application services: Forgejo, moby, media | |
 | 11 | lenora, metis, hermes, watchdogs | |
 | 12 | ruby and jennie, run by a person; router documented | |
-| 13 | Apply on merge, retire the old scripts | |
+| 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | |
 | 14 | Action log for the audit trail | |
 | 15 | Runbook engine in shadow mode | |
 | 16 | Runbooks go live one at a time | |
@@ -84,7 +84,14 @@ scripts/verify.sh                                # tools, config and reach; chan
 cd ansible                                       # ansible must run from here
 ansible fleet -m ansible.builtin.ping
 ansible-inventory --graph
+ansible-playbook fleet.yml --limit '!hermes' --check --diff   # what would change
+ansible-playbook fleet.yml --limit '!hermes'                   # apply
 ```
+
+`fleet.yml` is the baseline on every host, and a run on a healthy fleet changes
+nothing. For a new host: add it to `FLEET`, enrol it with `ca/scripts/enrol.sh`,
+and run the playbook limited to it. hermes is off unless a lab is running, so
+leave it out of the run while it is off. sally is not in `FLEET`, by design.
 
 | Path | Holds |
 |---|---|

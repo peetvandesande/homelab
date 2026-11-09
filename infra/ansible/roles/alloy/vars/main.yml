@@ -1,0 +1,3 @@
+---
+alloy_version: 1.19.2
+alloy_source: "{{ role_path }}/../../../../alloy/root"

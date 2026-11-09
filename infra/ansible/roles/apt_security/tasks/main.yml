@@ -1,0 +1,53 @@
+---
+- name: Install automatic updates and the restart checker
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - needrestart
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install the update policy and its metrics
+  ansible.builtin.copy:
+    src: "{{ apt_security_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: etc/apt/apt.conf.d/52homelab-unattended-upgrades, mode: "0644" }
+    - { path: etc/needrestart/conf.d/50homelab.conf, mode: "0644" }
+    - { path: etc/systemd/system/homelab-apt-textfile.service, mode: "0644" }
+    - { path: etc/systemd/system/homelab-apt-textfile.timer, mode: "0644" }
+    - { path: usr/local/sbin/homelab-apt-textfile, mode: "0755" }
+  notify: Publish apt metrics
+
+# apt lists append, so the policy's #clear has to have worked for this to be the
+# only origin. The -security form matters: the codename alone patches nothing.
+# Unlike apt/scripts/deploy.sh there is no unattended-upgrade --dry-run here,
+# because that advances the stamp the "stopped patching" alert reads.
+- name: Read the allowed update origins
+  ansible.builtin.command: apt-config dump --no-empty --format "%v%n" Unattended-Upgrade::Origins-Pattern
+  register: apt_security_origins
+  changed_when: false
+  check_mode: false
+
+- name: Refuse any policy but Debian's security updates
+  ansible.builtin.assert:
+    that:
+      - apt_security_origins.stdout_lines | length == 1
+      - "'-security,label=Debian-Security' in apt_security_origins.stdout"
+    fail_msg: "Unattended-Upgrade::Origins-Pattern is not the single Debian -security entry"
+    quiet: true
+
+- name: Keep the update timers on
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+    - homelab-apt-textfile.timer

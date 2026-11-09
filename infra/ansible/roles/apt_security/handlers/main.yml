@@ -1,0 +1,6 @@
+---
+- name: Publish apt metrics
+  ansible.builtin.systemd_service:
+    name: homelab-apt-textfile.service
+    state: started
+    daemon_reload: true

@@ -1,0 +1,60 @@
+---
+- name: Check the host holds a certificate
+  ansible.builtin.stat:
+    path: /etc/homelab-tls/host.key
+  register: node_exporter_key
+
+- name: Refuse a host that is not enrolled
+  ansible.builtin.assert:
+    that: node_exporter_key.stat.exists
+    fail_msg: "Not enrolled: run ca/scripts/enrol.sh first"
+    quiet: true
+
+- name: Install the exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Let the exporter read the certificate
+  ansible.builtin.user:
+    name: prometheus
+    groups: tlscert
+    append: true
+  notify: Restart node-exporter
+
+- name: Create the textfile collector directory
+  ansible.builtin.file:
+    path: /var/lib/node_exporter/textfile
+    state: directory
+    owner: root
+    group: prometheus
+    mode: "0775"
+
+- name: Create the TLS drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/prometheus-node-exporter.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the exporter's TLS configuration
+  ansible.builtin.copy:
+    src: "{{ node_exporter_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: etc/homelab-tls/node-exporter-web.yml, mode: "0644" }
+    - { path: etc/homelab-tls/post-renew.d/10-node-exporter, mode: "0755" }
+    - { path: etc/systemd/system/prometheus-node-exporter.service.d/tls.conf, mode: "0644" }
+  notify: Restart node-exporter
+
+- name: Keep the exporter enabled and running
+  ansible.builtin.systemd_service:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started

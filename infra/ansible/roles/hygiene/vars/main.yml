@@ -1,0 +1,4 @@
+---
+hygiene_units: >-
+  {{ lookup('ansible.builtin.file', role_path ~ '/../../../../fleet/masked-units').splitlines()
+     | reject('match', '^\s*(#|$)') | list }}

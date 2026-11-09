@@ -1,0 +1,104 @@
+---
+- name: Check for Grafana's package key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/grafana.gpg
+  register: alloy_key
+
+# grafana and loki already have this repository from installing their own
+# packages, in a file of their own, so it is only added where the key is absent.
+- name: Add Grafana's package repository
+  when: not alloy_key.stat.exists
+  block:
+    - name: Install what fetching the key needs
+      ansible.builtin.apt:
+        name: [curl, ca-certificates, gnupg]
+        state: present
+
+    - name: Create the keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Fetch Grafana's key
+      ansible.builtin.shell:
+        cmd: set -o pipefail; curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+        executable: /bin/bash
+        creates: /etc/apt/keyrings/grafana.gpg
+
+    - name: Add the repository
+      ansible.builtin.copy:
+        content: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main\n"
+        dest: /etc/apt/sources.list.d/grafana.list
+        owner: root
+        group: root
+        mode: "0644"
+
+    # Unconditional: the package list is already recent from earlier roles, so
+    # a time-based refresh would never read the repository just added.
+    - name: Read the new repository
+      ansible.builtin.apt:
+        update_cache: true
+
+# Pinned and held: Alloy's config language moves between minor versions.
+- name: Install the pinned Alloy
+  ansible.builtin.apt:
+    name: "alloy={{ alloy_version }}-1"
+    state: present
+    allow_downgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+  notify: Restart Alloy
+
+- name: Hold Alloy at that version
+  ansible.builtin.dpkg_selections:
+    name: alloy
+    selection: hold
+
+- name: Let Alloy read the journal and the certificate
+  ansible.builtin.user:
+    name: alloy
+    groups: [systemd-journal, adm, tlscert]
+    append: true
+  notify: Restart Alloy
+
+- name: Create Alloy's data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: alloy
+    group: alloy
+    mode: "0750"
+  loop:
+    - /var/lib/alloy
+    - /var/lib/alloy/data
+
+- name: Create the service drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/alloy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Alloy's configuration
+  ansible.builtin.copy:
+    src: "{{ alloy_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: etc/alloy/config.alloy, mode: "0640", group: alloy }
+    - { path: etc/default/alloy, mode: "0644" }
+    - { path: etc/homelab-tls/post-renew.d/15-alloy, mode: "0755" }
+    - { path: etc/systemd/system/alloy.service.d/homelab.conf, mode: "0644" }
+  notify: Restart Alloy
+
+- name: Keep Alloy enabled and running
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: started

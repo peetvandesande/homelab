@@ -1,0 +1,17 @@
+---
+# The baseline on every enrolled host. Each host must already hold a certificate
+# from ca/scripts/enrol.sh. node_exporter is first because the others publish
+# through its textfile directory. Run from infra/ansible:
+#
+#   ansible-playbook fleet.yml --limit '!hermes' --check --diff
+- name: Fleet baseline
+  hosts: fleet
+  gather_facts: false
+  # A failure later in the run must not skip a restart already owed, or a service
+  # keeps its old configuration and no later run would notice.
+  force_handlers: true
+  roles:
+    - node_exporter
+    - hygiene
+    - apt_security
+    - alloy

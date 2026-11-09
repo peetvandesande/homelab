@@ -1,0 +1,6 @@
+---
+# Parses the whole directory first, so a bad config cannot take Alloy down.
+- name: Restart Alloy
+  ansible.builtin.shell:
+    cmd: alloy validate /etc/alloy >/dev/null && systemctl daemon-reload && systemctl restart alloy
+  changed_when: true
