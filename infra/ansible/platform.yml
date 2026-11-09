@@ -1,0 +1,28 @@
+---
+# The hypervisor and the two VMs. hermes is off unless a lab is running, so leave it
+# out then. Run by a person until apply-on-merge exists. From infra/ansible:
+#
+#   ansible-playbook platform.yml --limit '!hermes' --check --diff
+- name: Metis
+  hosts: metis
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - metis
+
+- name: Lenora
+  hosts: lenora
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - lenora
+
+- name: Hermes
+  hosts: hermes
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - hermes

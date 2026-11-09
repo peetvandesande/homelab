@@ -1,0 +1,23 @@
+---
+# Re-reads the export set without restarting NFS or disturbing existing mounts.
+- name: Reapply the exports
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      exportfs -ra
+      case "$(exportfs -v)" in *"/hddpool/media"*) ;; *) echo "/hddpool/media is not exported" >&2; exit 1 ;; esac
+  changed_when: true
+
+- name: Restart chrony
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      systemctl restart chrony
+      for _ in $(seq 15); do
+        [[ "$(chronyc -n sources)" == *'^* 192.168.8.1 '* ]] && exit 0
+        sleep 2
+      done
+      echo "chrony is not synced to the router" >&2
+      exit 1
+    executable: /bin/bash
+  changed_when: true

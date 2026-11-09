@@ -1,0 +1,109 @@
+---
+- name: Check for the certificate and mailcow
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/homelab-tls/host.key
+    - "{{ hermes_mailcow }}/mailcow.conf"
+  register: hermes_ready
+
+- name: Refuse a host that is not ready
+  ansible.builtin.assert:
+    that: hermes_ready.results | map(attribute='stat.exists') | min
+    fail_msg: "Run hermes/scripts/bootstrap.sh and ca/scripts/enrol.sh first"
+    quiet: true
+
+- name: Create the settings directory
+  ansible.builtin.file:
+    path: /etc/homelab-mailcow
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the settings record
+  ansible.builtin.copy:
+    src: "{{ hermes_source }}/etc/homelab-mailcow/mailcow.conf.overrides"
+    dest: /etc/homelab-mailcow/mailcow.conf.overrides
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install the engine's configuration
+  ansible.builtin.copy:
+    src: "{{ hermes_source }}/etc/docker/daemon.json"
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    validate: dockerd --validate --config-file %s
+  notify: Restart Docker
+
+- name: Install postfix's extra settings
+  ansible.builtin.copy:
+    src: "{{ hermes_source }}/opt/mailcow-dockerized/data/conf/postfix/extra.cf"
+    dest: "{{ hermes_mailcow }}/data/conf/postfix/extra.cf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart postfix
+
+- name: Install Rspamd's overrides
+  ansible.builtin.copy:
+    src: "{{ hermes_source }}/opt/mailcow-dockerized/data/conf/rspamd/override.d/{{ item }}"
+    dest: "{{ hermes_mailcow }}/data/conf/rspamd/override.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [options.inc, homelab-local-addrs.map]
+  notify: Restart Rspamd
+
+- name: Install the metrics job and renewal hook
+  ansible.builtin.copy:
+    src: "{{ hermes_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/sbin/homelab-mailcow-textfile, mode: "0755" }
+    - { path: etc/systemd/system/homelab-mailcow-textfile.service, mode: "0644" }
+    - { path: etc/systemd/system/homelab-mailcow-textfile.timer, mode: "0644" }
+    - { path: etc/homelab-tls/post-renew.d/30-mailcow, mode: "0755" }
+
+- name: Apply the repo's mailcow settings
+  ansible.builtin.lineinfile:
+    path: "{{ hermes_mailcow }}/mailcow.conf"
+    regexp: "^{{ item | regex_replace('=.*$', '') }}="
+    line: "{{ item }}"
+  loop: "{{ hermes_overrides }}"
+
+- name: Set the API key the labs use
+  ansible.builtin.lineinfile:
+    path: "{{ hermes_mailcow }}/mailcow.conf"
+    regexp: "^API_KEY="
+    line: "API_KEY={{ hermes_api_key }}"
+  no_log: true
+
+# Exits at once when the certificate in place is already the current one.
+- name: Keep the certificate mailcow serves current
+  ansible.builtin.command: /etc/homelab-tls/post-renew.d/30-mailcow
+  changed_when: false
+
+- name: Apply anything owed before converging
+  ansible.builtin.meta: flush_handlers
+
+- name: Converge mailcow
+  ansible.builtin.command:
+    chdir: "{{ hermes_mailcow }}"
+    argv: "{{ ['docker', 'compose'] + (['--dry-run'] if ansible_check_mode else []) + ['up', '-d', '--remove-orphans', '--quiet-pull'] }}"
+  register: hermes_converge
+  changed_when: hermes_converge.stderr is regex(hermes_compose_changed)
+  check_mode: false
+
+- name: Keep the metrics job on
+  ansible.builtin.systemd_service:
+    name: homelab-mailcow-textfile.timer
+    enabled: true
+    state: started
+    daemon_reload: true

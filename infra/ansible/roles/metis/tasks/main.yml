@@ -1,0 +1,228 @@
+---
+- name: Check the host holds a certificate
+  ansible.builtin.stat:
+    path: /etc/homelab-tls/host.key
+  register: metis_cert
+
+- name: Refuse a host that is not enrolled
+  ansible.builtin.assert:
+    that: metis_cert.stat.exists
+    fail_msg: "Not enrolled: run ca/scripts/enrol.sh first"
+    quiet: true
+
+# non-free for the driver, non-free-firmware for its GSP blobs.
+- name: Enable the driver's package components
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/debian.sources
+    regexp: '^(Components: .*main)$'
+    replace: '\1 contrib non-free non-free-firmware'
+  register: metis_components
+
+- name: Install the packages
+  ansible.builtin.apt:
+    name: "{{ metis_packages }}"
+    state: present
+    update_cache: "{{ metis_components is changed }}"
+    cache_valid_time: 3600
+
+# DKMS builds for the generic kernel, so the cloud image's must not be what boots.
+- name: Remove the cloud kernel
+  ansible.builtin.apt:
+    name: "linux-image-*cloud*"
+    state: absent
+    purge: true
+
+- name: Check the card is usable
+  ansible.builtin.command: nvidia-smi -L
+  register: metis_gpu
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Stop here if the driver needs a reboot to load
+  ansible.builtin.assert:
+    that: metis_gpu.rc == 0
+    fail_msg: "nvidia-smi cannot see the card. A new driver needs one reboot: do that, then run this again."
+    quiet: true
+
+- name: Create Ollama's group
+  ansible.builtin.group:
+    name: ollama
+    system: true
+
+- name: Create Ollama's account
+  ansible.builtin.user:
+    name: ollama
+    group: ollama
+    groups: [video, render]
+    append: true
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: true
+    home: /var/lib/ollama
+  notify: Restart Ollama
+
+- name: Read the installed Ollama
+  ansible.builtin.command: /usr/local/bin/ollama --version
+  register: metis_ollama
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the pinned Ollama
+  when: metis_ollama_version not in metis_ollama.stdout
+  notify: Restart Ollama
+  block:
+    - name: Download Ollama
+      ansible.builtin.get_url:
+        url: "{{ metis_ollama_url }}"
+        dest: /tmp/ollama.tgz
+        checksum: "sha256:{{ metis_ollama_sha256 }}"
+        mode: "0644"
+
+    - name: Remove the old libraries
+      ansible.builtin.file:
+        path: /usr/local/lib/ollama
+        state: absent
+
+    - name: Unpack Ollama
+      ansible.builtin.unarchive:
+        src: /tmp/ollama.tgz
+        dest: /usr/local
+        remote_src: true
+
+    - name: Remove the download
+      ansible.builtin.file:
+        path: /tmp/ollama.tgz
+        state: absent
+
+- name: Read the installed exporter
+  ansible.builtin.command: /usr/local/bin/nvidia_gpu_exporter --version
+  register: metis_exporter
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the pinned exporter
+  when: metis_exporter_version not in (metis_exporter.stdout ~ metis_exporter.stderr)
+  notify: Restart the GPU exporter
+  block:
+    - name: Download the exporter
+      ansible.builtin.get_url:
+        url: "{{ metis_exporter_url | replace(' ', '') }}"
+        dest: /tmp/nvidia-gpu-exporter.tgz
+        checksum: "sha256:{{ metis_exporter_sha256 }}"
+        mode: "0644"
+
+    - name: Unpack the exporter
+      ansible.builtin.unarchive:
+        src: /tmp/nvidia-gpu-exporter.tgz
+        dest: /usr/local/bin
+        remote_src: true
+        include: [nvidia_gpu_exporter]
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Remove the exporter's download
+      ansible.builtin.file:
+        path: /tmp/nvidia-gpu-exporter.tgz
+        state: absent
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/nftables.d
+    - /etc/systemd/system/ollama.service.d
+
+- name: Install the firewall's rule set
+  ansible.builtin.copy:
+    src: "{{ metis_source }}/etc/nftables.d/ollama.nft"
+    dest: /etc/nftables.d/ollama.nft
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply the firewall
+
+- name: Install the firewall
+  ansible.builtin.copy:
+    src: "{{ metis_source }}/etc/nftables.conf"
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0755"
+    validate: nft -c -f %s
+  notify: Apply the firewall
+
+- name: Install Ollama's service
+  ansible.builtin.copy:
+    src: "{{ metis_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/systemd/system/ollama.service
+    - etc/systemd/system/ollama.service.d/homelab.conf
+  notify: Restart Ollama
+
+- name: Install the exporter's service and TLS settings
+  ansible.builtin.copy:
+    src: "{{ metis_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/systemd/system/nvidia-gpu-exporter.service
+    - etc/homelab-tls/nvidia-gpu-exporter-web.yml
+  notify: Restart the GPU exporter
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ metis_source }}/etc/homelab-tls/post-renew.d/20-nvidia-gpu-exporter"
+    dest: /etc/homelab-tls/post-renew.d/20-nvidia-gpu-exporter
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep the services enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - qemu-guest-agent
+    - nftables
+    - ollama
+    - nvidia-gpu-exporter
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Ollama to answer
+  ansible.builtin.uri:
+    url: http://127.0.0.1:11434/api/version
+  register: metis_answer
+  until: metis_answer.status == 200
+  retries: 24
+  delay: 5
+  check_mode: false
+
+- name: List the models
+  ansible.builtin.command: ollama list
+  register: metis_list
+  changed_when: false
+  check_mode: false
+
+- name: Fetch any that are missing
+  ansible.builtin.command: ollama pull {{ item }}
+  loop: "{{ metis_models }}"
+  when: item not in metis_list.stdout
+  changed_when: true

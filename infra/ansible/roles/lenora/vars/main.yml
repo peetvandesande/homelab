@@ -1,0 +1,23 @@
+---
+lenora_repo: "{{ role_path }}/../../../.."
+lenora_source: "{{ lenora_repo }}/proxmox/root"
+lenora_ula: fd33:5692:1834:1000::21/64
+lenora_ula_route: fd33:5692:1834::/48
+lenora_ula_gateway: fd33:5692:1834:1000::1
+lenora_timers: [homelab-router-metrics, homelab-ha-tls-renew, homelab-ha-metrics]
+# The driver's own units: the card is bound to vfio-pci, so they fail on every boot.
+lenora_masked_units: [nvidia-devnodes.service, nvidia-persistenced.service]
+lenora_tools:
+  - { src: router-metrics/lenora/usr/local/bin/homelab-router-metrics, dest: /usr/local/bin/homelab-router-metrics, mode: "0755" }
+  - { src: homeassistant/lenora/usr/local/bin/homelab-ha-tls-renew, dest: /usr/local/bin/homelab-ha-tls-renew, mode: "0755" }
+  - { src: homeassistant/lenora/usr/local/bin/homelab-ha-metrics, dest: /usr/local/bin/homelab-ha-metrics, mode: "0755" }
+  - { src: homeassistant/haos/ha-tls.py, dest: /usr/local/share/homelab/ha-tls.py, mode: "0644" }
+  - { src: sally/lenora/usr/local/bin/homelab-backup-hook, dest: /usr/local/bin/homelab-backup-hook, mode: "0755" }
+  - { src: sally/lenora/usr/local/bin/homelab-backup-restore-test, dest: /usr/local/bin/homelab-backup-restore-test, mode: "0755" }
+lenora_units:
+  - { src: router-metrics/lenora, name: homelab-router-metrics.service }
+  - { src: router-metrics/lenora, name: homelab-router-metrics.timer }
+  - { src: homeassistant/lenora, name: homelab-ha-tls-renew.service }
+  - { src: homeassistant/lenora, name: homelab-ha-tls-renew.timer }
+  - { src: homeassistant/lenora, name: homelab-ha-metrics.service }
+  - { src: homeassistant/lenora, name: homelab-ha-metrics.timer }

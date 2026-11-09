@@ -1,0 +1,169 @@
+---
+# Never reboots this host, never brings an interface up or down and never touches
+# a guest. Reboots stay with a person, and ifup here can cut off every container.
+- name: Check the host holds a certificate
+  ansible.builtin.stat:
+    path: /etc/homelab-tls/host.key
+  register: lenora_cert
+
+- name: Refuse a host that is not enrolled
+  ansible.builtin.assert:
+    that: lenora_cert.stat.exists
+    fail_msg: "Not enrolled: run ca/scripts/enrol.sh first"
+    quiet: true
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /usr/local/share/homelab
+    - /var/lib/homelab-backup
+
+# Read at the next boot. The live address and route are applied below instead.
+- name: Install the IPv6 address for the next boot
+  ansible.builtin.copy:
+    src: "{{ lenora_source }}/etc/network/interfaces.d/ipv6-ula"
+    dest: /etc/network/interfaces.d/ipv6-ula
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read the live IPv6 state
+  ansible.builtin.command: "{{ item }}"
+  loop:
+    - ip -6 addr show dev vmbr0
+    - ip -6 route show {{ lenora_ula_route }}
+  register: lenora_ipv6
+  changed_when: false
+  check_mode: false
+
+# `ip`, not ifup: this only ever adds an address and an off-link route.
+- name: Add the address if it is missing
+  ansible.builtin.command: ip -6 addr replace {{ lenora_ula }} dev vmbr0
+  when: lenora_ula not in lenora_ipv6.results[0].stdout
+  changed_when: true
+
+- name: Add the route if it is missing
+  ansible.builtin.command: ip -6 route replace {{ lenora_ula_route }} via {{ lenora_ula_gateway }} dev vmbr0
+  when: lenora_ula_gateway not in lenora_ipv6.results[1].stdout
+  changed_when: true
+
+- name: Install the NFS exports
+  ansible.builtin.copy:
+    src: "{{ lenora_source }}/etc/exports"
+    dest: /etc/exports
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reapply the exports
+
+- name: Install the time settings
+  ansible.builtin.copy:
+    src: "{{ lenora_source }}/etc/chrony/chrony.conf"
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+    # AppArmor confines chronyd to its own directory, so it cannot read the temp file.
+    validate: >-
+      sh -c 'c=/etc/chrony/chrony.conf.check; cp %s "$c" && chronyd -p -f "$c" >/dev/null; r=$?; rm -f "$c"; exit $r'
+  notify: Restart chrony
+
+- name: Mask the units that cannot work here
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: "{{ lenora_masked_units }}"
+
+- name: Install the collectors and backup hooks
+  ansible.builtin.copy:
+    src: "{{ lenora_repo }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop: "{{ lenora_tools }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Install the timers
+  ansible.builtin.copy:
+    src: "{{ lenora_repo }}/{{ item.src }}/etc/systemd/system/{{ item.name }}"
+    dest: "/etc/systemd/system/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ lenora_units }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Keep the timers on
+  ansible.builtin.systemd_service:
+    name: "{{ item }}.timer"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ lenora_timers }}"
+
+# Its authorized_keys line on the router is added by router-metrics/scripts/deploy.sh.
+- name: Generate the key that reads the router, once
+  ansible.builtin.command:
+    cmd: ssh-keygen -q -t ed25519 -N "" -C router-metrics@lenora -f /root/.ssh/router_metrics
+    creates: /root/.ssh/router_metrics
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ lenora_source }}/etc/homelab-tls/post-renew.d/20-pveproxy"
+    dest: /etc/homelab-tls/post-renew.d/20-pveproxy
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check whether the web interface has the lab certificate
+  ansible.builtin.stat:
+    path: /etc/pve/nodes/lenora/pveproxy-ssl.pem
+  register: lenora_gui_cert
+
+# After this the renewal job keeps it current. If the interface does not come back,
+# Proxmox's own certificate is restored so it is never left down.
+- name: Give the web interface the lab certificate
+  when: not lenora_gui_cert.stat.exists
+  block:
+    - name: Install the certificate
+      ansible.builtin.command: /etc/homelab-tls/post-renew.d/20-pveproxy
+      changed_when: true
+
+    - name: Wait for the interface on that certificate
+      ansible.builtin.uri:
+        url: https://127.0.0.1:8006/
+        ca_path: /etc/homelab-tls/root_ca.crt
+      register: lenora_gui_new
+      until: lenora_gui_new.status == 200
+      retries: 30
+      delay: 2
+  rescue:
+    - name: Put back Proxmox's own certificate
+      ansible.builtin.shell:
+        cmd: rm -f /etc/pve/nodes/lenora/pveproxy-ssl.pem /etc/pve/nodes/lenora/pveproxy-ssl.key; systemctl restart pveproxy
+      changed_when: true
+
+    - name: Report the failure
+      ansible.builtin.fail:
+        msg: "pveproxy did not come back on the lab certificate; rolled back"
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+- name: Confirm the web interface answers
+  ansible.builtin.uri:
+    url: https://127.0.0.1:8006/
+    ca_path: /etc/homelab-tls/root_ca.crt
+  register: lenora_gui
+  until: lenora_gui.status == 200
+  retries: 15
+  delay: 2
+  check_mode: false

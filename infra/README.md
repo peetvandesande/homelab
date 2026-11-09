@@ -48,6 +48,22 @@ The router and Home Assistant OS cannot be fully managed by Ansible, so they
 stay documented or specially handled. ruby and jennie get Ansible roles that a
 person runs.
 
+## Kept out of the automation
+
+These change the router, the ONT or Home Assistant OS, so a person runs them, from
+the repo. Each is safe to re-run, and each has a `verify.sh` beside it.
+
+| Script | What it installs |
+|---|---|
+| `wan-watchdog/scripts/deploy.sh` | The dead-WAN watchdog, on the router |
+| `wifi-watchdog/scripts/deploy.sh` | The stale Wi-Fi station watchdog, on the router |
+| `router-metrics/scripts/deploy.sh` | The read-only metrics dump and forced-command keys, on the router and ONT |
+| `appletv-uk/scripts/deploy.sh` | The Apple TV toggle, on the router and in Home Assistant |
+
+`lenora`'s halves of these (the collector and timers) are in `platform.yml`. The
+nightly backup job itself is created by `sally/scripts/backups.sh`, since it holds the
+PBS token.
+
 ## Tasks
 
 Each task ends with a checkpoint before the next begins.
@@ -64,7 +80,7 @@ Each task ends with a checkpoint before the next begins.
 | 8 | Prometheus, Loki, Grafana | Done |
 | 9 | DNS stack | Done |
 | 10 | Application services: Forgejo, moby, media | Done |
-| 11 | lenora, metis, hermes, watchdogs | |
+| 11 | lenora, metis, hermes, watchdogs (hermes's role first runs when a lab next has it on) | Done |
 | 12 | ruby and jennie, run by a person; router documented | |
 | 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | |
 | 14 | Action log for the audit trail | |
@@ -91,6 +107,7 @@ ansible-playbook ca.yml --check --diff                         # the CA on pisti
 ansible-playbook monitoring.yml --check --diff                 # Prometheus, Loki, Grafana; a person runs this until task 13
 ansible-playbook dns.yml --check --diff                        # pythia, then delphi, then themis; a person runs this until task 13
 ansible-playbook apps.yml --check --diff                       # Jellyfin, Navidrome, moby, Forgejo; a person runs this until task 13
+ansible-playbook platform.yml --limit '!hermes' --check --diff # lenora, metis; hermes when a lab has it running
 ```
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes

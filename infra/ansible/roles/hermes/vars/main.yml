@@ -1,0 +1,10 @@
+---
+hermes_root: "{{ role_path }}/../../../../hermes"
+hermes_source: "{{ hermes_root }}/root"
+hermes_mailcow: /opt/mailcow-dockerized
+hermes_api_key: "{{ lookup('ansible.builtin.file', hermes_root ~ '/secrets.env') | regex_search(\"(?m)^API_KEY='?(.*?)'?$\", '\\1') | first }}"
+# Whole-line settings the repo owns, read from the same file the old script used.
+hermes_overrides: >-
+  {{ lookup('ansible.builtin.file', hermes_source ~ '/etc/homelab-mailcow/mailcow.conf.overrides')
+     | regex_findall('(?m)^[A-Z_]+=.*$') }}
+hermes_compose_changed: '(Container \S+|Network \S+|Volume \S+) +(Recreate|Create|Start|Remov)'

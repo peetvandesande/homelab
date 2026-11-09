@@ -1,0 +1,24 @@
+---
+metis_source: "{{ role_path }}/../../../../metis/root"
+# Ollama upgrades change model formats and GPU support: bump on purpose.
+metis_ollama_version: 0.12.0
+metis_ollama_sha256: 5c6ea489179d534e2f841956fb62af1c97376bde0b759eb109e4911b82c88301
+metis_ollama_url: "https://github.com/ollama/ollama/releases/download/v{{ metis_ollama_version }}/ollama-linux-amd64.tgz"
+metis_exporter_version: 1.15.1
+metis_exporter_sha256: 71aaae0e00b7fa4a115091973e87eadd332e477d4c6bbebaccc0133bc77df9f6
+metis_exporter_url: >-
+  https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v{{ metis_exporter_version
+  }}/nvidia_gpu_exporter_{{ metis_exporter_version }}_linux_x86_64.tar.gz
+metis_models: [bge-m3, "qwen3:4b"]
+metis_packages:
+  - curl
+  - ca-certificates
+  - jq
+  - qemu-guest-agent
+  - systemd-timesyncd
+  - nftables
+  - linux-image-amd64
+  - linux-headers-amd64
+  - nvidia-driver
+  - firmware-misc-nonfree
+  - nvidia-smi
