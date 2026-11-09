@@ -17,9 +17,10 @@ has no `deploy.sh`. It was a hand-run rollout, now live:
 ## Secrets are not in this repo
 
 The repo is public. Every private key and PSK in `ruby/`, `jennie/` and `home/`
-is a `<placeholder>`. The real values – ruby's `wg1.key`/`wg2.key`, the PSKs,
-the filled-in configs and the old wg-quick configs (`superseded/`) – live
-outside git in `~/projects/homelab-private/wireguard/`.
+is a `<placeholder>`. The real values – ruby's `wg1.key`/`wg2.key`, the PSKs
+and the filled-in configs – are in Bitwarden, as `wireguard/*` in
+`infra/secrets/manifest`, and `infra/scripts/vault.py pull` writes them to
+`~/projects/homelab-private/wireguard/`.
 
 ruby and jennie each have a clone of the repo at `~/homelab`; deploy steps
 run from `~/homelab/wireguard` there. **Never fill a secret into the clone**:

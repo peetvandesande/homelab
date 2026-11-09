@@ -2,9 +2,9 @@
 
 How the GL-BE14000 talks to Orange directly, without the Livebox. Working since
 7 October 2026, IPv4 and IPv6. Credentials, the option 90 blob, cloned MACs and
-the ONT identity are **not here** – they live in the router's `uci` and in
-`~/projects/homelab-private/router/` (including the Livebox's own status page,
-the reference for the ONT identity and optical levels).
+the ONT identity are **not here** – they live in the router's `uci`, and the
+login and password in Bitwarden as `router/ORANGE_LOGIN` and
+`router/ORANGE_PASSWORD`.
 
 ## Hardware
 
