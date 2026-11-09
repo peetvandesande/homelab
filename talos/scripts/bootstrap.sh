@@ -59,9 +59,10 @@ $SSH "root@$HOST" "
   install -d -o forgejo-runner -g forgejo-runner -m 0700 $h/.ssh
   [ -f $h/.ssh/github ] || runuser -u forgejo-runner -- \
     ssh-keygen -q -t ed25519 -N "" -C forgejo-runner@talos -f $h/.ssh/github
-  printf "Host github.com\n  User git\n  IdentityFile %s/.ssh/github\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n" "$h" > $h/.ssh/config
+  printf "Host github.com\n  User git\n  IdentityFile %s/.ssh/github\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  UpdateHostKeys no\n" "$h" > $h/.ssh/config
   # GitHub'"'"'s published key, so the first push trusts nothing it is told.
   printf "%s\n" "$github_key" > $h/.ssh/known_hosts
+  rm -f $h/.ssh/known_hosts.old
   chown forgejo-runner:forgejo-runner $h/.ssh/config $h/.ssh/known_hosts
   chmod 0600 $h/.ssh/config $h/.ssh/known_hosts
 '
