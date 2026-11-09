@@ -97,6 +97,40 @@ ansible-inventory --graph
 | `scripts/install-bws.sh` | Installs the pinned `bws`, checksum verified |
 | `scripts/ci-checks.sh` | The checks every push must pass; runnable by hand |
 
+## OpenTofu
+
+`tofu/guests.tf` describes every guest but the disposable `9xxx` lab VMs. State is
+in the `tofu_state` database on forgejo, encrypted; `scripts/state-db.sh` builds
+that database. Always run OpenTofu through `scripts/tofu.sh`, which supplies the
+state connection and the Proxmox token.
+
+```sh
+scripts/tofu.sh init
+scripts/tofu.sh plan
+```
+
+The token can only read until task 13, so nothing here can change a guest yet.
+Every push runs the plan on `talos` and fails if a guest differs from `guests.tf`.
+
+To bring in a new guest, read-only, with `<type>` being `container` or `vm`:
+
+```sh
+cat > tofu/import.tf <<EOT
+import {
+  to = proxmox_virtual_environment_<type>.<name>
+  id = "lenora/<vmid>"
+}
+EOT
+scripts/tofu.sh plan -generate-config-out=generated.tf
+```
+
+Move the block from `generated.tf` into `guests.tf`. Remove lines set to `null`
+or `""`, and `units = 0`, `servers = []` and `mac_addresses`. For a container add
+`template_file_id` under `operating_system`. Copy the `lifecycle` block from a
+guest of the same kind, including `prevent_destroy`. Run `scripts/tofu.sh plan`
+until it reads "1 to import, 0 to add, 0 to change", apply, and delete `import.tf`.
+Remember `GUESTS` in `sally/scripts/backups.sh`.
+
 ## Host keys
 
 Ansible refuses any host whose key is not in `ansible/known_hosts`. After a
