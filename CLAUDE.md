@@ -99,6 +99,8 @@ change to that work against it, and finish each task with a checkpoint.
 **This repo's primary is Forgejo** (`origin`, private). Every push is checked on
 `talos`, and only a passing run on `main` publishes to GitHub, which is public.
 Push to Forgejo, never to GitHub directly.
+`main` is protected, so changes land by pull request once the checks pass –
+`infra/README.md`, "Changing main".
 
 ## Storage
 

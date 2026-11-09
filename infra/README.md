@@ -48,6 +48,14 @@ The router and Home Assistant OS cannot be fully managed by Ansible, so they
 stay documented or specially handled. ruby and jennie get Ansible roles that a
 person runs.
 
+## Changing main
+
+`main` is protected, administrators included: changes land by pull request, and only
+once `checks / checks (push)`, which includes the secret scan, has passed on a branch
+that is up to date with `main`. No approval is required, so automation can merge its
+own work. A change that exposes a service or touches an outward-facing path still
+waits for a person, even when the checks pass.
+
 ## Apply on merge
 
 After the checks and the GitHub publish, `infra/scripts/apply.sh` runs the playbooks
@@ -99,7 +107,7 @@ Each task ends with a checkpoint before the next begins.
 | 10 | Application services: Forgejo, moby, media | Done |
 | 11 | lenora, metis, hermes, watchdogs (hermes's role first runs when a lab next has it on) | Done |
 | 12 | ruby and jennie, run by a person; router documented; lexie and talos | Done |
-| 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | Built: a person still has to turn on the apply step and branch protection |
+| 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | Done |
 | 14 | Action log for the audit trail | |
 | 15 | Runbook engine in shadow mode | |
 | 16 | Runbooks go live one at a time | |
