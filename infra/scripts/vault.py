@@ -41,7 +41,7 @@ SAFE_BARE = re.compile(r"(?!~)[A-Za-z0-9_@%+=:,./~^!*?\[\]{}-]*")
 class Entry(NamedTuple):
     key: str
     project: str
-    kind: str  # env: one variable in a file; file: a whole file
+    kind: str  # env: one variable in a file; env-bare: never quoted; file: a whole file
     path: str  # under homelab-private, or repo:<path under this repo>
     var: str
 
@@ -57,8 +57,8 @@ def load_manifest(path):
         if not line:
             continue
         fields = line.split()
-        if len(fields) != 5 or fields[2] not in ("env", "file"):
-            die(f"{path.name}:{number}: expected: key project env|file path variable-or-dash")
+        if len(fields) != 5 or fields[2] not in ("env", "env-bare", "file"):
+            die(f"{path.name}:{number}: expected: key project env|env-bare|file path variable-or-dash")
         entry = Entry(*fields)
         if entry.key in seen:
             die(f"{path.name}:{number}: {entry.key} is listed twice")
@@ -101,10 +101,11 @@ def parse_env(path):
     return values
 
 
-def render_env(pairs):
+def render_env(triples):
     # Plain VAR=value wherever that is safe: some scripts read these with sed
     # rather than sourcing them, and would keep any quotes as part of the value.
-    lines = [f"{var}={value if SAFE_BARE.fullmatch(value) else shlex.quote(value)}" for var, value in pairs]
+    lines = [f"{var}={value if bare or SAFE_BARE.fullmatch(value) else shlex.quote(value)}"
+             for var, value, bare in triples]
     return "\n".join(lines) + "\n"
 
 
@@ -280,9 +281,9 @@ def cmd_pull(entries, args):
             write_private(local_path(entry, base), value)
             written += 1
         else:
-            env_files[local_path(entry, base)].append((entry.var, value))
-    for path, pairs in env_files.items():
-        write_private(path, render_env(pairs))
+            env_files[local_path(entry, base)].append((entry.var, value, entry.kind == "env-bare"))
+    for path, triples in env_files.items():
+        write_private(path, render_env(triples))
         written += 1
     print(f"{written} files written, mode 600")
     return 0
