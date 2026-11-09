@@ -150,6 +150,23 @@
 - name: Configure CI's forced-command account
   ansible.builtin.include_tasks: ci.yml
 
+# Hosted here but not repo-owned, so only their exposure is managed.
+- name: Find the migrated stacks' password files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /opt/stacks/nextcloud/db.env
+    - /opt/stacks/xwiki/.env
+  register: moby_migrated_secrets
+
+- name: Keep those files from other accounts
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    mode: o-rwx
+  loop: "{{ moby_migrated_secrets.results | selectattr('stat.exists') }}"
+  loop_control:
+    label: "{{ item.item }}"
+
 - name: Wait for the sites and the engine
   ansible.builtin.wait_for:
     host: "{{ ansible_host }}"

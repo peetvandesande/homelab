@@ -31,7 +31,9 @@ for entry in "${HOSTS[@]}"; do
   from=$LEXIE; [[ $ip == "$LEXIE" ]] && from="$LEXIE,127.0.0.1"
   $SSH "root@$ip" "
     set -e
-    id responder >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --comment 'alert responder' responder
+    # A fixed uid well clear of 1000: on moby, old stack files and n8n's container
+    # processes run as 1000, and the first account created would inherit them.
+    id responder >/dev/null 2>&1 || useradd --uid 1500 --user-group --create-home --shell /bin/bash --comment 'alert responder' responder
     usermod -aG systemd-journal,adm responder
     passwd -l responder >/dev/null
     # The account's real home, not an assumed one: on lexie it is the
