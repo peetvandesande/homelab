@@ -1,0 +1,58 @@
+# What each alert would run. `alert` is the rule's exact title in Grafana, and a host
+# or unit that is not listed here is refused. Managed from homelab/runbooks.
+#
+# Every rule stays in shadow until infra/README.md task 16 takes it live.
+
+[[rule]]
+name = "restart-failed-unit"
+alert = "systemd unit failed"
+runbook = "restart-unit"
+mode = "shadow"
+units = { themis = ["vpn-domain-sync.service"], delphi = ["rpz-update.service"], moby = ["nginx.service"] }
+
+[[rule]]
+name = "free-disk"
+alert = "Root filesystem nearly full"
+runbook = "free-disk"
+mode = "shadow"
+hosts = ["themis", "delphi", "pythia", "prometheus", "grafana", "loki", "lexie", "moby", "jellyfin", "navidrome", "forgejo", "metis", "talos"]
+
+[[rule]]
+name = "rerun-vpn-sync-failing"
+alert = "VPN domain sync is failing"
+runbook = "rerun-job"
+mode = "shadow"
+host = "themis"
+unit = "vpn-domain-sync.service"
+
+[[rule]]
+name = "rerun-vpn-sync-late"
+alert = "VPN domain sync has not run"
+runbook = "rerun-job"
+mode = "shadow"
+host = "themis"
+unit = "vpn-domain-sync.service"
+
+[[rule]]
+name = "rerun-blocklist-stale"
+alert = "Blocklist feed is stale"
+runbook = "rerun-job"
+mode = "shadow"
+host = "delphi"
+unit = "rpz-update.service"
+
+[[rule]]
+name = "rerun-blocklist-failing"
+alert = "Blocklist feed refresh is failing"
+runbook = "rerun-job"
+mode = "shadow"
+host = "delphi"
+unit = "rpz-update.service"
+
+# Exercises the path end to end: runbooks/scripts/verify.sh sends this alert.
+[[rule]]
+name = "engine-test"
+alert = "Runbook engine test"
+runbook = "noop"
+mode = "shadow"
+host = "lexie"

@@ -66,7 +66,7 @@ def main():
     end = commands.add_parser("end")
     end.add_argument("id")
     end.add_argument("--action", required=True)
-    end.add_argument("outcome", choices=["succeeded", "failed", "refused"])
+    end.add_argument("outcome", choices=["succeeded", "failed", "refused", "shadow"])
     end.add_argument("--detail", default="")
 
     args = parser.parse_args()

@@ -1,0 +1,6 @@
+---
+runbook_source: "{{ role_path }}/../../../../runbooks/root"
+runbook_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+runbook_secrets: "{{ lookup('ansible.builtin.file', runbook_private ~ '/responder/secrets.env') }}"
+runbook_token: "{{ runbook_secrets | regex_search(\"(?m)^RUNBOOK_TOKEN='?(.*?)'?$\", '\\1') | first }}"
+runbook_commit: "{{ lookup('ansible.builtin.pipe', 'git -C ' ~ role_path ~ ' rev-parse HEAD') }}"

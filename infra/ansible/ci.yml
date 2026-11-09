@@ -11,6 +11,7 @@
   any_errors_fatal: true
   roles:
     - responder
+    - runbook
     - role: forgejo_runner
       vars:
         forgejo_runner_source: "{{ playbook_dir }}/../../forgejo-runner/root"

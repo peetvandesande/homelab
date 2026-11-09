@@ -1,0 +1,78 @@
+---
+# No SSH key and no sudo: in shadow mode this account can change nothing.
+- name: Create the account
+  ansible.builtin.user:
+    name: runbook
+    system: true
+    create_home: true
+    home: /var/lib/runbook
+    shell: /usr/sbin/nologin
+    comment: runbook engine
+    groups: tlscert
+    append: true
+  notify: Restart the runbook engine
+
+- name: Keep its home private
+  ansible.builtin.file:
+    path: /var/lib/runbook
+    state: directory
+    owner: runbook
+    group: runbook
+    mode: "0700"
+
+- name: Create the settings directory
+  ansible.builtin.file:
+    path: /etc/runbook
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the action log
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../scripts/action-log"
+    dest: /usr/local/bin/action-log
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the engine and its rules
+  ansible.builtin.copy:
+    src: "{{ runbook_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/bin/runbook-engine, mode: "0755" }
+    - { path: etc/runbook/rules.toml, mode: "0644" }
+    - { path: etc/systemd/system/runbook-engine.service, mode: "0644" }
+    - { path: etc/homelab-tls/post-renew.d/31-runbook-engine, mode: "0755" }
+  notify: Restart the runbook engine
+
+- name: Record which commit is deployed
+  ansible.builtin.copy:
+    content: "{{ runbook_commit }}\n"
+    dest: /etc/runbook/commit
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install its address and token
+  ansible.builtin.copy:
+    content: |
+      RUNBOOK_BIND={{ ansible_host }}
+      RUNBOOK_TOKEN={{ runbook_token }}
+    dest: /etc/runbook/runbook.env
+    owner: root
+    group: runbook
+    mode: "0640"
+  no_log: true
+  notify: Restart the runbook engine
+
+- name: Keep the engine enabled and running
+  ansible.builtin.systemd_service:
+    name: runbook-engine
+    enabled: true
+    state: started
+    daemon_reload: true

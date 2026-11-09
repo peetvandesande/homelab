@@ -1,0 +1,6 @@
+---
+- name: Restart the runbook engine
+  ansible.builtin.systemd_service:
+    name: runbook-engine
+    state: restarted
+    daemon_reload: true

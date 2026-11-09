@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""Runbook engine: match Grafana alerts against exact rules and record the result.
+
+Managed from homelab/runbooks. Standard library only, and no LLM, so it works with
+the internet down.
+
+POST /alert over TLS (the lab certificate) with `Authorization: Bearer <token>`.
+Every rule is in shadow mode: a match writes what would have run to the action log
+and does nothing else. Alert text is untrusted, since log lines reach labels. It is
+only ever compared against /etc/runbook/rules.toml, and never reaches a shell.
+"""
+import hmac
+import json
+import os
+import queue
+import re
+import ssl
+import subprocess
+import sys
+import threading
+import time
+import tomllib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+RULES = "/etc/runbook/rules.toml"
+COMMIT = "/etc/runbook/commit"
+ACTION_LOG = "/usr/local/bin/action-log"
+STATE = "/var/lib/runbook/seen.json"
+CERT = "/etc/homelab-tls/host.crt"
+KEY = "/etc/homelab-tls/host.key"
+PORT = 9096
+COOLDOWN = 3600
+MAX_BODY = 256 * 1024
+
+RUNBOOKS = {"restart-unit", "free-disk", "rerun-job", "noop"}
+INSTANCE = re.compile(r"([a-z0-9-]{1,63})\.home:[0-9]{1,5}")
+FINGERPRINT = re.compile(r"[0-9a-f]{1,32}")
+
+work = queue.Queue(maxsize=16)
+lock = threading.Lock()
+
+
+def log(*message):
+    print(*message, file=sys.stderr, flush=True)
+
+
+def validate(rules):
+    """Raise ValueError unless every rule is well formed. Only shadow is accepted."""
+    alerts = set()
+    for rule in rules:
+        where = rule.get("name", "unnamed rule")
+        for field in ("name", "alert", "runbook", "mode"):
+            if not isinstance(rule.get(field), str) or not rule[field]:
+                raise ValueError(f"{where}: {field} is required")
+        if rule["mode"] != "shadow":
+            raise ValueError(f"{where}: mode must be shadow")
+        if rule["runbook"] not in RUNBOOKS:
+            raise ValueError(f"{where}: unknown runbook {rule['runbook']}")
+        if rule["alert"] in alerts:
+            raise ValueError(f"{where}: another rule already matches {rule['alert']}")
+        alerts.add(rule["alert"])
+        if sum(key in rule for key in ("host", "hosts", "units")) != 1:
+            raise ValueError(f"{where}: needs exactly one of host, hosts or units")
+    return rules
+
+
+def load_rules(path=RULES):
+    with open(path, "rb") as f:
+        return validate(tomllib.load(f).get("rule", []))
+
+
+def label(labels, key):
+    value = labels.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def clean(value):
+    """What may be written about a value that did not match: never the raw text."""
+    return re.sub(r"[^A-Za-z0-9_.@:-]", "?", value)[:80]
+
+
+def decide(rules, labels):
+    """The rule an alert matches and whether its target is allowed, or None."""
+    name = label(labels, "alertname")
+    rule = next((r for r in rules if r["alert"] == name), None)
+    if rule is None:
+        return None
+    if "host" in rule:
+        return {"rule": rule, "host": rule["host"], "unit": rule.get("unit", ""), "allowed": True}
+    found = INSTANCE.fullmatch(label(labels, "instance"))
+    host = found.group(1) if found else ""
+    if "hosts" in rule:
+        return {"rule": rule, "host": host or clean(label(labels, "instance")), "unit": "",
+                "allowed": host in rule["hosts"]}
+    unit = label(labels, "name")
+    return {"rule": rule, "host": host or clean(label(labels, "instance")), "unit": clean(unit),
+            "allowed": unit in rule["units"].get(host, [])}
+
+
+def claim(key):
+    """True if this alert has not been handled inside the cooldown."""
+    now = time.time()
+    with lock:
+        try:
+            with open(STATE) as f:
+                seen = json.load(f)
+        except (OSError, ValueError):
+            seen = {}
+        seen = {k: v for k, v in seen.items() if now - v < COOLDOWN}
+        if key in seen:
+            return False
+        seen[key] = now
+        with open(STATE + ".tmp", "w") as f:
+            json.dump(seen, f)
+        os.replace(STATE + ".tmp", STATE)
+        return True
+
+
+def commit():
+    try:
+        with open(COMMIT) as f:
+            return f.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def record(decision, fingerprint):
+    rule = decision["rule"]
+    action = f"runbook:{rule['name']}"
+    targets = "/".join(filter(None, (decision["host"], decision["unit"]))) or "none"
+    env = dict(os.environ, ACTION_ACTOR="runbook-engine", ACTION_COMMIT=commit(),
+               ACTION_TRIGGER=f"alert {rule['alert']} {fingerprint}", ACTION_URL="")
+    started = subprocess.run([ACTION_LOG, "start", f"--action={action}", f"--targets={targets}"],
+                             env=env, capture_output=True, text=True, check=True)
+    if decision["allowed"]:
+        outcome, detail = "shadow", f"would run {rule['runbook']}"
+    else:
+        outcome, detail = "refused", "target is not on the rule's allowlist"
+    subprocess.run([ACTION_LOG, "end", started.stdout.strip(), f"--action={action}", outcome,
+                    f"--detail={detail}"], env=env, capture_output=True, text=True, check=True)
+
+
+def worker():
+    while True:
+        decision, fingerprint = work.get()
+        try:
+            record(decision, fingerprint)
+            log(f"recorded {decision['rule']['name']} for {decision['host']}")
+        except Exception as error:  # one bad alert must not stop the worker
+            log(f"could not record {decision['rule']['name']}: {str(error)[:300]}")
+        finally:
+            work.task_done()
+
+
+def accept(rules, alerts):
+    """Queue what matches. Returns how many were queued."""
+    queued = 0
+    for alert in alerts if isinstance(alerts, list) else []:
+        if not isinstance(alert, dict) or alert.get("status") != "firing":
+            continue
+        labels = alert.get("labels")
+        if not isinstance(labels, dict):
+            continue
+        decision = decide(rules, labels)
+        if decision is None:
+            continue
+        given = alert.get("fingerprint")
+        fingerprint = given if isinstance(given, str) and FINGERPRINT.fullmatch(given) else "none"
+        key = "|".join((decision["rule"]["name"], decision["host"], decision["unit"], fingerprint))
+        if not claim(key):
+            continue
+        try:
+            work.put_nowait((decision, fingerprint))
+            queued += 1
+        except queue.Full:
+            log("queue full, dropped", decision["rule"]["name"])
+    return queued
+
+
+class Handler(BaseHTTPRequestHandler):
+    rules = []
+    token = b""
+
+    def reply(self, code, body=b""):
+        self.send_response(code)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        given = self.headers.get("Authorization", "").removeprefix("Bearer ").encode()
+        if not hmac.compare_digest(given, self.token):
+            return self.reply(401)
+        if self.path != "/alert":
+            return self.reply(404)
+        try:
+            size = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self.reply(400)
+        if size < 0 or size > MAX_BODY:
+            return self.reply(413)
+        try:
+            payload = json.loads(self.rfile.read(size))
+        except ValueError:
+            return self.reply(400)
+        alerts = payload.get("alerts", []) if isinstance(payload, dict) else []
+        self.reply(202, json.dumps({"queued": accept(self.rules, alerts)}).encode())
+
+    def log_message(self, fmt, *args):
+        log(self.address_string(), fmt % args)
+
+
+def main():
+    Handler.rules = load_rules()
+    Handler.token = os.environ["RUNBOOK_TOKEN"].encode()
+    threading.Thread(target=worker, daemon=True).start()
+    httpd = ThreadingHTTPServer((os.environ["RUNBOOK_BIND"], PORT), Handler)
+    # Read once at start; the post-renew hook restarts the service on renewal.
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(CERT, KEY)
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+    httpd.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

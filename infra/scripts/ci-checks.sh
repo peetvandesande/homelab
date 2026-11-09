@@ -38,6 +38,8 @@ for path in sys.argv[1:]:
 sys.exit(bad)'
 }
 
+runbook_tests() { python3 -m unittest discover -s runbooks/tests -q; }
+
 step "no secrets in the history" scan_secrets
 step "OpenTofu is formatted" tofu_fmt
 step "OpenTofu is valid" tofu_validate
@@ -45,6 +47,7 @@ step "Ansible lint" ansible_lint
 step "shell scripts have no errors" shell_errors
 step "infra and talos scripts are clean" shell_infra
 step "Python parses" python_syntax
+step "the runbook engine's tests pass" runbook_tests
 
 echo
 if ((failed)); then echo "$failed check(s) failed"; exit 1; fi

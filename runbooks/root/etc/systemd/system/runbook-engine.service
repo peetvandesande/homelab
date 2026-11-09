@@ -1,0 +1,26 @@
+[Unit]
+Description=Runbook engine (Grafana webhook -> exact rules, shadow mode)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=runbook
+Group=runbook
+# Reads the host key, which is root:tlscert 0640.
+SupplementaryGroups=tlscert
+EnvironmentFile=/etc/runbook/runbook.env
+# In an LXC with ifupdown network-online.target comes before eth0 has its address,
+# and this binds to it. "+" runs outside the sandbox below, which blocks the netlink
+# socket "ip" needs.
+ExecStartPre=+/bin/sh -c 'n=0; while [ $n -lt 120 ]; do ip -4 addr show dev eth0 | grep -q "inet 192.168.8.24/" && exit 0; n=$((n+1)); sleep 0.5; done; echo "192.168.8.24 never appeared on eth0" >&2; exit 1'
+ExecStart=/usr/local/bin/runbook-engine
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/runbook
+
+[Install]
+WantedBy=multi-user.target
