@@ -26,6 +26,9 @@ ROOT=rootca/certs/root.crt
 # prometheus/etc/prometheus/prometheus.yml - a host here but not there is
 # unmonitored, and a host there but not here will fail its scrape once
 # node-exporter goes TLS.
+#
+# sally is enrolled but deliberately absent: every script that reads this list
+# acts on all of it, and sally must stay out of reach of the automation.
 FLEET=(
   "192.168.8.21 lenora"
   "192.168.8.50 themis"

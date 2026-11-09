@@ -305,6 +305,12 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   `router/CLAUDE.md` invariant 12. DHCPv6 stays disabled and `ra_flags` stays
   `none`; addressing is SLAAC from RA, which is all `ip6=auto` needs.
 
+## Backups
+
+`sally` (`sally.home`) is a bare-metal Proxmox Backup Server, the lab's backup
+destination. It is enrolled with the CA but kept out of `FLEET`, so the fleet's
+automation does not reach it – `sally/CLAUDE.md`.
+
 ## Docker
 
 Container workloads that are not worth an LXC run on `moby` (CT 108,

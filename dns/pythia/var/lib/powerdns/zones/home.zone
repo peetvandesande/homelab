@@ -9,7 +9,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026102804  ; serial
+                2026110901  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -22,6 +22,8 @@ gw          IN  A   192.168.8.1
 gw          IN  AAAA fd33:5692:1834:1000:0000:0000:0000:0001
 lenora      IN  A   192.168.8.21     ; Proxmox host
 lenora      IN  AAAA fd33:5692:1834:1000:0000:0000:0000:0021 ; Proxmox host
+sally       IN  A   192.168.8.22     ; Proxmox Backup Server
+sally       IN  AAAA fd33:5692:1834:1000:e654:e8ff:fe62:da39 ; Proxmox Backup Server
 themis      IN  A   192.168.8.50     ; dnsdist - the LAN's resolver
 themis      IN  AAAA fd33:5692:1834:1000:be24:11ff:feda:9b4b ; dnsdist - the LAN's resolver
 delphi      IN  A   192.168.8.51     ; recursor + filtering

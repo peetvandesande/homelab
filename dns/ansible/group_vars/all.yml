@@ -61,6 +61,7 @@ zones:
         records:
           - { name: gw,         data: 192.168.8.1,  data6: 'fd33:5692:1834:1000:0000:0000:0000:0001' }
           - { name: lenora,     data: 192.168.8.21, data6: 'fd33:5692:1834:1000:0000:0000:0000:0021', comment: 'Proxmox host' }
+          - { name: sally,      data: 192.168.8.22, data6: 'fd33:5692:1834:1000:e654:e8ff:fe62:da39', comment: 'Proxmox Backup Server' }
           - { name: themis,     data: 192.168.8.50, data6: 'fd33:5692:1834:1000:be24:11ff:feda:9b4b', comment: 'dnsdist - the LAN''s resolver' }
           - { name: delphi,     data: 192.168.8.51, data6: 'fd33:5692:1834:1000:be24:11ff:fe7d:3b06', comment: 'recursor + filtering' }
           - { name: pythia,     data: 192.168.8.52, data6: 'fd33:5692:1834:1000:be24:11ff:fe06:d987', comment: 'this server' }

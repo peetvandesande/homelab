@@ -1,0 +1,17 @@
+#!/bin/sh
+# Install the renewed certificate where Proxmox Backup Server looks for it, then
+# have the proxy pick it up.
+#
+# host.crt is leaf plus intermediate, which is what proxy.pem has to hold for a
+# client to build the chain. The proxy runs as user backup, so both files are
+# root:backup 0640; the .new names keep a half-written file out of the live path.
+set -eu
+DIR=/etc/proxmox-backup
+
+install -m 0640 -o root -g backup /etc/homelab-tls/host.key "$DIR/proxy.key.new"
+install -m 0640 -o root -g backup /etc/homelab-tls/host.crt "$DIR/proxy.pem.new"
+mv -f "$DIR/proxy.key.new" "$DIR/proxy.key"
+mv -f "$DIR/proxy.pem.new" "$DIR/proxy.pem"
+
+# Reload, not restart: backups already running keep their connections.
+exec systemctl reload proxmox-backup-proxy
