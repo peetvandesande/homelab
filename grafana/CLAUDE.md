@@ -278,3 +278,18 @@ there, not here.
     a ping. The ping URL is the check's only credential (anyone holding it can
     fake the heartbeat), so it is substituted from that file like the
     webhook id.
+
+## Retiring an alert rule
+
+Deleting a rule from a file here does not delete it from Grafana, which keeps a
+provisioned rule until it is told to drop it. Add this to the rule's file, merge so it
+is applied, then remove the block in a later change:
+
+```yaml
+deleteRules:
+  - orgId: 1
+    uid: <the rule's uid>
+```
+
+Dashboards need none of this: the `grafana` role removes a file the repo no longer
+has, and Grafana drops the dashboard with it.

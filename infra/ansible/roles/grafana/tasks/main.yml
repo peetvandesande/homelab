@@ -74,6 +74,26 @@
   loop_control:
     label: "{{ item | basename }}"
 
+# A dashboard is deleted from Grafana when its file goes. Alert rules are not, so
+# this covers dashboards only: grafana/CLAUDE.md, "Retiring an alert rule".
+- name: Find the dashboards on the host
+  ansible.builtin.find:
+    paths: /var/lib/grafana/dashboards
+    patterns: "*.json"
+  register: grafana_dashboards_found
+  check_mode: false
+
+- name: Remove dashboards the repo no longer has
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ grafana_dashboards_found.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: >-
+    (item.path | basename) not in
+    (lookup('ansible.builtin.fileglob', grafana_source ~ '/var/lib/grafana/dashboards/*.json', wantlist=True) | map('basename'))
+
 - name: Keep Grafana enabled and running
   ansible.builtin.systemd_service:
     name: grafana-server
