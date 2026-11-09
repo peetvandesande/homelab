@@ -58,7 +58,7 @@ Each task ends with a checkpoint before the next begins.
 | 2 | Secrets handling a person can take over | Done |
 | 3 | Forgejo primary, deploy runner, CI that lints and plans only | Done |
 | 4 | PBS on sally, guest backups, a tested restore | |
-| 5 | Import all guests into OpenTofu, with a no-change plan | |
+| 5 | Import all guests into OpenTofu, with a no-change plan | Done |
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | |
 | 7 | CA and enrolment | |
 | 8 | Prometheus, Loki, Grafana | |
