@@ -1,0 +1,135 @@
+---
+- name: Create the stack directories
+  ansible.builtin.file:
+    path: "/opt/stacks/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - n8n
+    - n8n-sogode
+    - jobsearch-sogode
+    - jobsearch-personal
+    - jobsearch-shared
+    - jobsearch-shared/render
+
+- name: Install the compose files
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/opt/stacks/{{ item.stack }}/{{ item.file }}"
+    dest: "/opt/stacks/{{ item.stack }}/{{ item.file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ moby_stack_files }}"
+  loop_control:
+    label: "{{ item.stack }}/{{ item.file }}"
+
+- name: Install the render service's source
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/opt/stacks/jobsearch-shared/render/{{ item }}"
+    dest: "/opt/stacks/jobsearch-shared/render/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [Dockerfile, server.py]
+  register: moby_render
+
+# Generated here once and never again. N8N_ENCRYPTION_KEY encrypts every credential
+# n8n stores, so replacing it would orphan them all.
+- name: Generate each n8n stack's secrets once
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      umask 077
+      env=/opt/stacks/{{ item }}/.env
+      if [ ! -s "$env" ]; then
+        printf "POSTGRES_PASSWORD=%s\nN8N_ENCRYPTION_KEY=%s\n" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$env"
+        echo generated
+      fi
+      for k in {{ moby_n8n_generated | join(' ') }}; do
+        grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 32)" >> "$env"; echo generated; }
+      done
+  loop: "{{ moby_n8n_stacks }}"
+  register: moby_n8n_env
+  changed_when: "'generated' in moby_n8n_env.stdout"
+
+- name: Install each n8n stack's mail password
+  ansible.builtin.lineinfile:
+    path: "/opt/stacks/{{ item }}/.env"
+    regexp: '^N8N_SMTP_PASS='
+    line: "N8N_SMTP_PASS={{ lookup('ansible.builtin.file', moby_smtp_file) | regex_search('(?m)^SMTP_PASSWD=(.*)$', '\\1') | first }}"
+    mode: "0600"
+  vars:
+    moby_smtp_file: "{{ moby_private }}/{{ item }}/secrets.env"
+  loop: "{{ moby_n8n_stacks }}"
+  no_log: true
+
+- name: Generate each job search stack's database password once
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      umask 077
+      env=/opt/stacks/{{ item }}/.env
+      [ -s "$env" ] && exit 0
+      printf "POSTGRES_PASSWORD=%s\n" "$(openssl rand -hex 24)" > "$env"
+      echo generated
+  loop: "{{ moby_jobsearch_stacks }}"
+  register: moby_jobsearch_env
+  changed_when: "'generated' in moby_jobsearch_env.stdout"
+
+- name: Generate the notification passwords once
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      umask 077
+      env=/opt/stacks/jobsearch-shared/.env
+      touch "$env"
+      for k in NTFY_N8N_PASSWORD NTFY_PEET_PASSWORD; do
+        grep -q "^$k=" "$env" || { printf "%s=%s\n" "$k" "$(openssl rand -hex 16)" >> "$env"; echo generated; }
+      done
+  register: moby_shared_env
+  changed_when: "'generated' in moby_shared_env.stdout"
+
+- name: Keep the secrets private
+  ansible.builtin.file:
+    path: "/opt/stacks/{{ item }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ moby_n8n_stacks + moby_jobsearch_stacks + ['jobsearch-shared'] }}"
+
+# Pinned image tags, so Compose fetches only what a changed file names. Each
+# job search stack joins an n8n stack's network, which has to exist first.
+- name: Converge the stacks in order
+  ansible.builtin.command:
+    chdir: "/opt/stacks/{{ item }}"
+    argv: >-
+      {{ ['docker', 'compose']
+         + (['--dry-run'] if ansible_check_mode else [])
+         + ['up', '-d', '--remove-orphans']
+         + (['--build'] if item == 'jobsearch-shared' and moby_render is changed else []) }}
+  loop: "{{ moby_n8n_stacks + moby_jobsearch_stacks + ['jobsearch-shared'] }}"
+  register: moby_converge
+  changed_when: moby_converge.stderr is regex(moby_compose_changed)
+  check_mode: false
+
+# ntfy denies everything by default. n8n may publish to jobs-*, peet may read them.
+- name: Keep the notification users in step with the passwords
+  ansible.builtin.shell:
+    chdir: /opt/stacks/jobsearch-shared
+    cmd: |
+      set -e
+      . ./.env
+      for _ in $(seq 20); do docker compose exec -T ntfy ntfy user list >/dev/null 2>&1 && break; sleep 1; done
+      list=$(docker compose exec -T ntfy ntfy user list 2>&1)
+      for u in n8n:$NTFY_N8N_PASSWORD:write-only peet:$NTFY_PEET_PASSWORD:read-only; do
+        name=${u%%:*}; rest=${u#*:}; pass=${rest%%:*}; perm=${rest#*:}
+        case "$list" in
+          *"user $name "*) action=change-pass ;;
+          *) action=add ;;
+        esac
+        docker compose exec -T -e NTFY_PASSWORD="$pass" ntfy ntfy user "$action" "$name" >/dev/null
+        docker compose exec -T ntfy ntfy access "$name" "jobs-*" "$perm" >/dev/null
+      done
+  changed_when: false

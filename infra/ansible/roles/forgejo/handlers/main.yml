@@ -1,0 +1,18 @@
+---
+# Debian 13 starts sshd through ssh.socket, which holds :22. A reload makes sshd
+# re-exec and try to bind it itself, so it dies: a restart is what picks up a change.
+- name: Restart SSH
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      install -d -m 0755 /run/sshd
+      sshd -t
+      systemctl restart ssh.service
+  changed_when: true
+
+- name: Restart Forgejo
+  ansible.builtin.systemd_service:
+    name: forgejo
+    state: restarted
+    daemon_reload: true
+  failed_when: false

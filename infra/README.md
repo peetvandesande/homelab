@@ -63,7 +63,7 @@ Each task ends with a checkpoint before the next begins.
 | 7 | CA and enrolment | Done |
 | 8 | Prometheus, Loki, Grafana | Done |
 | 9 | DNS stack | Done |
-| 10 | Application services: Forgejo, moby, media | |
+| 10 | Application services: Forgejo, moby, media | Done |
 | 11 | lenora, metis, hermes, watchdogs | |
 | 12 | ruby and jennie, run by a person; router documented | |
 | 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | |
@@ -90,6 +90,7 @@ ansible-playbook enrol.yml --limit <host>                      # certificate for
 ansible-playbook ca.yml --check --diff                         # the CA on pistis; a person runs this
 ansible-playbook monitoring.yml --check --diff                 # Prometheus, Loki, Grafana; a person runs this until task 13
 ansible-playbook dns.yml --check --diff                        # pythia, then delphi, then themis; a person runs this until task 13
+ansible-playbook apps.yml --check --diff                       # Jellyfin, Navidrome, moby, Forgejo; a person runs this until task 13
 ```
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes

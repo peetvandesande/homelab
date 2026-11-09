@@ -1,0 +1,38 @@
+---
+# The application services, smallest first and Forgejo last: it carries the CI
+# that checks these very changes. A failure on one stops the run before the next
+# is touched. Run by a person until apply-on-merge exists: mail passwords come from
+# the local secrets cache. Each host must have had fleet.yml first. From infra/ansible:
+#
+#   ansible-playbook apps.yml --check --diff
+- name: Jellyfin
+  hosts: jellyfin
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - jellyfin
+
+- name: Navidrome
+  hosts: navidrome
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - navidrome
+
+- name: Moby
+  hosts: moby
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - moby
+
+- name: Forgejo
+  hosts: forgejo
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - forgejo

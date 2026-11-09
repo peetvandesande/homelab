@@ -1,0 +1,15 @@
+---
+forgejo_source: "{{ role_path }}/../../../../forgejo/root"
+forgejo_version: 15.0.11
+forgejo_sha256: 17b59b5f8a8f968126b7a6fcc1d45d9531228dbf293f172cf5565d2e72e999a3
+forgejo_binary: "/usr/local/bin/forgejo-{{ forgejo_version }}"
+forgejo_url: "https://codeberg.org/forgejo/forgejo/releases/download/v{{ forgejo_version }}/forgejo-{{ forgejo_version }}-linux-amd64"
+forgejo_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+forgejo_secrets: "{{ lookup('ansible.builtin.file', forgejo_private ~ '/forgejo/secrets.env') }}"
+forgejo_smtp_passwd: "{{ forgejo_secrets | regex_search('(?m)^SMTP_PASSWD=(.*)$', '\\1') | first }}"
+forgejo_runner_secret: "{{ forgejo_secrets | regex_search('(?m)^RUNNER_LEXIE_SECRET=(.*)$', '\\1') | first }}"
+forgejo_generated_secrets:
+  - { file: secret_key, kind: SECRET_KEY }
+  - { file: internal_token, kind: INTERNAL_TOKEN }
+  - { file: jwt_secret, kind: JWT_SECRET }
+  - { file: lfs_jwt_secret, kind: JWT_SECRET }

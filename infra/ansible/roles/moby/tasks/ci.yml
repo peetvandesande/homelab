@@ -1,0 +1,48 @@
+---
+# Only the runner on lexie uses this account. It is in the docker group because
+# its one command needs `docker exec`, and the forced command keeps it to that.
+- name: Install the schema command
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/usr/local/sbin/jobsearch-schema"
+    dest: /usr/local/sbin/jobsearch-schema
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Read the runner's key
+  ansible.builtin.slurp:
+    src: "{{ moby_runner_key }}"
+  delegate_to: lexie
+  register: moby_runner_pub
+  failed_when: false
+
+- name: Create the account for that key
+  when: moby_runner_pub.content is defined
+  block:
+    - name: Create the account
+      ansible.builtin.user:
+        name: jobsearch-ci
+        system: true
+        create_home: true
+        home: /var/lib/jobsearch-ci
+        shell: /bin/sh
+        comment: job search CI (forced command)
+        groups: docker
+        append: true
+        password_lock: true
+
+    - name: Create its key directory
+      ansible.builtin.file:
+        path: /var/lib/jobsearch-ci/.ssh
+        state: directory
+        owner: jobsearch-ci
+        group: jobsearch-ci
+        mode: "0700"
+
+    - name: Accept only the runner's key, from lexie, for that one command
+      ansible.builtin.copy:
+        content: "restrict,from=\"192.168.8.24\",command=\"/usr/local/sbin/jobsearch-schema\" {{ moby_runner_pub.content | b64decode }}"
+        dest: /var/lib/jobsearch-ci/.ssh/authorized_keys
+        owner: jobsearch-ci
+        group: jobsearch-ci
+        mode: "0600"

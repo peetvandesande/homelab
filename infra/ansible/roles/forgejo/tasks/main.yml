@@ -1,0 +1,188 @@
+---
+- name: Check the host holds a certificate
+  ansible.builtin.stat:
+    path: /etc/homelab-tls/host.key
+  register: forgejo_cert
+
+- name: Refuse a host that is not enrolled
+  ansible.builtin.assert:
+    that:
+      - forgejo_cert.stat.exists
+      - forgejo_runner_secret is match('^[0-9a-f]{40}$')
+    fail_msg: "Not enrolled, or RUNNER_LEXIE_SECRET is not 40 hex characters"
+    quiet: true
+
+- name: Install the packages
+  ansible.builtin.apt:
+    name: [curl, ca-certificates, git, git-lfs, openssh-server, postgresql]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# A real shell, because OpenSSH runs the forced command through it on every push.
+- name: Create the service account
+  ansible.builtin.user:
+    name: git
+    system: true
+    create_home: false
+    home: /var/lib/forgejo
+    shell: /bin/bash
+    groups: tlscert
+    append: true
+    password_lock: true
+  notify: Restart Forgejo
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: git
+    mode: "0750"
+  loop:
+    - { path: /var/lib/forgejo, owner: git }
+    - { path: /var/lib/forgejo/custom, owner: git }
+    - { path: /var/lib/forgejo/log, owner: git }
+    - { path: /var/lib/forgejo/data, owner: git }
+    - { path: /var/lib/forgejo/repositories, owner: git }
+    - { path: /etc/forgejo, owner: root }
+    - { path: /etc/forgejo/secrets, owner: root }
+
+# The role is named after the OS user, so Forgejo connects over the socket with
+# peer authentication and there is no password at all.
+- name: Create the database and its owner
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      [ -n "$(runuser -u postgres -- psql -tAc "select 1 from pg_roles where rolname='git'")" ] \
+        || { runuser -u postgres -- createuser git; echo created; }
+      [ -n "$(runuser -u postgres -- psql -tAc "select 1 from pg_database where datname='forgejo'")" ] \
+        || { runuser -u postgres -- createdb -O git -E UTF8 -T template0 forgejo; echo created; }
+  register: forgejo_db
+  changed_when: "'created' in forgejo_db.stdout"
+
+- name: Download the pinned Forgejo
+  ansible.builtin.get_url:
+    url: "{{ forgejo_url }}"
+    dest: "{{ forgejo_binary }}"
+    checksum: "sha256:{{ forgejo_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart Forgejo
+
+- name: Point the command at that version
+  ansible.builtin.file:
+    src: "{{ forgejo_binary }}"
+    dest: /usr/local/bin/forgejo
+    state: link
+  notify: Restart Forgejo
+
+- name: Install the service
+  ansible.builtin.copy:
+    src: "{{ forgejo_source }}/etc/systemd/system/forgejo.service"
+    dest: /etc/systemd/system/forgejo.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Forgejo
+
+- name: Install the configuration
+  vars:
+    SMTP_PASSWD: "{{ forgejo_smtp_passwd }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ forgejo_source }}/etc/forgejo/app.ini"
+    dest: /etc/forgejo/app.ini
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: git
+    mode: "0640"
+  no_log: true
+  notify: Restart Forgejo
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ forgejo_source }}/etc/homelab-tls/post-renew.d/20-forgejo"
+    dest: /etc/homelab-tls/post-renew.d/20-forgejo
+    owner: root
+    group: root
+    mode: "0755"
+
+# Generated once on the host: a new SECRET_KEY cannot decrypt what the old one
+# encrypted.
+- name: Generate the secrets the configuration points at
+  ansible.builtin.shell:
+    cmd: umask 027; /usr/local/bin/forgejo generate secret {{ item.kind }} > /etc/forgejo/secrets/{{ item.file }}
+    creates: "/etc/forgejo/secrets/{{ item.file }}"
+  loop: "{{ forgejo_generated_secrets }}"
+  loop_control:
+    label: "{{ item.file }}"
+
+- name: Keep those secrets private to the service
+  ansible.builtin.file:
+    path: "/etc/forgejo/secrets/{{ item.file }}"
+    owner: root
+    group: git
+    mode: "0640"
+  loop: "{{ forgejo_generated_secrets }}"
+  loop_control:
+    label: "{{ item.file }}"
+
+- name: Install the SSH settings
+  ansible.builtin.copy:
+    src: "{{ forgejo_source }}/etc/ssh/sshd_config.d/forgejo.conf"
+    dest: /etc/ssh/sshd_config.d/forgejo.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: sshd -t -f %s
+  notify: Restart SSH
+
+- name: Keep Forgejo enabled and running
+  ansible.builtin.systemd_service:
+    name: forgejo
+    enabled: true
+    state: started
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Forgejo to answer
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}/api/healthz"
+    ca_path: /etc/homelab-tls/root_ca.crt
+  register: forgejo_health
+  until: forgejo_health.status == 200
+  retries: 24
+  delay: 5
+  check_mode: false
+
+# Registering the same secret again updates the runner in place, scoped to peet's
+# repositories so nobody else's workflow lands on a host-mode runner.
+- name: Keep lexie's runner registered
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - git
+      - --
+      - /usr/local/bin/forgejo
+      - forgejo-cli
+      - actions
+      - register
+      - --config
+      - /etc/forgejo/app.ini
+      - --work-path
+      - /var/lib/forgejo
+      - --name
+      - lexie
+      - --scope
+      - peet
+      - --labels
+      - lexie
+      - --secret-stdin=1
+    stdin: "{{ forgejo_runner_secret }}"
+    stdin_add_newline: false
+  no_log: true
+  changed_when: false

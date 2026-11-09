@@ -1,0 +1,70 @@
+---
+- name: Check for Jellyfin's package key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/jellyfin.gpg
+  register: jellyfin_key
+
+- name: Fetch Jellyfin's package key
+  when: not jellyfin_key.stat.exists
+  block:
+    - name: Install what fetching the key needs
+      ansible.builtin.apt:
+        name: [curl, ca-certificates, gnupg]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Fetch the key
+      ansible.builtin.shell:
+        cmd: set -o pipefail; curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg
+        executable: /bin/bash
+        creates: /etc/apt/keyrings/jellyfin.gpg
+
+- name: Add Jellyfin's package repository
+  ansible.builtin.copy:
+    content: |
+      Types: deb
+      URIs: https://repo.jellyfin.org/debian
+      Suites: trixie
+      Components: main
+      Architectures: amd64
+      Signed-By: /etc/apt/keyrings/jellyfin.gpg
+    dest: /etc/apt/sources.list.d/jellyfin.sources
+    owner: root
+    group: root
+    mode: "0644"
+  register: jellyfin_repo
+
+- name: Install Jellyfin
+  ansible.builtin.apt:
+    name: jellyfin
+    state: present
+    update_cache: "{{ jellyfin_repo is changed }}"
+
+- name: Install the network settings
+  ansible.builtin.copy:
+    src: "{{ jellyfin_source }}/etc/jellyfin/network.xml"
+    dest: /etc/jellyfin/network.xml
+    owner: root
+    group: jellyfin
+    mode: "0640"
+  notify: Restart Jellyfin
+
+- name: Keep Jellyfin enabled and running
+  ansible.builtin.systemd_service:
+    name: jellyfin
+    enabled: true
+    state: started
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Jellyfin to answer
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:8096/health"
+    return_content: true
+  register: jellyfin_health
+  until: jellyfin_health.status == 200 and 'Healthy' in jellyfin_health.content
+  retries: 24
+  delay: 5
+  check_mode: false

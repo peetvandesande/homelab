@@ -1,0 +1,158 @@
+---
+- name: Check for the certificate and Docker's package key
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/homelab-tls/host.key
+    - /etc/apt/keyrings/docker.gpg
+  register: moby_ready
+
+- name: Refuse a host that is not enrolled
+  ansible.builtin.assert:
+    that: moby_ready.results[0].stat.exists
+    fail_msg: "Enrol the host with ca/scripts/enrol.sh and run fleet.yml first"
+    quiet: true
+
+- name: Fetch Docker's package key
+  when: not moby_ready.results[1].stat.exists
+  block:
+    - name: Install what fetching the key needs
+      ansible.builtin.apt:
+        name: [curl, ca-certificates, gnupg]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Fetch the key
+      ansible.builtin.shell:
+        cmd: set -o pipefail; curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        executable: /bin/bash
+        creates: /etc/apt/keyrings/docker.gpg
+
+- name: Add Docker's package repository
+  ansible.builtin.copy:
+    content: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable\n"
+    dest: /etc/apt/sources.list.d/docker.list
+    owner: root
+    group: root
+    mode: "0644"
+  register: moby_repo
+
+- name: Install Docker and nginx
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin, nginx, jq]
+    state: present
+    update_cache: "{{ moby_repo is changed }}"
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /opt/stacks
+    - /etc/docker
+    - /etc/systemd/system/docker.service.d
+    - /etc/systemd/system/nginx.service.d
+
+- name: Install the extra addresses
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: etc/homelab-extra-addresses, mode: "0644" }
+    - { path: etc/systemd/system/homelab-extra-addresses.service, mode: "0644" }
+    - { path: usr/local/sbin/homelab-extra-addresses, mode: "0755" }
+  notify: Apply the extra addresses
+
+- name: Keep the extra addresses on
+  ansible.builtin.systemd_service:
+    name: homelab-extra-addresses
+    enabled: true
+
+- name: Install the sites
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/etc/nginx/sites-available/{{ item }}.conf"
+    dest: "/etc/nginx/sites-available/{{ item }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ moby_sites }}"
+  notify: Reload nginx
+
+- name: Enable the sites
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item }}.conf"
+    state: link
+  loop: "{{ moby_sites }}"
+  notify: Reload nginx
+
+# A second default_server on :80, serving the nginx splash page to the LAN.
+- name: Remove nginx's default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Install nginx's start ordering and renewal hook
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: etc/systemd/system/nginx.service.d/wait-for-address.conf, mode: "0644" }
+    - { path: etc/homelab-tls/post-renew.d/20-nginx, mode: "0755" }
+  notify: Reload nginx
+
+- name: Install the engine's start ordering
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/etc/systemd/system/docker.service.d/extra-addresses.conf"
+    dest: /etc/systemd/system/docker.service.d/extra-addresses.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+
+- name: Install the engine's configuration
+  ansible.builtin.copy:
+    src: "{{ moby_source }}/etc/docker/daemon.json"
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    validate: dockerd --validate --config-file %s
+  notify: Restart Docker
+
+- name: Keep the services enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - nginx
+    - docker
+
+# Before the stacks, so a container binding an extra address finds it there.
+- name: Apply anything owed before the stacks
+  ansible.builtin.meta: flush_handlers
+
+- name: Converge the stacks
+  ansible.builtin.include_tasks: stacks.yml
+
+- name: Configure CI's forced-command account
+  ansible.builtin.include_tasks: ci.yml
+
+- name: Wait for the sites and the engine
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 443
+    timeout: 60
+  check_mode: false

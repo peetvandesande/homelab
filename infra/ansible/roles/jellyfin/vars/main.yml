@@ -1,0 +1,2 @@
+---
+jellyfin_source: "{{ role_path }}/../../../../jellyfin/root"

@@ -1,0 +1,25 @@
+---
+# In this order: a container binding an extra address needs it before the engine
+# comes back. `ip addr replace` makes the unit safe to run again.
+- name: Apply the extra addresses
+  ansible.builtin.systemd_service:
+    name: homelab-extra-addresses
+    state: restarted
+    daemon_reload: true
+
+- name: Reload nginx
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      nginx -t
+      systemctl daemon-reload
+      systemctl reload nginx
+  changed_when: true
+
+# A restart: log-driver and metrics-addr are read only at start. live-restore keeps
+# the containers running while the daemon is down.
+- name: Restart Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    state: restarted
+    daemon_reload: true

@@ -1,0 +1,61 @@
+---
+- name: Install ffmpeg for transcoding
+  ansible.builtin.apt:
+    name: ffmpeg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Read the installed version
+  ansible.builtin.command: dpkg-query -W -f=${Version} navidrome
+  register: navidrome_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the pinned Navidrome
+  when: navidrome_installed.stdout != navidrome_version
+  notify: Restart Navidrome
+  block:
+    - name: Download the package
+      ansible.builtin.get_url:
+        url: "{{ navidrome_url }}"
+        dest: /tmp/navidrome.deb
+        checksum: "sha256:{{ navidrome_sha256 }}"
+        mode: "0644"
+
+    - name: Install the package
+      ansible.builtin.apt:
+        deb: /tmp/navidrome.deb
+
+    - name: Remove the download
+      ansible.builtin.file:
+        path: /tmp/navidrome.deb
+        state: absent
+
+- name: Install the configuration
+  ansible.builtin.copy:
+    src: "{{ navidrome_source }}/etc/navidrome/navidrome.toml"
+    dest: /etc/navidrome/navidrome.toml
+    owner: root
+    group: navidrome
+    mode: "0640"
+  notify: Restart Navidrome
+
+- name: Keep Navidrome enabled and running
+  ansible.builtin.systemd_service:
+    name: navidrome
+    enabled: true
+    state: started
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Navidrome to answer
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:4533/ping"
+  register: navidrome_ping
+  until: navidrome_ping.status == 200
+  retries: 24
+  delay: 5
+  check_mode: false

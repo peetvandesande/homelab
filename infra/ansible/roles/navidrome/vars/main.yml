@@ -1,0 +1,5 @@
+---
+navidrome_source: "{{ role_path }}/../../../../navidrome/root"
+navidrome_version: 0.63.2
+navidrome_sha256: 59ec91b7bd9d944269e1107bb4e5bf800c75ae0f00ae5038dd9b8ac7a8cea009
+navidrome_url: "https://github.com/navidrome/navidrome/releases/download/v{{ navidrome_version }}/navidrome_{{ navidrome_version }}_linux_amd64.deb"

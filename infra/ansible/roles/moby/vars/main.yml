@@ -1,0 +1,21 @@
+---
+moby_source: "{{ role_path }}/../../../../moby/root"
+moby_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+moby_sites: [metrics, n8n, n8n-sogode, ntfy-sogode]
+# In dependency order: each jobsearch stack joins an n8n stack's network, and
+# nextcloud, traefik and xwiki came from the old moby and are not repo-owned.
+moby_n8n_stacks: [n8n, n8n-sogode]
+moby_jobsearch_stacks: [jobsearch-sogode, jobsearch-personal]
+moby_stack_files:
+  - { stack: n8n, file: compose.yaml }
+  - { stack: n8n, file: searxng-settings.yml }
+  - { stack: n8n-sogode, file: compose.yaml }
+  - { stack: n8n-sogode, file: searxng-settings.yml }
+  - { stack: jobsearch-sogode, file: compose.yaml }
+  - { stack: jobsearch-personal, file: compose.yaml }
+  - { stack: jobsearch-shared, file: compose.yaml }
+moby_n8n_generated: [SANDBOX_API_KEY, SANDBOX_REGISTRATION_TOKEN, SANDBOX_RUNNER_KEY, N8N_RUNNERS_AUTH_TOKEN, SEARXNG_SECRET]
+# The one-shot certificate job runs to completion on every `up`, so it says
+# nothing about whether a run changed anything.
+moby_compose_changed: '(Container (?!\S*-certs-)\S+|Network \S+|Volume \S+) +(Recreate|Create|Start|Remov)'
+moby_runner_key: /var/lib/forgejo-runner/.ssh/id_ed25519.pub
