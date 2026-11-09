@@ -56,7 +56,7 @@ echo "== provisioned dashboards"
 # nothing. Grafana 13 keeps dashboards in unified storage - the `resource`
 # table, one JSON document per object - not the legacy `dashboard` table,
 # which stays empty.
-DASHBOARD_UIDS=(homelab-dns homelab-fleet homelab-router)
+DASHBOARD_UIDS=(homelab-dns homelab-fleet homelab-router homelab-actions)
 for uid in ${DASHBOARD_UIDS[@]+"${DASHBOARD_UIDS[@]}"}; do
   title=$(ssh -o BatchMode=yes root@$HOST 'python3 -c "
 import sqlite3, json
