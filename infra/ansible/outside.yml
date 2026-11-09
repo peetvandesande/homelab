@@ -1,10 +1,26 @@
 ---
 # ruby and jennie. Always run by a person, over the VPN, and never from CI: these
 # hosts face the internet and carry mail. Only what the repo owns is here. WireGuard,
-# nftables and a brand-new public vhost stay with their own install scripts. From
-# infra/ansible, using your own sudo password:
+# nftables and a brand-new public vhost stay with their own install scripts.
 #
-#   ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff
+# Login takes more than a key, and Ansible cannot answer the prompt, so log in
+# yourself first and stay logged in. Once per host, jennie then ruby:
+#
+#   ssh -M -o ControlPath='~/.ssh/cm-%r@%h:%p' peet@192.168.254.2
+#   ssh -M -o ControlPath='~/.ssh/cm-%r@%h:%p' peet@192.168.254.254
+#
+# Then, from infra/ansible in another terminal, point Ansible at those sessions.
+# The address above has to be the inventory's ansible_host, or the path differs.
+#
+#   export ANSIBLE_SSH_ARGS='-o BatchMode=yes -o StrictHostKeyChecking=yes
+#     -o UserKnownHostsFile=known_hosts -o ControlMaster=auto
+#     -o ControlPath=~/.ssh/cm-%r@%h:%p'
+#
+# Run one host at a time, as Ansible asks for one sudo password per run. Use
+# your own, and always pass --ask-become-pass: sudo tried without a password
+# sends a security alert from ruby.
+#
+#   ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff --limit jennie
 #   ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --limit jennie
 #
 # Start with jennie, then ruby.

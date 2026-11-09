@@ -122,7 +122,7 @@ ansible-playbook dns.yml --check --diff                        # pythia, then de
 ansible-playbook apps.yml --check --diff                       # Jellyfin, Navidrome, moby, Forgejo; a person runs this until task 13
 ansible-playbook platform.yml --limit '!hermes' --check --diff # lenora, metis; hermes when a lab has it running
 ansible-playbook ci.yml --check --diff                         # lexie's and talos's runners, the responder; always a person
-ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff  # ruby and jennie; always a person
+ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff --limit jennie  # then ruby; always a person, and log in first: see outside.yml
 ../../router/scripts/check.sh                                  # the live router against the settings the lab needs; read-only
 ```
 
