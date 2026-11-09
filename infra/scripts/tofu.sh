@@ -21,7 +21,8 @@ value() { sed -n "s/^$1=//p" "$secrets"; }
 
 PG_CONN_STR="postgres://tofu:$(value TOFU_STATE_PG_PASSWORD)@forgejo.home/tofu_state?sslmode=verify-full&sslrootcert=$root_ca"
 TF_VAR_state_passphrase=$(value TOFU_STATE_PASSPHRASE)
-PROXMOX_VE_API_TOKEN=$(value PROXMOX_VE_API_TOKEN)
+# Read-only unless a caller asks for another token: tofu-apply.sh does.
+PROXMOX_VE_API_TOKEN=$(value "${TOFU_TOKEN_NAME:-PROXMOX_VE_API_TOKEN}")
 export PG_CONN_STR TF_VAR_state_passphrase PROXMOX_VE_API_TOKEN
 
 exec tofu -chdir="$repo/infra/tofu" "$@"

@@ -28,6 +28,9 @@ jobs:
       - name: Apply
         if: forgejo.ref == 'refs/heads/main'
         run: repo/infra/scripts/apply.sh "${{ forgejo.event.before }}" "${{ forgejo.sha }}"
+      - name: Apply OpenTofu
+        if: forgejo.ref == 'refs/heads/main'
+        run: repo/infra/scripts/tofu-apply.sh "${{ forgejo.event.before }}" "${{ forgejo.sha }}"
       # After publishing, so that a guest changed by hand reports drift without
       # holding up the code. Exit code 2 from plan means something differs.
       - name: Report drift from OpenTofu

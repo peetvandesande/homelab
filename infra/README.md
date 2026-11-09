@@ -51,15 +51,19 @@ person runs.
 ## Apply on merge
 
 After the checks and the GitHub publish, `infra/scripts/apply.sh` runs the playbooks
-whose sources a merge to `main` changed. It is built but **off**: nothing happens until
-a person runs `ansible-playbook deploy-access.yml`, which gives `talos` a deploy key
-and a copy of the secrets those playbooks read. See what a merge would do without
-applying it: `infra/scripts/apply.sh --plan <old> <new>`.
+whose sources a merge to `main` changed. It runs with a deploy key on `talos`, set up
+by `ansible-playbook deploy-access.yml`. See what a merge would do without applying it:
+`infra/scripts/apply.sh --plan <old> <new>`.
 
 It can only reach the services whose roles are safe to run unattended. `pistis`,
 `lenora`, `talos`, `lexie`, `ruby` and `jennie` are out of its reach, and a change to
-any of them is printed for a person. OpenTofu still only reports drift: applying from
-CI needs a Proxmox token that can write, which a person has to create.
+any of them is printed for a person.
+
+`infra/scripts/tofu-apply.sh` does the same for OpenTofu, when a merge changes
+`infra/tofu`. A guest changed by hand is reported as drift, not overwritten. It refuses
+any plan that deletes or replaces something, so a person applies those. Its Proxmox
+token is `tofu-apply@pve!apply`, with the `TofuApply` role: guest configuration and
+power, but no console, guest agent or rights over users.
 
 ## Kept out of the automation
 
