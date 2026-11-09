@@ -88,6 +88,7 @@ ansible-playbook fleet.yml --limit '!hermes' --check --diff   # what would chang
 ansible-playbook fleet.yml --limit '!hermes'                   # apply
 ansible-playbook enrol.yml --limit <host>                      # certificate for a host
 ansible-playbook ca.yml --check --diff                         # the CA on pistis; a person runs this
+ansible-playbook monitoring.yml --check --diff                 # Prometheus, Loki, Grafana; a person runs this until task 13
 ```
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes

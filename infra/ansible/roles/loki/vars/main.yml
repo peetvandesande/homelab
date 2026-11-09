@@ -1,0 +1,4 @@
+---
+loki_source: "{{ role_path }}/../../../../loki/root"
+# Schema and config keys move between majors: bump together with etc/loki/config.yml.
+loki_version: 3.7.7

@@ -1,0 +1,95 @@
+---
+- name: Install the pinned Loki
+  ansible.builtin.apt:
+    name: "loki={{ loki_version }}"
+    state: present
+    allow_downgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+  notify: Restart Loki
+
+- name: Hold Loki at that version
+  ansible.builtin.dpkg_selections:
+    name: loki
+    selection: hold
+
+# The package leaves the user in nogroup, with no group of its own. This one lets
+# the configuration be root:loki 0640 without opening it to every nogroup process.
+- name: Create Loki's group
+  ansible.builtin.group:
+    name: loki
+    system: true
+
+- name: Put Loki in its group and let it read the certificate
+  ansible.builtin.user:
+    name: loki
+    group: loki
+    groups: tlscert
+    append: true
+  notify: Restart Loki
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/lib/loki, owner: loki, mode: "0750" }
+    - { path: /etc/systemd/system/loki.service.d, owner: root, mode: "0755" }
+
+- name: Install Loki's configuration
+  ansible.builtin.copy:
+    src: "{{ loki_source }}/etc/loki/config.yml"
+    dest: /etc/loki/config.yml
+    owner: root
+    group: loki
+    mode: "0640"
+    validate: loki -config.file=%s -verify-config
+  notify: Restart Loki
+
+- name: Install the TLS drop-in
+  ansible.builtin.copy:
+    src: "{{ loki_source }}/etc/systemd/system/loki.service.d/tls.conf"
+    dest: /etc/systemd/system/loki.service.d/tls.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Loki
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ loki_source }}/etc/homelab-tls/post-renew.d/20-loki"
+    dest: /etc/homelab-tls/post-renew.d/20-loki
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the router's syslog listener
+  ansible.builtin.copy:
+    src: "{{ loki_source }}/etc/alloy/router.alloy"
+    dest: /etc/alloy/router.alloy
+    owner: root
+    group: alloy
+    mode: "0640"
+  notify: Restart Alloy with the router listener
+
+- name: Keep Loki enabled and running
+  ansible.builtin.systemd_service:
+    name: loki
+    enabled: true
+    state: started
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Loki to answer
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}:3100/ready"
+    ca_path: /etc/homelab-tls/root_ca.crt
+  register: loki_ready
+  until: loki_ready.status == 200
+  retries: 24
+  delay: 5
+  check_mode: false

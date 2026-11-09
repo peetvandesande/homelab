@@ -1,0 +1,149 @@
+---
+- name: Refuse secrets of the wrong shape
+  ansible.builtin.assert:
+    that:
+      - grafana_ha_webhook_id | length > 0
+      - grafana_responder_token | length > 0
+      - grafana_healthchecks_ping_url is match('https://hc-ping.com/')
+    fail_msg: "grafana/ or responder/ secrets.env is incomplete: run infra/scripts/vault.py pull"
+    quiet: true
+
+- name: Install the pinned Grafana
+  ansible.builtin.apt:
+    name: "grafana={{ grafana_version }}"
+    state: present
+    allow_downgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+  notify: Restart Grafana
+
+- name: Hold Grafana at that version
+  ansible.builtin.dpkg_selections:
+    name: grafana
+    selection: hold
+
+- name: Let Grafana read the certificate
+  ansible.builtin.user:
+    name: grafana
+    groups: tlscert
+    append: true
+  notify: Restart Grafana
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/systemd/system/grafana-server.service.d
+    - /var/lib/grafana/dashboards
+
+- name: Install the service settings and provisioning
+  ansible.builtin.copy:
+    src: "{{ grafana_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/systemd/system/grafana-server.service.d/tls.conf
+    - etc/grafana/provisioning/datasources/prometheus.yaml
+    - etc/grafana/provisioning/datasources/loki.yaml
+    - etc/grafana/provisioning/dashboards/homelab.yaml
+  notify: Restart Grafana
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ grafana_source }}/etc/homelab-tls/post-renew.d/20-grafana"
+    dest: /etc/homelab-tls/post-renew.d/20-grafana
+    owner: root
+    group: root
+    mode: "0755"
+
+# Grafana re-reads this directory every 30 seconds, so no restart.
+- name: Install the dashboards
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/var/lib/grafana/dashboards/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ lookup('ansible.builtin.fileglob', grafana_source ~ '/var/lib/grafana/dashboards/*.json', wantlist=True) }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Keep Grafana enabled and running
+  ansible.builtin.systemd_service:
+    name: grafana-server
+    enabled: true
+    state: started
+
+# On a new host Grafana creates the datasources when it first starts, so this has
+# to happen before their uids can be read.
+- name: Apply anything owed before reading the datasources
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the datasource uids
+  ansible.builtin.command:
+    argv: [python3, -I, -c, "{{ grafana_uid_query }}"]
+  register: grafana_uids
+  until: >-
+    grafana_uids.rc == 0
+    and (grafana_uids.stdout | from_json).prometheus | length > 0
+    and (grafana_uids.stdout | from_json).loki | length > 0
+  retries: 24
+  delay: 5
+  changed_when: false
+  check_mode: false
+
+# Rule text holds Go templates in double braces, so @@ is the only delimiter here.
+- name: Install the alert rules
+  vars:
+    PROM_DS_UID: "{{ (grafana_uids.stdout | from_json).prometheus }}"  # noqa: var-naming[pattern]
+    LOKI_DS_UID: "{{ (grafana_uids.stdout | from_json).loki }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/grafana/provisioning/alerting/{{ item | basename }}"
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ lookup('ansible.builtin.fileglob', grafana_source ~ '/etc/grafana/provisioning/alerting/*.yaml', wantlist=True) | reject('search', '/notifications.yaml$') }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  notify: Restart Grafana
+
+- name: Install the contact points
+  vars:
+    HA_WEBHOOK_ID: "{{ grafana_ha_webhook_id }}"  # noqa: var-naming[pattern]
+    HEALTHCHECKS_PING_URL: "{{ grafana_healthchecks_ping_url }}"  # noqa: var-naming[pattern]
+    RESPONDER_TOKEN: "{{ grafana_responder_token }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ grafana_source }}/etc/grafana/provisioning/alerting/notifications.yaml"
+    dest: /etc/grafana/provisioning/alerting/notifications.yaml
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: grafana
+    mode: "0640"
+  no_log: true
+  notify: Restart Grafana
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+# Only an answer from the API counts. A provisioning error makes Grafana exit a few
+# seconds after starting and systemd relaunches it, so the unit looks active while
+# the UI is down.
+- name: Wait for Grafana to answer
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}:3000/api/health"
+    ca_path: /etc/homelab-tls/root_ca.crt
+  register: grafana_health
+  until: grafana_health.status == 200
+  retries: 24
+  delay: 5
+  check_mode: false

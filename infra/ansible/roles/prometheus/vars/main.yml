@@ -1,0 +1,2 @@
+---
+prometheus_source: "{{ role_path }}/../../../../prometheus/root"

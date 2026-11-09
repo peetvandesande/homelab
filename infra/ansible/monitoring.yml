@@ -1,0 +1,46 @@
+---
+# Prometheus, Loki and Grafana, in the order they depend on each other. Run by a
+# person until apply-on-merge exists: Grafana's contact points are filled from the
+# local secrets cache (infra/scripts/vault.py pull). From infra/ansible:
+#
+#   ansible-playbook monitoring.yml --check --diff
+- name: Check the monitoring hosts are ready
+  hosts: prometheus:loki:grafana
+  gather_facts: false
+  tasks:
+    - name: Look for the certificate and Grafana's package key
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/homelab-tls/host.key
+        - /etc/apt/keyrings/grafana.gpg
+      register: monitoring_ready
+
+    - name: Refuse a host without them
+      ansible.builtin.assert:
+        that: monitoring_ready.results | map(attribute='stat.exists') | min
+        fail_msg: "Enrol the host with ca/scripts/enrol.sh and run fleet.yml first"
+        quiet: true
+
+# A failure later in a run must not skip a restart already owed, or a service
+# keeps its old configuration and no later run would notice.
+- name: Prometheus
+  hosts: prometheus
+  gather_facts: false
+  force_handlers: true
+  roles:
+    - prometheus
+
+- name: Loki
+  hosts: loki
+  gather_facts: false
+  force_handlers: true
+  roles:
+    - loki
+
+- name: Grafana
+  hosts: grafana
+  gather_facts: false
+  force_handlers: true
+  roles:
+    - grafana

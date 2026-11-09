@@ -1,0 +1,18 @@
+---
+grafana_source: "{{ role_path }}/../../../../grafana/root"
+grafana_version: 13.2.1
+grafana_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+grafana_secrets: "{{ lookup('ansible.builtin.file', grafana_private ~ '/grafana/secrets.env') }}"
+grafana_responder_secrets: "{{ lookup('ansible.builtin.file', grafana_private ~ '/responder/secrets.env') }}"
+grafana_ha_webhook_id: "{{ grafana_secrets | regex_search(\"(?m)^HA_WEBHOOK_ID='?(.*?)'?$\", '\\1') | first }}"
+grafana_healthchecks_ping_url: "{{ grafana_secrets | regex_search(\"(?m)^HEALTHCHECKS_PING_URL='?(.*?)'?$\", '\\1') | first }}"
+grafana_responder_token: "{{ grafana_responder_secrets | regex_search(\"(?m)^RESPONDER_TOKEN='?(.*?)'?$\", '\\1') | first }}"
+# Datasources carry no pinned uid, since adding one to a live datasource stops
+# Grafana starting. Alert rules need it, so it is read from Grafana's own database.
+grafana_uid_query: |
+  import json, sqlite3
+  db = sqlite3.connect("file:/var/lib/grafana/grafana.db?mode=ro", uri=True)
+  def uid(kind, name):
+      row = db.execute("select uid from data_source where type=? and name=?", (kind, name)).fetchone()
+      return row[0] if row else ""
+  print(json.dumps({"prometheus": uid("prometheus", "Prometheus"), "loki": uid("loki", "Loki")}))

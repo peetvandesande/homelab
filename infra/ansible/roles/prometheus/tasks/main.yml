@@ -1,0 +1,106 @@
+---
+# Before the configuration, so ours replaces the package's /etc/default file and
+# not the other way round.
+- name: Install Prometheus and the blackbox exporter
+  ansible.builtin.apt:
+    name: [prometheus, prometheus-blackbox-exporter]
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Let Prometheus read the certificate
+  ansible.builtin.user:
+    name: prometheus
+    groups: tlscert
+    append: true
+  notify: Restart Prometheus
+
+- name: Create the TLS drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/prometheus.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Allow unprivileged ping for the blackbox exporter
+  ansible.builtin.copy:
+    src: "{{ prometheus_source }}/etc/sysctl.d/60-ping-group-range.conf"
+    dest: /etc/sysctl.d/60-ping-group-range.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply the ping range
+
+- name: Install the blackbox exporter's arguments
+  ansible.builtin.copy:
+    src: "{{ prometheus_source }}/etc/default/prometheus-blackbox-exporter"
+    dest: /etc/default/prometheus-blackbox-exporter
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the blackbox exporter
+
+- name: Install the blackbox exporter's configuration
+  ansible.builtin.copy:
+    src: "{{ prometheus_source }}/etc/prometheus/blackbox.yml"
+    dest: /etc/prometheus/blackbox.yml
+    owner: root
+    group: root
+    mode: "0644"
+    validate: prometheus-blackbox-exporter --config.check --config.file=%s
+  notify: Restart the blackbox exporter
+
+- name: Install the TLS settings
+  ansible.builtin.copy:
+    src: "{{ prometheus_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/homelab-tls/prometheus-web.yml
+    - etc/systemd/system/prometheus.service.d/tls.conf
+  notify: Restart Prometheus
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ prometheus_source }}/etc/homelab-tls/post-renew.d/20-prometheus"
+    dest: /etc/homelab-tls/post-renew.d/20-prometheus
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the scrape configuration
+  ansible.builtin.copy:
+    src: "{{ prometheus_source }}/etc/prometheus/prometheus.yml"
+    dest: /etc/prometheus/prometheus.yml
+    owner: root
+    group: root
+    mode: "0644"
+    validate: promtool check config %s
+  notify: Restart Prometheus
+
+- name: Keep the services enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - prometheus
+    - prometheus-blackbox-exporter
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+# Replaying the write-ahead log after a restart can take minutes.
+- name: Wait for Prometheus to answer
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}:9090/-/ready"
+    ca_path: /etc/homelab-tls/root_ca.crt
+  register: prometheus_ready
+  until: prometheus_ready.status == 200
+  retries: 36
+  delay: 5
+  check_mode: false
