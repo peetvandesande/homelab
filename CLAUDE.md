@@ -235,6 +235,10 @@ Three things to be aware of:
   repositories, whose only reach beyond lexie is a forced-command key on moby.
   `forgejo-runner/CLAUDE.md`. Neither runs as `peet`, whose key the lab
   accepts everywhere.
+
+  **Lexie also runs the runbook engine**, as a `runbook` account that matches
+  alerts against exact rules and, in shadow mode, only records what it would do.
+  `runbooks/CLAUDE.md`.
 - **`homeassistant` (VM 302) is at 192.168.8.90**, pooled into Production
   but outside its range, by choice. It is one of two VMs, with `hermes`:
   Home Assistant OS, UEFI (OVMF, Secure Boot keys not enrolled – HAOS will

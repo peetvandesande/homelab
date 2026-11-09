@@ -120,7 +120,7 @@ Each task ends with a checkpoint before the next begins.
 | 12 | ruby and jennie, run by a person; router documented; lexie and talos | Done |
 | 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | Done |
 | 14 | Action log for the audit trail | Done |
-| 15 | Runbook engine in shadow mode | |
+| 15 | Runbook engine in shadow mode | Built: shadowing until 16 November 2026, then reviewed before task 16 |
 | 16 | Runbooks go live one at a time | |
 | 17 | The responder gains authority to act | |
 | 18 | Weekly email | |
