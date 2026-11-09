@@ -46,6 +46,11 @@ schema_config:
 
 limits_config:
   retention_period: 30d
+  # The audit trail outlives ordinary logs: infra/README.md, "Action log".
+  retention_stream:
+    - selector: '{identifier="homelab-action"}'
+      priority: 1
+      period: 8760h
   # Logs shipped from journald arrive with timestamps; be forgiving about
   # a container whose clock is a little behind.
   reject_old_samples: true
