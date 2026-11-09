@@ -4,6 +4,7 @@
     that:
       - grafana_ha_webhook_id | length > 0
       - grafana_responder_token | length > 0
+      - grafana_runbook_token | length > 0
       - grafana_healthchecks_ping_url is match('https://hc-ping.com/')
     fail_msg: "grafana/ or responder/ secrets.env is incomplete: run infra/scripts/vault.py pull"
     quiet: true
@@ -141,6 +142,7 @@
     HA_WEBHOOK_ID: "{{ grafana_ha_webhook_id }}"  # noqa: var-naming[pattern]
     HEALTHCHECKS_PING_URL: "{{ grafana_healthchecks_ping_url }}"  # noqa: var-naming[pattern]
     RESPONDER_TOKEN: "{{ grafana_responder_token }}"  # noqa: var-naming[pattern]
+    RUNBOOK_TOKEN: "{{ grafana_runbook_token }}"  # noqa: var-naming[pattern]
   ansible.builtin.template:
     src: "{{ grafana_source }}/etc/grafana/provisioning/alerting/notifications.yaml"
     dest: /etc/grafana/provisioning/alerting/notifications.yaml

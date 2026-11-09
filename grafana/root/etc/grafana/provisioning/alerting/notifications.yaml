@@ -68,6 +68,21 @@ contactPoints:
           authorization_scheme: Bearer
           authorization_credentials: "@@RESPONDER_TOKEN@@"
 
+  # The runbook engine on lexie (homelab/runbooks): exact-match rules, with no LLM.
+  # TLS off the lab CA and a bearer token, like the responder above. Which alerts
+  # it acts on is decided there (runbooks/root/etc/runbook/rules.toml).
+  - orgId: 1
+    name: runbook
+    receivers:
+      - uid: runbook-webhook
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "https://192.168.8.24:9096/alert"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "@@RUNBOOK_TOKEN@@"
+
 policies:
   - orgId: 1
     receiver: home-assistant
@@ -90,6 +105,14 @@ policies:
       # A copy of every alert goes to the responder, then on to the routes
       # below as before. After the heartbeat, which does not continue.
       - receiver: responder
+        continue: true
+        object_matchers:
+          - [alertname, "=~", ".+"]
+        group_wait: 30s
+        repeat_interval: 12h
+      # A copy for the runbook engine too. continue, so it never takes an alert away
+      # from the routes below.
+      - receiver: runbook
         continue: true
         object_matchers:
           - [alertname, "=~", ".+"]

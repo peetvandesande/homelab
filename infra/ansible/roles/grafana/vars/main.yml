@@ -8,6 +8,7 @@ grafana_responder_secrets: "{{ lookup('ansible.builtin.file', grafana_private ~ 
 grafana_ha_webhook_id: "{{ grafana_secrets | regex_search(\"(?m)^HA_WEBHOOK_ID='?(.*?)'?$\", '\\1') | first }}"
 grafana_healthchecks_ping_url: "{{ grafana_secrets | regex_search(\"(?m)^HEALTHCHECKS_PING_URL='?(.*?)'?$\", '\\1') | first }}"
 grafana_responder_token: "{{ grafana_responder_secrets | regex_search(\"(?m)^RESPONDER_TOKEN='?(.*?)'?$\", '\\1') | first }}"
+grafana_runbook_token: "{{ grafana_responder_secrets | regex_search(\"(?m)^RUNBOOK_TOKEN='?(.*?)'?$\", '\\1') | first }}"
 # Datasources carry no pinned uid, since adding one to a live datasource stops
 # Grafana starting. Alert rules need it, so it is read from Grafana's own database.
 grafana_uid_query: |
