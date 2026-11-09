@@ -1,0 +1,25 @@
+# Checks every push on talos, and publishes main to GitHub once they pass.
+# GitHub is public, so nothing reaches it that has not passed the secret scan:
+# the publish step is last and a failed step before it stops the job.
+name: checks
+on:
+  push:
+jobs:
+  checks:
+    runs-on: talos
+    steps:
+      - name: Fetch the full history
+        env:
+          TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          rm -rf repo
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader \
+          GIT_CONFIG_VALUE_0="Authorization: token $TOKEN" \
+            git clone -q https://git.peetvandesande.com/peet/homelab.git repo
+          git -C repo checkout -q "${{ forgejo.sha }}"
+      - name: Checks
+        run: repo/infra/scripts/ci-checks.sh
+      - name: Publish to GitHub
+        if: forgejo.ref == 'refs/heads/main'
+        run: git -C repo push git@github.com:peetvandesande/homelab.git "${{ forgejo.sha }}:refs/heads/main"

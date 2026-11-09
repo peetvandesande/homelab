@@ -1,0 +1,3 @@
+# Allowlists for false positives only. Never list a real secret here: rotate it.
+[extend]
+useDefault = true

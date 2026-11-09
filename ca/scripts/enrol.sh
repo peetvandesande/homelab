@@ -48,6 +48,7 @@ FLEET=(
   "192.168.8.62 forgejo git.peetvandesande.com"
   "192.168.8.57 hermes"
   "192.168.8.58 metis"
+  "192.168.8.59 talos"
 )
 
 enrol_one() { # enrol_one <ip> <name> [extra sans...]

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for the per-container deploy scripts (grafana/, jellyfin/,
 # navidrome/, prometheus/, node-exporter/). Sourced, not executed.
 #

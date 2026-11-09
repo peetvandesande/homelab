@@ -1,0 +1,8 @@
+# Findings checked by hand and known not to be secrets. Never list a real secret here: rotate it.
+# WireGuard public key, which is meant to be shared
+e5bc57f36e3236d35979eb5cef62c083d7454030:wireguard/TASKS.md:generic-api-key:620
+1d7f2aa551f26d3c549b0344da1cb29e3e74b97c:wireguard/README.md:generic-api-key:578
+# Prose about an API, no value
+460446a2266b458946bc63ebeb2f006bfd360da8:hermes/CLAUDE.md:generic-api-key:97
+# The sample WebSocket key from RFC 6455
+dde57f61123e64dd00677a9910772b5ac43e3bd8:moby/scripts/verify.sh:generic-api-key:116

@@ -95,6 +95,7 @@ ansible-inventory --graph
 | `secrets/manifest` | Which secrets exist and where each is written locally; names only |
 | `scripts/vault.py` | Moves secrets between Bitwarden and the local files |
 | `scripts/install-bws.sh` | Installs the pinned `bws`, checksum verified |
+| `scripts/ci-checks.sh` | The checks every push must pass; runnable by hand |
 
 ## Host keys
 
@@ -106,6 +107,15 @@ network is not what vouches for it, then replace that host's line:
 ssh root@lenora.home pct exec <ctid> -- cat /etc/ssh/ssh_host_ed25519_key.pub
 ssh root@lenora.home qm guest exec <vmid> -- cat /etc/ssh/ssh_host_ed25519_key.pub
 ```
+
+## Where the code lives
+
+Forgejo's private `peet/homelab` is the primary. Every push runs
+`.forgejo/workflows/checks.yml` on `talos`, and a passing run on `main` publishes
+to GitHub, which is public; ruby and jennie pull from there. A finding from the
+secret scan stops publication. If it is a false positive, add it to
+`.gitleaksignore`; if it is real, rotate the secret and rewrite the commit.
+`talos/CLAUDE.md` covers the runner.
 
 ## Secrets
 

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared assertions for the per-container verify scripts. Sourced, not run.
 # Every one of them needs the same three questions answered: is it TLS, does it
 # chain to our root, and is the certificate the CA actually issued.

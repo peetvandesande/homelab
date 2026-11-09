@@ -4,7 +4,7 @@
 # unreachable.
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 # shellcheck disable=SC1091
 source versions.env
 

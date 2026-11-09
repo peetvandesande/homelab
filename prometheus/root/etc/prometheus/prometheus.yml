@@ -74,6 +74,8 @@ scrape_configs:
         labels: {role: hermes }
       - targets: ['metis.home:9100']
         labels: {role: metis }
+      - targets: ['talos.home:9100']
+        labels: {role: talos }
       - targets: ['jellyfin.home:9100']
         labels: {role: jellyfin }
       - targets: ['navidrome.home:9100']
@@ -113,6 +115,8 @@ scrape_configs:
         labels: {role: hermes }
       - targets: ['metis.home:12345']
         labels: {role: metis }
+      - targets: ['talos.home:12345']
+        labels: {role: talos }
       - targets: ['jellyfin.home:12345']
         labels: {role: jellyfin }
       - targets: ['navidrome.home:12345']
@@ -295,6 +299,7 @@ scrape_configs:
           - '192.168.8.56:9100'
           - '192.168.8.57:9100'
           - '192.168.8.58:9100'
+          - '192.168.8.59:9100'
           - '192.168.8.60:9100'
           - '192.168.8.61:9100'
           - '192.168.8.62:9100'

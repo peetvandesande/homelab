@@ -71,6 +71,7 @@ zones:
           - { name: loki,       data: 192.168.8.56, data6: 'fd33:5692:1834:1000:be24:11ff:fe5e:a645', comment: 'log store' }
           - { name: hermes,     data: 192.168.8.57, data6: 'fd33:5692:1834:1000:be24:11ff:fe1b:5d14', comment: 'mailcow VM 109 - mail for the labs' }
           - { name: metis,      data: 192.168.8.58, data6: 'fd33:5692:1834:1000:be24:11ff:fe6e:7a19', comment: 'Ollama VM 110 on the P2200 - job search embeddings' }
+          - { name: talos,      data: 192.168.8.59, data6: 'fd33:5692:1834:1000:be24:11ff:fe21:4d0d', comment: 'deploy runner' }
           - { name: moby,       data: 192.168.8.27, data6: 'fd33:5692:1834:1000:be24:11ff:fe13:54b8', comment: 'Docker host - outside the .50-.59 range' }
           # No data6 on these two: .73 and .74 are extra IPv4 addresses on
           # moby's eth0, applied by a unit because Proxmox rewrites interface

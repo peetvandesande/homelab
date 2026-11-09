@@ -1,0 +1,28 @@
+# forgejo-runner on talos (talos/scripts/deploy.sh installs it). Host jobs only,
+# under the label `talos`, for the peet/homelab repository and no other, so
+# nothing else can run a job here. A job runs as the forgejo-runner user, which
+# holds the one key that can publish to GitHub.
+log:
+  level: info
+  job_level: info
+runner:
+  capacity: 1            # one job at a time: publishes never overlap
+  timeout: 30m
+  shutdown_timeout: 5m
+  insecure: false
+  fetch_timeout: 30s
+  fetch_interval: 5s
+  labels: ["talos:host"]
+cache:
+  enabled: false
+host:
+  workdir_parent: /var/lib/forgejo-runner/work
+server:
+  # The UUID is derived from the shared secret (the first 16 characters as
+  # bytes, as Forgejo does), so deploy.sh fills it in; the token itself is
+  # the secret, handed over by systemd (LoadCredential in the unit).
+  connections:
+    forgejo:
+      url: https://git.peetvandesande.com/
+      uuid: "@@RUNNER_UUID@@"
+      token_url: file:$CREDENTIALS_DIRECTORY/token
