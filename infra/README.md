@@ -61,7 +61,7 @@ Each task ends with a checkpoint before the next begins.
 | 5 | Import all guests into OpenTofu, with a no-change plan | Done |
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | Done |
 | 7 | CA and enrolment | Done |
-| 8 | Prometheus, Loki, Grafana | |
+| 8 | Prometheus, Loki, Grafana | Done |
 | 9 | DNS stack | |
 | 10 | Application services: Forgejo, moby, media | |
 | 11 | lenora, metis, hermes, watchdogs | |
