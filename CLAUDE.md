@@ -81,8 +81,10 @@ than fought.
 
 ## Secrets outside the repo
 
-This repo is public. Besides the gitignored `secrets.env` files, secrets with no
-deploy script to template them live outside git in `~/projects/homelab-private/`:
+This repo is public. Bitwarden Secrets Manager holds every secret, and
+`infra/scripts/vault.py` rebuilds the local copies from it – `infra/README.md`,
+"Secrets". A new secret needs a line in `infra/secrets/manifest`. Besides the
+gitignored `secrets.env` files, those copies live in `~/projects/homelab-private/`:
 WireGuard keys and filled configs, the Orange WAN credentials, and the mail
 passwords for Forgejo and both n8n stacks, Grafana's and the responder's alerting
 secrets, and the CA's passphrases – each in `<service>/secrets.env` there,

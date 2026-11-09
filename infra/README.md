@@ -31,7 +31,8 @@ Success means all four of these:
 | Git home | Forgejo primary, mirrored to GitHub, with a separate deploy runner acting only on `main` |
 | Restarts | Staggered service restarts by runbook, DNS hosts one at a time; lenora reboots stay with a person |
 | Order | Full migration to OpenTofu and Ansible first, then autonomy |
-| Backups | Proxmox Backup Server on a dedicated Dell, out of the agent's reach; ruby and jennie rely on OVH's daily snapshots |
+| Backups | Proxmox Backup Server on sally, a dedicated Dell, out of the agent's reach; ruby and jennie rely on OVH's daily snapshots |
+| Secrets | Bitwarden Secrets Manager is the source of truth; `~/projects/homelab-private` is a cache of it. No encrypted copy in Git, and no separate break-glass export for now, by choice |
 | Weekly email | A new section of `estate-report`, sent only to the owner |
 
 **Never without a person:** exposing secrets or services, and outward-facing
@@ -56,7 +57,7 @@ Each task ends with a checkpoint before the next begins.
 | 1 | Repo layout, pinned tools, read-only Ansible reach | Done |
 | 2 | Secrets handling a person can take over | |
 | 3 | Forgejo primary, deploy runner, CI that lints and plans only | |
-| 4 | PBS on the Dell, guest backups, a tested restore | |
+| 4 | PBS on sally, guest backups, a tested restore | |
 | 5 | Import all guests into OpenTofu, with a no-change plan | |
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | |
 | 7 | CA and enrolment | |
@@ -91,6 +92,9 @@ ansible-inventory --graph
 | `tofu/` | OpenTofu configuration; no resources until task 5 |
 | `ansible/inventory/fleet.py` | Inventory read from `FLEET` in `ca/scripts/enrol.sh` |
 | `ansible/known_hosts` | Pinned ed25519 host keys, by address |
+| `secrets/manifest` | Which secrets exist and where each is written locally; names only |
+| `scripts/vault.py` | Moves secrets between Bitwarden and the local files |
+| `scripts/install-bws.sh` | Installs the pinned `bws`, checksum verified |
 
 ## Host keys
 
@@ -102,3 +106,71 @@ network is not what vouches for it, then replace that host's line:
 ssh root@lenora.home pct exec <ctid> -- cat /etc/ssh/ssh_host_ed25519_key.pub
 ssh root@lenora.home qm guest exec <vmid> -- cat /etc/ssh/ssh_host_ed25519_key.pub
 ```
+
+## Secrets
+
+Bitwarden Secrets Manager holds every secret. `~/projects/homelab-private` and
+the gitignored files named in `secrets/manifest` are a cache of it, in the
+layout the deploy scripts read, so they can be deleted and rebuilt.
+
+| Project | Holds | Who gets a token |
+|---|---|---|
+| `homelab` | Service credentials | A person's laptop; later the deploy runner |
+| `homelab-restricted` | CA, WireGuard and Orange credentials | A person's laptop only, never automation |
+
+The root CA key is in the owner's Bitwarden vault and nowhere else;
+`ca/README.md` says how to use it. No agent or automated account other than the
+deploy runner ever holds a token.
+
+### Taking over
+
+You need a Bitwarden account with access to the organisation. In Secrets Manager
+create a machine account with access to both projects and copy its access token.
+
+```sh
+scripts/install-bws.sh
+export BWS_ACCESS_TOKEN=...          # from a password prompt or clipboard, not typed into history
+scripts/vault.py pull                # rebuild every local file, mode 600
+scripts/vault.py verify              # names only; exits non-zero on any difference
+```
+
+### Rules
+
+- A name must be unique within its project: Bitwarden allows duplicates, and
+  `vault.py` stops rather than guess.
+- A value can be at most 25,000 characters, so text only. Binary files such as
+  router backups do not belong here.
+- `pull` rewrites env files without their comments. Keep explanations in the
+  repo, not beside the values.
+- Fetching needs the WAN. Running services hold their own copies, so an outage
+  only stops a deploy that has to fetch a new value.
+
+### Adding or changing a secret
+
+Add a line to `secrets/manifest` if it is new, put the value in the local file,
+then run `scripts/vault.py import`. It changes only what differs and reads every
+value back.
+
+### Rotating a secret
+
+Change it at its origin, update the local file, run `scripts/vault.py import`,
+then run what consumes it. Rows marked *person* are outward-facing or need
+access the automation does not have.
+
+| Secrets | Origin | Then run |
+|---|---|---|
+| `dns/*` | Generate new; `DNSDIST_API_KEY_HASHED` is derived from `DNSDIST_API_KEY` | `dns/scripts/deploy.sh` |
+| `hermes/API_KEY` | mailcow admin | `hermes/scripts/deploy.sh` |
+| `forgejo/SMTP_PASSWD` | Mailbox on ruby – *person* | `forgejo/scripts/deploy.sh` |
+| `forgejo/RUNNER_LEXIE_SECRET` | Generate 40 hex characters | `forgejo/scripts/deploy.sh`, then `forgejo-runner/scripts/deploy.sh` |
+| `grafana-admin/GRAFANA_PASSWORD` | Grafana | `grafana/scripts/deploy.sh` |
+| `grafana/viewer-token` | Grafana service account | Nothing; read at use |
+| `grafana/HA_WEBHOOK_ID`, `responder/HA_WEBHOOK_ID` | Home Assistant automation | `grafana/scripts/deploy.sh`, `responder/scripts/deploy.sh` |
+| `grafana/HEALTHCHECKS_PING_URL` | Healthchecks.io – *person* | `grafana/scripts/deploy.sh` |
+| `responder/RESPONDER_TOKEN` | Generate new | `responder/scripts/deploy.sh` |
+| `n8n/SMTP_PASSWD`, `n8n-sogode/SMTP_PASSWD` | Mailbox on ruby – *person* | `moby/scripts/deploy.sh` |
+| `jobsearch/*` | n8n, Forgejo or Anthropic console, or the mailbox on ruby – *person* | `forgejo-runner/scripts/deploy.sh` |
+| `esp32/kitchen-api-key` | ESPHome config | Reflash the device |
+| `ca/*` | `ca/README.md` – *person* | `ca/scripts/deploy.sh` |
+| `wireguard/*` | `wireguard/README.md` – *person* | Install on the router, ruby and jennie |
+| `router/ORANGE_*` | Orange – *person* | `router/ORANGE.md` |

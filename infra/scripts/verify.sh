@@ -21,6 +21,8 @@ check_eq "OpenTofu version" "$TOFU_VERSION" \
 check_eq "ansible-core version" "$ANSIBLE_CORE_VERSION" \
   "$(ansible --version | sed -n 's/^ansible \[core \(.*\)\]$/\1/p')"
 
+check_eq "bws version" "bws $BWS_VERSION" "$(bws --version)"
+
 echo "== OpenTofu"
 if tofu -chdir=tofu fmt -check >/dev/null; then pass "formatted"; else fail "tofu fmt -check"; fi
 if tofu -chdir=tofu init -backend=false -input=false >/dev/null \
