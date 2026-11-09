@@ -51,7 +51,7 @@
 # talos makes its own, so no copy exists anywhere else. lexie's is in Bitwarden.
 - name: Make the runner's secret on a host that keeps its own
   ansible.builtin.shell:
-    cmd: umask 077; openssl rand -hex 20 | tr -d '\n' > /etc/forgejo-runner/token
+    cmd: umask 077; printf %s "$(openssl rand -hex 20)" > /etc/forgejo-runner/token
     creates: /etc/forgejo-runner/token
   when: forgejo_runner_token_value is not defined
 

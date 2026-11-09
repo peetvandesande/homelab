@@ -23,6 +23,11 @@ jobs:
       - name: Publish to GitHub
         if: forgejo.ref == 'refs/heads/main'
         run: git -C repo push git@github.com:peetvandesande/homelab.git "${{ forgejo.sha }}:refs/heads/main"
+      # Only on main, and only after the checks and the publish. apply.sh does nothing
+      # until a person has turned it on.
+      - name: Apply
+        if: forgejo.ref == 'refs/heads/main'
+        run: repo/infra/scripts/apply.sh "${{ forgejo.event.before }}" "${{ forgejo.sha }}"
       # After publishing, so that a guest changed by hand reports drift without
       # holding up the code. Exit code 2 from plan means something differs.
       - name: Report drift from OpenTofu

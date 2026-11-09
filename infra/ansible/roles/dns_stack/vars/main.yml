@@ -1,7 +1,9 @@
 ---
 dns_stack_root: "{{ role_path }}/../../../../dns"
 dns_stack_source: "{{ dns_stack_root }}/{{ inventory_hostname }}"
-dns_stack_secrets: "{{ lookup('ansible.builtin.file', dns_stack_root ~ '/secrets.env') }}"
+# talos has no gitignored copy in its checkout, so it names the file instead.
+dns_stack_secrets_file: "{{ lookup('ansible.builtin.env', 'HOMELAB_DNS_SECRETS') | default(dns_stack_root ~ '/secrets.env', true) }}"
+dns_stack_secrets: "{{ lookup('ansible.builtin.file', dns_stack_secrets_file) }}"
 dns_stack_auth_api_key: "{{ dns_stack_secrets | regex_search(\"(?m)^AUTH_API_KEY='?(.*?)'?$\", '\\1') | first }}"
 dns_stack_recursor_api_key: "{{ dns_stack_secrets | regex_search(\"(?m)^RECURSOR_API_KEY='?(.*?)'?$\", '\\1') | first }}"
 dns_stack_console_key: "{{ dns_stack_secrets | regex_search(\"(?m)^DNSDIST_CONSOLE_KEY='?(.*?)'?$\", '\\1') | first }}"

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Applies one merge to main: runs only the playbooks whose sources changed, in the
+# order the services depend on each other. Called by CI after the checks pass.
+#
+#   apply.sh <old-commit> <new-commit>            apply
+#   apply.sh --plan <old-commit> <new-commit>     print what would run, touch nothing
+#
+# Does nothing until a person has run infra/ansible/deploy-access.yml, which is what
+# gives talos a key and the secrets. Hosts holding the keys to everything else stay
+# out of reach of this: pistis (the CA), lenora (the hypervisor), talos and lexie
+# (the runners and the responder), and ruby and jennie. A change to those is printed
+# for a person to apply.
+set -uo pipefail
+cd "$(dirname "$0")/../.." || exit 1
+
+plan=0
+[[ ${1:-} == --plan ]] && { plan=1; shift; }
+old=${1:-}; new=${2:-}
+DEPLOY=/etc/forgejo-runner/deploy
+# Baseline hosts the runner never reaches. hermes is off unless a lab is running.
+LIMIT='!pistis:!lenora:!talos:!lexie:!hermes'
+
+if [[ -z $old || -z $new ]] || ! git rev-parse -q --verify "$old^{commit}" >/dev/null \
+   || [[ $old =~ ^0+$ ]]; then
+  echo "no previous commit to compare with; nothing to apply"
+  exit 0
+fi
+mapfile -t changed < <(git diff --name-only "$old" "$new")
+
+matches() { printf '%s\n' "${changed[@]}" | grep -qE "$1"; }
+roles() { printf '^infra/ansible/roles/(%s)/' "$1"; }
+
+need=()
+matches "^(alloy/root|apt/|fleet/|node-exporter/)|$(roles 'node_exporter|hygiene|apt_security|alloy')|^infra/ansible/fleet\.yml" && need+=(fleet)
+matches "^(prometheus|loki|grafana)/root/|$(roles 'prometheus|loki|grafana')|^infra/ansible/monitoring\.yml" && need+=(monitoring)
+matches "^dns/(pythia|delphi|themis|ansible)/|$(roles 'dns_stack')|^infra/ansible/dns\.yml" && need+=(dns)
+matches "^(jellyfin|navidrome|moby|forgejo)/root/|$(roles 'jellyfin|navidrome|moby|forgejo')|^infra/ansible/apps\.yml" && need+=(apps)
+matches "^metis/root/|$(roles 'metis')" && need+=(metis)
+
+person=$(printf '%s\n' "${changed[@]}" | grep -E \
+  "^(ca|responder|forgejo-runner|talos|outside|estate-report|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|enrol|responder|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|enrol|outside|platform|deploy-access)\.yml" || true)
+if [[ -n $person ]]; then
+  echo "== needs a person: these do not reach their hosts through CI"
+  printf '%s\n' "$person" | sed 's/^/   /'
+fi
+
+if ((${#need[@]} == 0)); then
+  echo "== no playbook to run"
+  exit 0
+fi
+echo "== to apply: ${need[*]}"
+((plan)) && exit 0
+
+if [[ ! -r $DEPLOY/key ]]; then
+  echo "== apply is not enabled on this runner (see infra/ansible/deploy-access.yml); skipping"
+  exit 0
+fi
+export ANSIBLE_PRIVATE_KEY_FILE=$DEPLOY/key HOMELAB_PRIVATE=$DEPLOY/private
+export HOMELAB_DNS_SECRETS=$DEPLOY/private/dns/secrets.env
+export PATH=/opt/ci/bin:$PATH
+cd infra/ansible || exit 1
+
+run() { echo "== ansible-playbook $*"; ansible-playbook "$@" || exit 1; }
+for item in "${need[@]}"; do
+  case $item in
+    fleet) run fleet.yml --limit "$LIMIT" ;;
+    monitoring) run monitoring.yml ;;
+    dns) run dns.yml ;;
+    apps) run apps.yml ;;
+    metis) run platform.yml --limit metis ;;
+  esac
+done
+echo "== applied"

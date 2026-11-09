@@ -1,6 +1,9 @@
 ---
 forgejo_runner_version: 13.2.0
 forgejo_runner_sha256: fadaec897f5e6641c363f87ecaf75f866f99c81b7097ec6b433e4c48123fcad1
-forgejo_runner_url: "https://code.forgejo.org/forgejo/runner/releases/download/v{{ forgejo_runner_version }}/forgejo-runner-{{ forgejo_runner_version }}-linux-amd64"
-forgejo_runner_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+forgejo_runner_base: "https://code.forgejo.org/forgejo/runner/releases/download/v{{ forgejo_runner_version }}"
+forgejo_runner_url: "{{ forgejo_runner_base }}/forgejo-runner-{{ forgejo_runner_version }}-linux-amd64"
+forgejo_runner_private: >-
+  {{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE')
+     | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}
 forgejo_runner_home: /var/lib/forgejo-runner

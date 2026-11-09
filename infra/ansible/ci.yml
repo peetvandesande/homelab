@@ -15,7 +15,9 @@
       vars:
         forgejo_runner_source: "{{ playbook_dir }}/../../forgejo-runner/root"
         forgejo_runner_scope: peet
-        forgejo_runner_token_value: "{{ lookup('ansible.builtin.file', forgejo_runner_private ~ '/forgejo/secrets.env') | regex_search('(?m)^RUNNER_LEXIE_SECRET=(.*)$', '\\1') | first }}"
+        forgejo_runner_token_value: >-
+          {{ lookup('ansible.builtin.file', forgejo_runner_private ~ '/forgejo/secrets.env')
+             | regex_search('(?m)^RUNNER_LEXIE_SECRET=(.*)$', '\\1') | first }}
   tasks:
     - name: Keep what the job search deploy needs
       ansible.builtin.import_tasks: roles/forgejo_runner/tasks/lexie_jobs.yml

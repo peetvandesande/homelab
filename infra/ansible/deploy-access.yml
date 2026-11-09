@@ -1,0 +1,88 @@
+---
+# Turns on apply-on-merge. Run once by a person, after deciding to: it gives talos's
+# runner root on the hosts apply.sh can reach, and a copy of the secrets those roles
+# use. Reversing it means removing the key line from each host and deleting
+# /etc/forgejo-runner/deploy on talos. From infra/ansible:
+#
+#   ansible-playbook deploy-access.yml --check
+#   ansible-playbook deploy-access.yml
+- name: Prepare talos
+  hosts: talos
+  gather_facts: false
+  vars:
+    deploy_access_dir: /etc/forgejo-runner/deploy
+    deploy_access_private: >-
+      {{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE')
+         | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}
+  tasks:
+    - name: Create the deploy directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: forgejo-runner
+        mode: "0750"
+      loop:
+        - "{{ deploy_access_dir }}"
+        - "{{ deploy_access_dir }}/private"
+        - "{{ deploy_access_dir }}/private/grafana"
+        - "{{ deploy_access_dir }}/private/responder"
+        - "{{ deploy_access_dir }}/private/forgejo"
+        - "{{ deploy_access_dir }}/private/n8n"
+        - "{{ deploy_access_dir }}/private/n8n-sogode"
+        - "{{ deploy_access_dir }}/private/dns"
+
+    - name: Generate the deploy key
+      ansible.builtin.command:
+        cmd: ssh-keygen -q -t ed25519 -N "" -C forgejo-runner@talos-deploy -f {{ deploy_access_dir }}/key
+        creates: "{{ deploy_access_dir }}/key"
+
+    - name: Let the runner read the key
+      ansible.builtin.file:
+        path: "{{ deploy_access_dir }}/key"
+        owner: root
+        group: forgejo-runner
+        mode: "0640"
+      when: not ansible_check_mode
+
+    - name: Install the secrets the applied roles read
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ deploy_access_dir }}/private/{{ item.dest }}/secrets.env"
+        owner: root
+        group: forgejo-runner
+        mode: "0640"
+      loop:
+        - { src: "{{ deploy_access_private }}/grafana/secrets.env", dest: grafana }
+        - { src: "{{ deploy_access_private }}/responder/secrets.env", dest: responder }
+        - { src: "{{ deploy_access_private }}/forgejo/secrets.env", dest: forgejo }
+        - { src: "{{ deploy_access_private }}/n8n/secrets.env", dest: n8n }
+        - { src: "{{ deploy_access_private }}/n8n-sogode/secrets.env", dest: n8n-sogode }
+        - { src: "{{ playbook_dir }}/../../dns/secrets.env", dest: dns }
+      loop_control:
+        label: "{{ item.dest }}"
+      no_log: true
+
+    - name: Read the public key
+      ansible.builtin.slurp:
+        src: "{{ deploy_access_dir }}/key.pub"
+      register: deploy_access_pub
+      check_mode: false
+      failed_when: false
+
+# Matches apply.sh: pistis, lenora, talos, lexie and hermes get no key.
+- name: Accept that key from talos alone
+  hosts: fleet:!pistis:!lenora:!talos:!lexie:!hermes
+  gather_facts: false
+  tasks:
+    - name: Authorise the key
+      ansible.builtin.lineinfile:
+        path: /root/.ssh/authorized_keys
+        regexp: 'forgejo-runner@talos-deploy$'
+        line: >-
+          from="192.168.8.59",no-agent-forwarding,no-X11-forwarding,no-port-forwarding
+          {{ hostvars['talos'].deploy_access_pub.content | b64decode | trim }}
+        owner: root
+        group: root
+        mode: "0600"
+      when: hostvars['talos'].deploy_access_pub.content is defined
