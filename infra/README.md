@@ -94,7 +94,7 @@ Each task ends with a checkpoint before the next begins.
 | 9 | DNS stack | Done |
 | 10 | Application services: Forgejo, moby, media | Done |
 | 11 | lenora, metis, hermes, watchdogs (hermes's role first runs when a lab next has it on) | Done |
-| 12 | ruby and jennie, run by a person; router documented; lexie and talos | Built: a person still has to run the `outside.yml` check |
+| 12 | ruby and jennie, run by a person; router documented; lexie and talos | Done |
 | 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | Built: a person still has to turn on the apply step and branch protection |
 | 14 | Action log for the audit trail | |
 | 15 | Runbook engine in shadow mode | |
