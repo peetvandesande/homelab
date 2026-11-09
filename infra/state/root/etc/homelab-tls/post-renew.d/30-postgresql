@@ -1,0 +1,3 @@
+#!/bin/sh
+# PostgreSQL re-reads its certificate on reload, without dropping connections.
+exec pg_ctlcluster 17 main reload

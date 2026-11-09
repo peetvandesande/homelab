@@ -23,3 +23,10 @@ jobs:
       - name: Publish to GitHub
         if: forgejo.ref == 'refs/heads/main'
         run: git -C repo push git@github.com:peetvandesande/homelab.git "${{ forgejo.sha }}:refs/heads/main"
+      # After publishing, so that a guest changed by hand reports drift without
+      # holding up the code. Exit code 2 from plan means something differs.
+      - name: Report drift from OpenTofu
+        run: |
+          set -euo pipefail
+          repo/infra/scripts/tofu.sh init -input=false -lockfile=readonly >/dev/null
+          repo/infra/scripts/tofu.sh plan -input=false -lock=false -detailed-exitcode -no-color

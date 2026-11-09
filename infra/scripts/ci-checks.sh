@@ -16,7 +16,11 @@ step() { # step <label> <command...>
 
 scan_secrets() { gitleaks git --redact --no-banner --log-level warn --config .gitleaks.toml .; }
 tofu_fmt() { tofu -chdir=infra/tofu fmt -check; }
-tofu_validate() { tofu -chdir=infra/tofu init -backend=false -input=false >/dev/null && tofu -chdir=infra/tofu validate; }
+# validate never reads state, so the encryption passphrase can be a stand-in.
+tofu_validate() {
+  export TF_VAR_state_passphrase=validate-only-placeholder
+  tofu -chdir=infra/tofu init -backend=false -input=false >/dev/null && tofu -chdir=infra/tofu validate
+}
 ansible_lint() { (cd infra/ansible && ansible-lint --offline -q .); }
 # Errors everywhere, and the stricter default for the code this programme adds.
 shell_errors() { git ls-files -z '*.sh' | xargs -0 shellcheck -S error; }

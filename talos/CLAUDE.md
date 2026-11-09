@@ -30,9 +30,11 @@ checks, so a person can run them without the runner.
 2. **Registered for one repository.** A wider scope would let any other
    repository's workflow use the GitHub key.
 
-3. **The only credential here is the GitHub key.** `verify.sh` asserts it. The
-   key never leaves this host, and the runner's own secret is made here too, so
-   neither is in Bitwarden: a rebuild makes new ones.
+3. **The only write access here is the GitHub key and OpenTofu's state.**
+   `verify.sh` asserts the key is the only one. The key never leaves this host,
+   and the runner's own secret is made here too, so neither is in Bitwarden: a
+   rebuild makes new ones. `/etc/forgejo-runner/tofu.env` holds the state
+   database password and passphrase and a Proxmox token that can only read.
 
 4. **Never force-push to GitHub.** If GitHub has commits Forgejo lacks, the
    publish step fails and a person reconciles it. ruby and jennie pull from

@@ -35,6 +35,12 @@ $SSH "root@$HOST" "v=$RUNNER_VERSION"'
   systemctl enable forgejo-runner >/dev/null
 '
 
+# What the drift check needs: the state database and a read-only Proxmox token.
+SECRETS=${HOMELAB_PRIVATE:-$HOME/projects/homelab-private}/tofu/secrets.env
+$SSH "root@$HOST" '( umask 027; cat > /etc/forgejo-runner/tofu.env.new )
+  chown root:forgejo-runner /etc/forgejo-runner/tofu.env.new
+  mv -f /etc/forgejo-runner/tofu.env.new /etc/forgejo-runner/tofu.env' < "$SECRETS"
+
 # Registering the same secret again updates the runner in place. Scoped to one
 # repository, so no other repository's workflow can ever land on this host.
 # --secret-stdin is a string flag that wants a value; the value is ignored.

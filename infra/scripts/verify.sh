@@ -25,6 +25,7 @@ check_eq "bws version" "bws $BWS_VERSION" "$(bws --version)"
 
 echo "== OpenTofu"
 if tofu -chdir=tofu fmt -check >/dev/null; then pass "formatted"; else fail "tofu fmt -check"; fi
+export TF_VAR_state_passphrase=validate-only-placeholder
 if tofu -chdir=tofu init -backend=false -input=false >/dev/null \
   && tofu -chdir=tofu validate >/dev/null; then
   pass "configuration is valid"
