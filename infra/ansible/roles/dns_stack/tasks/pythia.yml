@@ -1,0 +1,76 @@
+---
+- name: Create the zone directory
+  ansible.builtin.file:
+    path: /var/lib/powerdns/zones
+    state: directory
+    owner: pdns
+    group: pdns
+    mode: "0755"
+
+- name: Create the lab zones database once
+  ansible.builtin.shell:
+    cmd: sqlite3 /var/lib/powerdns/labs.sqlite3 < /usr/share/pdns-backend-sqlite3/schema/schema.sqlite3.sql
+    creates: /var/lib/powerdns/labs.sqlite3
+
+# Its contents belong to the API: this only keeps the file readable by the server.
+- name: Keep the lab zones database private to the server
+  ansible.builtin.file:
+    path: /var/lib/powerdns/labs.sqlite3
+    owner: pdns
+    group: pdns
+    mode: "0640"
+
+# The server needs these to start on a new host. force: false leaves existing
+# files alone, so a changed zone still reaches the reload in the zones step.
+- name: Seed the zones on a new host
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/var/lib/powerdns/zones/{{ item | basename }}"
+    force: false
+    owner: pdns
+    group: pdns
+    mode: "0644"
+  loop: "{{ lookup('ansible.builtin.fileglob', dns_stack_source ~ '/var/lib/powerdns/zones/*.zone', wantlist=True) }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Seed the zone list on a new host
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/powerdns/bindbackend.conf"
+    dest: /etc/powerdns/bindbackend.conf
+    force: false
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install the server's configuration
+  vars:
+    AUTH_API_KEY: "{{ dns_stack_auth_api_key }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ dns_stack_source }}/etc/powerdns/pdns.conf"
+    dest: /etc/powerdns/pdns.conf
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: pdns
+    mode: "0640"
+    # The checker takes a directory holding the usual file name, not a path.
+    validate: >-
+      sh -c 'd=$(mktemp -d) && cp %s "$d/pdns.conf" && pdns_server --config-dir="$d" --config=check >/dev/null; r=$?; rm -rf "$d"; exit $r'
+  no_log: true
+  notify: Restart the authoritative server
+
+- name: Make the server wait for its address
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/systemd/system/pdns.service.d/wait-for-address.conf"
+    dest: /etc/systemd/system/pdns.service.d/wait-for-address.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the authoritative server
+
+- name: Keep the server enabled and running
+  ansible.builtin.systemd_service:
+    name: pdns
+    enabled: true
+    state: started

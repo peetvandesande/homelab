@@ -1,0 +1,71 @@
+---
+- name: Install the packages
+  ansible.builtin.apt:
+    name: "{{ dns_stack_packages[inventory_hostname] + ['nginx', 'bind9-dnsutils'] }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the service drop-in directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ dns_stack_unit }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  vars:
+    dns_stack_unit: "{{ {'pythia': 'pdns', 'delphi': 'pdns-recursor', 'themis': 'dnsdist'}[inventory_hostname] }}"
+
+- name: Configure this host's service
+  ansible.builtin.include_tasks: "{{ inventory_hostname }}.yml"
+
+- name: Install the TLS front's site
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/nginx/sites-available/metrics.conf"
+    dest: /etc/nginx/sites-available/metrics.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/homelab-tls/post-renew.d/20-nginx"
+    dest: /etc/homelab-tls/post-renew.d/20-nginx
+    owner: root
+    group: root
+    mode: "0755"
+
+# Our site and the packaged one are both default_server, which is a fatal error.
+- name: Remove nginx's default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Enable the TLS front's site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/metrics.conf
+    dest: /etc/nginx/sites-enabled/metrics.conf
+    state: link
+  notify: Reload nginx
+
+- name: Keep nginx enabled and running
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Apply anything owed before testing
+  ansible.builtin.meta: flush_handlers
+
+# An active unit proves little here: only a real answer means the next host can
+# safely be touched.
+- name: Wait for a real answer from this host
+  ansible.builtin.command: dig +time=2 +tries=1 +short @{{ ansible_host }} {{ dns_stack_probe_name }} A
+  register: dns_stack_probe
+  until: dns_stack_probe.stdout == dns_stack_probe_answer
+  retries: 12
+  delay: 5
+  changed_when: false
+  check_mode: false

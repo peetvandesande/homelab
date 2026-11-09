@@ -1,0 +1,5 @@
+---
+# dns.yml calls this role to push zones, so lint would follow it. It predates the
+# rules used here and is left as it was written.
+exclude_paths:
+  - ../../dns/ansible/

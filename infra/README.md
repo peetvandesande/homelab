@@ -62,7 +62,7 @@ Each task ends with a checkpoint before the next begins.
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | Done |
 | 7 | CA and enrolment | Done |
 | 8 | Prometheus, Loki, Grafana | Done |
-| 9 | DNS stack | |
+| 9 | DNS stack | Done |
 | 10 | Application services: Forgejo, moby, media | |
 | 11 | lenora, metis, hermes, watchdogs | |
 | 12 | ruby and jennie, run by a person; router documented | |
@@ -89,6 +89,7 @@ ansible-playbook fleet.yml --limit '!hermes'                   # apply
 ansible-playbook enrol.yml --limit <host>                      # certificate for a host
 ansible-playbook ca.yml --check --diff                         # the CA on pistis; a person runs this
 ansible-playbook monitoring.yml --check --diff                 # Prometheus, Loki, Grafana; a person runs this until task 13
+ansible-playbook dns.yml --check --diff                        # pythia, then delphi, then themis; a person runs this until task 13
 ```
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes

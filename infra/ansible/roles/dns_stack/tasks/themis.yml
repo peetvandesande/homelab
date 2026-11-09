@@ -1,0 +1,97 @@
+---
+# dnsdist reads the certificate itself and never runs as root.
+- name: Let dnsdist read the certificate
+  ansible.builtin.user:
+    name: _dnsdist
+    groups: tlscert
+    append: true
+  notify: Restart dnsdist
+
+- name: Install the client policies
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/dnsdist/client-policies.conf"
+    dest: /etc/dnsdist/client-policies.conf
+    owner: root
+    group: _dnsdist
+    mode: "0640"
+  notify: Restart dnsdist
+
+- name: Install dnsdist's configuration
+  vars:
+    DNSDIST_API_KEY_HASHED: "{{ dns_stack_api_key_hashed }}"  # noqa: var-naming[pattern]
+    DNSDIST_CONSOLE_KEY: "{{ dns_stack_console_key }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ dns_stack_source }}/etc/dnsdist/dnsdist.conf"
+    dest: /etc/dnsdist/dnsdist.conf
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: _dnsdist
+    mode: "0640"
+    validate: dnsdist --check-config --config %s
+  no_log: true
+  notify: Restart dnsdist
+
+- name: Make dnsdist wait for its addresses
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/systemd/system/dnsdist.service.d/wait-for-address.conf"
+    dest: /etc/systemd/system/dnsdist.service.d/wait-for-address.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart dnsdist
+
+- name: Install the certificate reload hook
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/etc/homelab-tls/post-renew.d/30-dnsdist"
+    dest: /etc/homelab-tls/post-renew.d/30-dnsdist
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep dnsdist enabled and running
+  ansible.builtin.systemd_service:
+    name: dnsdist
+    enabled: true
+    state: started
+
+- name: Install the VPN-domain sync's units
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/systemd/system/vpn-domain-sync.service
+    - etc/systemd/system/vpn-domain-sync.timer
+
+- name: Install the VPN-domain sync
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/usr/local/bin/vpn-domain-sync"
+    dest: /usr/local/bin/vpn-domain-sync
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the key directory for reading the router's policy
+  ansible.builtin.file:
+    path: /etc/dnsdist/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# The router's authorized_keys forces a read-only command for this key, so a new
+# one needs adding there by hand: dns/README.md.
+- name: Generate that key once
+  ansible.builtin.command:
+    cmd: ssh-keygen -t ed25519 -N "" -C vpn-domain-sync@themis -f /etc/dnsdist/.ssh/router
+    creates: /etc/dnsdist/.ssh/router
+
+- name: Keep the sync timer on
+  ansible.builtin.systemd_service:
+    name: vpn-domain-sync.timer
+    enabled: true
+    state: started
+    daemon_reload: true

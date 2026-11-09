@@ -1,0 +1,39 @@
+---
+# Each checks the configuration first, so a bad one fails the run and leaves the
+# old process serving. A restart can report failure while the outgoing process
+# still holds its socket, so only the check can fail here; the role then asks the
+# server for a real answer.
+- name: Restart the authoritative server
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      pdns_server --config=check >/dev/null
+      systemctl daemon-reload
+      systemctl restart pdns || true
+  changed_when: true
+
+- name: Restart the recursor
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      pdns_recursor --config=check >/dev/null
+      systemctl daemon-reload
+      systemctl restart pdns-recursor || true
+  changed_when: true
+
+- name: Restart dnsdist
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      dnsdist --check-config --config /etc/dnsdist/dnsdist.conf >/dev/null
+      systemctl daemon-reload
+      systemctl restart dnsdist || true
+  changed_when: true
+
+- name: Reload nginx
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      nginx -t
+      systemctl reload nginx
+  changed_when: true

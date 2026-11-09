@@ -1,0 +1,15 @@
+---
+dns_stack_root: "{{ role_path }}/../../../../dns"
+dns_stack_source: "{{ dns_stack_root }}/{{ inventory_hostname }}"
+dns_stack_secrets: "{{ lookup('ansible.builtin.file', dns_stack_root ~ '/secrets.env') }}"
+dns_stack_auth_api_key: "{{ dns_stack_secrets | regex_search(\"(?m)^AUTH_API_KEY='?(.*?)'?$\", '\\1') | first }}"
+dns_stack_recursor_api_key: "{{ dns_stack_secrets | regex_search(\"(?m)^RECURSOR_API_KEY='?(.*?)'?$\", '\\1') | first }}"
+dns_stack_console_key: "{{ dns_stack_secrets | regex_search(\"(?m)^DNSDIST_CONSOLE_KEY='?(.*?)'?$\", '\\1') | first }}"
+dns_stack_api_key_hashed: "{{ dns_stack_secrets | regex_search(\"(?m)^DNSDIST_API_KEY_HASHED='?(.*?)'?$\", '\\1') | first }}"
+dns_stack_packages:
+  pythia: [pdns-server, pdns-backend-bind, pdns-backend-sqlite3, sqlite3]
+  delphi: [pdns-recursor]
+  themis: [dnsdist]
+# A name only Pythia can answer, so a reply proves every hop up to the one asked.
+dns_stack_probe_name: pythia.home
+dns_stack_probe_answer: 192.168.8.52

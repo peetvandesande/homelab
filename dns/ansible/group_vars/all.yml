@@ -25,7 +25,7 @@
 # Where the rendered zone files land in this repo. The playbook writes them
 # here first, so `git diff` is the review step, and scripts/deploy.sh keeps
 # pushing the same files it always has.
-repo_root:       "{{ playbook_dir }}/.."
+repo_root:       "{{ dns_repo_root | default(playbook_dir ~ '/..') }}"
 zone_src_dir:    "{{ repo_root }}/pythia/var/lib/powerdns/zones"
 bindbackend_src: "{{ repo_root }}/pythia/etc/powerdns/bindbackend.conf"
 

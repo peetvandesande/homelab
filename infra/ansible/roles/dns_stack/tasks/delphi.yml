@@ -1,0 +1,113 @@
+---
+- name: Create the feed directory
+  ansible.builtin.file:
+    path: /var/lib/powerdns/rpz
+    state: directory
+    owner: pdns
+    group: pdns
+    mode: "0755"
+
+# Picked up ahead of the YAML if the package or an old install left one behind.
+- name: Remove any old-style configuration
+  ansible.builtin.file:
+    path: /etc/powerdns/recursor.conf
+    state: absent
+  notify: Restart the recursor
+
+- name: Install the recursor's configuration
+  vars:
+    RECURSOR_API_KEY: "{{ dns_stack_recursor_api_key }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ dns_stack_source }}/etc/powerdns/recursor.yml"
+    dest: /etc/powerdns/recursor.yml
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: pdns
+    mode: "0640"
+    # The checker takes a directory holding the usual file name, not a path.
+    validate: >-
+      sh -c 'd=$(mktemp -d) && cp %s "$d/recursor.yml" && pdns_recursor --config-dir="$d" --config=check >/dev/null; r=$?; rm -rf "$d"; exit $r'
+  no_log: true
+  notify: Restart the recursor
+
+- name: Install the policy and lists
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/powerdns/recursor.lua
+    - etc/powerdns/policy.lua
+    - etc/powerdns/allowlist.conf
+    - etc/powerdns/allowlist-malware.conf
+    - etc/powerdns/rpz-feeds.conf
+    - etc/systemd/system/pdns-recursor.service.d/wait-for-address.conf
+  notify: Restart the recursor
+
+- name: Install the feed updater's units
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/systemd/system/rpz-update.service
+    - etc/systemd/system/rpz-update.timer
+
+- name: Install the feed updater
+  ansible.builtin.copy:
+    src: "{{ dns_stack_source }}/usr/local/bin/rpz-update"
+    dest: /usr/local/bin/rpz-update
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep the feed timer on
+  ansible.builtin.systemd_service:
+    name: rpz-update.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# A feed missing from disk is a fatal error when the recursor starts, and one
+# that has never downloaded has no older copy to fall back on.
+- name: Find feeds that have never downloaded
+  ansible.builtin.shell: &dns_stack_missing_feeds |
+    while read -r name _; do
+      [ -n "$name" ] || continue
+      case "$name" in \#*) continue ;; esac
+      [ -s "/var/lib/powerdns/rpz/$name.rpz" ] || echo "$name"
+    done < /etc/powerdns/rpz-feeds.conf
+  register: dns_stack_missing
+  changed_when: false
+  check_mode: false
+
+- name: Fetch the feeds and refuse to go on without them
+  when: dns_stack_missing.stdout | length > 0
+  block:
+    - name: Fetch the feeds
+      ansible.builtin.command: /usr/local/bin/rpz-update
+      changed_when: true
+      failed_when: false
+
+    - name: Look again
+      ansible.builtin.shell: *dns_stack_missing_feeds
+      register: dns_stack_still_missing
+      changed_when: false
+      check_mode: false
+
+    - name: Stop before restarting into a recursor that cannot start
+      ansible.builtin.assert:
+        that: dns_stack_still_missing.stdout | length == 0
+        fail_msg: "Feeds never downloaded: {{ dns_stack_still_missing.stdout_lines | join(', ') }}"
+        quiet: true
+
+- name: Keep the recursor enabled and running
+  ansible.builtin.systemd_service:
+    name: pdns-recursor
+    enabled: true
+    state: started

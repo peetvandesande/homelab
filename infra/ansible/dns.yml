@@ -1,0 +1,56 @@
+---
+# The DNS stack, one host at a time and in the order each depends on the next:
+# Delphi forwards to Pythia, and Themis hands queries to Delphi. A failure on one
+# stops the run before the next is touched. Run by a person until apply-on-merge
+# exists: the API and console keys come from dns/secrets.env. From infra/ansible:
+#
+#   ansible-playbook dns.yml --check --diff
+- name: Check the DNS hosts are ready
+  hosts: pythia:delphi:themis
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Look for the certificate
+      ansible.builtin.stat:
+        path: /etc/homelab-tls/host.key
+      register: dns_ready
+
+    - name: Refuse a host without one
+      ansible.builtin.assert:
+        that: dns_ready.stat.exists
+        fail_msg: "Enrol the host with ca/scripts/enrol.sh and run fleet.yml first"
+        quiet: true
+
+- name: Pythia
+  hosts: pythia
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  vars:
+    dns_repo_root: "{{ playbook_dir }}/../../dns"
+  vars_files:
+    - ../../dns/ansible/group_vars/all.yml
+  roles:
+    - dns_stack
+  tasks:
+    # Zones reload one at a time, so editing a record never restarts the server.
+    - name: Push and reload the zones
+      ansible.builtin.include_role:
+        name: powerdns_zones
+        tasks_from: push
+
+- name: Delphi
+  hosts: delphi
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - dns_stack
+
+- name: Themis
+  hosts: themis
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - dns_stack
