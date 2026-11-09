@@ -1,0 +1,52 @@
+---
+- name: Create the report's settings directory
+  ansible.builtin.file:
+    path: /etc/estate-report
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the estate report
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: estate-report/root/usr/local/bin/estate-report, dest: /usr/local/bin/estate-report, mode: "0755" }
+    - { src: ca/rootca/certs/root.crt, dest: /etc/estate-report/lab-root.crt, mode: "0644" }
+    - { src: estate-report/root/etc/systemd/system/estate-report.service, dest: /etc/systemd/system/estate-report.service, mode: "0644" }
+    - { src: estate-report/root/etc/systemd/system/estate-report.timer, dest: /etc/systemd/system/estate-report.timer, mode: "0644" }
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Keep the report's timer on
+  ansible.builtin.systemd_service:
+    name: estate-report.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# A vhost that is not already enabled is a new public service: that goes through
+# its own install script, which also issues the certificate.
+- name: Find the public sites that are already enabled
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-enabled/{{ item.name }}"
+  loop: "{{ outside_host_vhosts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: outside_host_enabled
+
+- name: Update those sites from the repo
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/{{ item.item.src }}"
+    dest: "/etc/nginx/sites-available/{{ item.item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ outside_host_enabled.results | selectattr('stat.exists') }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  notify: Reload nginx

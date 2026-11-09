@@ -1,0 +1,24 @@
+---
+- name: Restart the blackbox exporter
+  ansible.builtin.systemd_service:
+    name: prometheus-blackbox-exporter
+    state: restarted
+    daemon_reload: true
+
+# Parses the whole directory first, so a bad config cannot take Alloy down.
+- name: Restart Alloy
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      alloy validate /etc/alloy >/dev/null
+      systemctl daemon-reload
+      systemctl restart alloy
+  changed_when: true
+
+- name: Reload nginx
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      nginx -t
+      systemctl reload nginx
+  changed_when: true

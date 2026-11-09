@@ -1,0 +1,18 @@
+---
+# ruby and jennie. Always run by a person, over the VPN, and never from CI: these
+# hosts face the internet and carry mail. Only what the repo owns is here. WireGuard,
+# nftables and a brand-new public vhost stay with their own install scripts. From
+# infra/ansible, using your own sudo password:
+#
+#   ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff
+#   ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --limit jennie
+#
+# Start with jennie, then ruby.
+- name: The outside servers
+  hosts: outside
+  gather_facts: false
+  force_handlers: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - outside_host

@@ -1,0 +1,142 @@
+---
+- name: Create the runner's account
+  ansible.builtin.user:
+    name: forgejo-runner
+    system: true
+    create_home: true
+    home: "{{ forgejo_runner_home }}"
+    shell: /usr/sbin/nologin
+    comment: Forgejo Actions runner
+  notify: Restart the runner
+
+- name: Create its directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: forgejo-runner
+    group: forgejo-runner
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ forgejo_runner_home }}", mode: "0750" }
+    - { path: "{{ forgejo_runner_home }}/work", mode: "0750" }
+    - { path: "{{ forgejo_runner_home }}/.ssh", mode: "0700" }
+
+- name: Read the installed runner
+  ansible.builtin.command: /usr/local/bin/forgejo-runner --version
+  register: forgejo_runner_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the pinned runner
+  ansible.builtin.get_url:
+    url: "{{ forgejo_runner_url }}"
+    dest: /usr/local/bin/forgejo-runner
+    checksum: "sha256:{{ forgejo_runner_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+    force: true
+  when: ("v" ~ forgejo_runner_version) not in forgejo_runner_installed.stdout
+  notify: Restart the runner
+
+- name: Create the configuration directory
+  ansible.builtin.file:
+    path: /etc/forgejo-runner
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# talos makes its own, so no copy exists anywhere else. lexie's is in Bitwarden.
+- name: Make the runner's secret on a host that keeps its own
+  ansible.builtin.shell:
+    cmd: umask 077; openssl rand -hex 20 | tr -d '\n' > /etc/forgejo-runner/token
+    creates: /etc/forgejo-runner/token
+  when: forgejo_runner_token_value is not defined
+
+- name: Install the runner's secret
+  ansible.builtin.copy:
+    content: "{{ forgejo_runner_token_value }}"
+    dest: /etc/forgejo-runner/token
+    owner: root
+    group: root
+    mode: "0600"
+  when: forgejo_runner_token_value is defined
+  no_log: true
+  notify: Restart the runner
+
+- name: Read the runner's secret
+  ansible.builtin.slurp:
+    src: /etc/forgejo-runner/token
+  register: forgejo_runner_token
+  no_log: true
+
+- name: Derive the runner's UUID from its secret
+  ansible.builtin.command:
+    argv: [python3, -I, -c, "import sys, uuid; print(uuid.UUID(bytes=sys.stdin.read().encode()))"]
+    stdin: "{{ (forgejo_runner_token.content | b64decode)[:16] }}"
+    stdin_add_newline: false
+  register: forgejo_runner_uuid
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Install the runner's configuration
+  vars:
+    RUNNER_UUID: "{{ forgejo_runner_uuid.stdout }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ forgejo_runner_source }}/etc/forgejo-runner/config.yml"
+    dest: /etc/forgejo-runner/config.yml
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: forgejo-runner
+    mode: "0640"
+  no_log: true
+  notify: Restart the runner
+
+- name: Install the service
+  ansible.builtin.copy:
+    src: "{{ forgejo_runner_source }}/etc/systemd/system/forgejo-runner.service"
+    dest: /etc/systemd/system/forgejo-runner.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the runner
+
+- name: Keep the runner enabled
+  ansible.builtin.systemd_service:
+    name: forgejo-runner
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# Registering the same secret again updates the runner in place.
+- name: Keep the runner registered with Forgejo
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - git
+      - --
+      - /usr/local/bin/forgejo
+      - forgejo-cli
+      - actions
+      - register
+      - --config
+      - /etc/forgejo/app.ini
+      - --work-path
+      - /var/lib/forgejo
+      - --name
+      - "{{ inventory_hostname }}"
+      - --scope
+      - "{{ forgejo_runner_scope }}"
+      - --labels
+      - "{{ inventory_hostname }}"
+      - --secret-stdin=1
+    stdin: "{{ forgejo_runner_token.content | b64decode }}"
+    stdin_add_newline: false
+  delegate_to: forgejo
+  no_log: true
+  changed_when: false

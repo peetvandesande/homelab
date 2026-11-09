@@ -6,10 +6,8 @@
 
 - name: Refuse a host that is not enrolled
   ansible.builtin.assert:
-    that:
-      - forgejo_cert.stat.exists
-      - forgejo_runner_secret is match('^[0-9a-f]{40}$')
-    fail_msg: "Not enrolled, or RUNNER_LEXIE_SECRET is not 40 hex characters"
+    that: forgejo_cert.stat.exists
+    fail_msg: "Not enrolled: run ca/scripts/enrol.sh first"
     quiet: true
 
 - name: Install the packages
@@ -157,32 +155,3 @@
   retries: 24
   delay: 5
   check_mode: false
-
-# Registering the same secret again updates the runner in place, scoped to peet's
-# repositories so nobody else's workflow lands on a host-mode runner.
-- name: Keep lexie's runner registered
-  ansible.builtin.command:
-    argv:
-      - runuser
-      - -u
-      - git
-      - --
-      - /usr/local/bin/forgejo
-      - forgejo-cli
-      - actions
-      - register
-      - --config
-      - /etc/forgejo/app.ini
-      - --work-path
-      - /var/lib/forgejo
-      - --name
-      - lexie
-      - --scope
-      - peet
-      - --labels
-      - lexie
-      - --secret-stdin=1
-    stdin: "{{ forgejo_runner_secret }}"
-    stdin_add_newline: false
-  no_log: true
-  changed_when: false

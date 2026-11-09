@@ -7,7 +7,6 @@ forgejo_url: "https://codeberg.org/forgejo/forgejo/releases/download/v{{ forgejo
 forgejo_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
 forgejo_secrets: "{{ lookup('ansible.builtin.file', forgejo_private ~ '/forgejo/secrets.env') }}"
 forgejo_smtp_passwd: "{{ forgejo_secrets | regex_search('(?m)^SMTP_PASSWD=(.*)$', '\\1') | first }}"
-forgejo_runner_secret: "{{ forgejo_secrets | regex_search('(?m)^RUNNER_LEXIE_SECRET=(.*)$', '\\1') | first }}"
 forgejo_generated_secrets:
   - { file: secret_key, kind: SECRET_KEY }
   - { file: internal_token, kind: INTERNAL_TOKEN }

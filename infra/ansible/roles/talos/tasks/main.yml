@@ -1,0 +1,160 @@
+---
+- name: Install the packages
+  ansible.builtin.apt:
+    name: [git, curl, unzip, openssl, python3-venv, python3-packaging, shellcheck]
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Read the installed tools
+  ansible.builtin.command: "{{ item }}"
+  loop: [tofu version, gitleaks version]
+  register: talos_tools
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install the pinned OpenTofu
+  when: ('OpenTofu v' ~ talos_tofu_version) not in talos_tools.results[0].stdout
+  block:
+    - name: Download OpenTofu
+      ansible.builtin.get_url:
+        url: "https://github.com/opentofu/opentofu/releases/download/v{{ talos_tofu_version }}/tofu_{{ talos_tofu_version }}_linux_amd64.zip"
+        dest: /tmp/tofu.zip
+        checksum: "sha256:{{ talos_tofu_sha256 }}"
+        mode: "0644"
+
+    - name: Unpack OpenTofu
+      ansible.builtin.unarchive:
+        src: /tmp/tofu.zip
+        dest: /usr/local/bin
+        remote_src: true
+        include: [tofu]
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Remove the OpenTofu download
+      ansible.builtin.file:
+        path: /tmp/tofu.zip
+        state: absent
+
+- name: Install the pinned gitleaks
+  when: talos_gitleaks_version not in talos_tools.results[1].stdout
+  block:
+    - name: Download gitleaks
+      ansible.builtin.get_url:
+        url: "https://github.com/gitleaks/gitleaks/releases/download/v{{ talos_gitleaks_version }}/gitleaks_{{ talos_gitleaks_version }}_linux_x64.tar.gz"
+        dest: /tmp/gitleaks.tgz
+        checksum: "sha256:{{ talos_gitleaks_sha256 }}"
+        mode: "0644"
+
+    - name: Unpack gitleaks
+      ansible.builtin.unarchive:
+        src: /tmp/gitleaks.tgz
+        dest: /usr/local/bin
+        remote_src: true
+        include: [gitleaks]
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Remove the gitleaks download
+      ansible.builtin.file:
+        path: /tmp/gitleaks.tgz
+        state: absent
+
+# From PyPI, as Debian packages an older ansible-core than the lab uses.
+- name: Install the pinned Ansible
+  ansible.builtin.pip:
+    name:
+      - "ansible-core=={{ talos_core_version }}"
+      - "ansible-lint=={{ talos_lint_version }}"
+    virtualenv: /opt/ci
+    virtualenv_command: python3 -m venv
+
+- name: Put the tools on the path
+  ansible.builtin.file:
+    src: "/opt/ci/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+  loop: [ansible, ansible-lint, ansible-playbook]
+
+- name: Create the runner's account for the keys
+  ansible.builtin.user:
+    name: forgejo-runner
+    system: true
+    create_home: true
+    home: "{{ talos_home }}"
+    shell: /usr/sbin/nologin
+    comment: Forgejo Actions runner
+
+- name: Create the key directory
+  ansible.builtin.file:
+    path: "{{ talos_home }}/.ssh"
+    state: directory
+    owner: forgejo-runner
+    group: forgejo-runner
+    mode: "0700"
+
+# A new GitHub key has to be added to the repository as a deploy key by a person;
+# a new minting key goes in talos/pistis-mint.pub, and ca.yml installs it.
+- name: Generate the keys once
+  ansible.builtin.command:
+    cmd: runuser -u forgejo-runner -- ssh-keygen -q -t ed25519 -N "" -C {{ item.comment }} -f {{ talos_home }}/.ssh/{{ item.file }}
+    creates: "{{ talos_home }}/.ssh/{{ item.file }}"
+  loop:
+    - { file: github, comment: forgejo-runner@talos }
+    - { file: pistis-mint, comment: forgejo-runner@talos-mint }
+
+- name: Name the two destinations
+  ansible.builtin.copy:
+    content: |
+      Host github.com
+        User git
+        IdentityFile {{ talos_home }}/.ssh/github
+        IdentitiesOnly yes
+        StrictHostKeyChecking yes
+        UpdateHostKeys no
+
+      Host pistis-mint
+        HostName 192.168.8.55
+        User root
+        IdentityFile {{ talos_home }}/.ssh/pistis-mint
+        IdentitiesOnly yes
+        StrictHostKeyChecking yes
+        UpdateHostKeys no
+    dest: "{{ talos_home }}/.ssh/config"
+    owner: forgejo-runner
+    group: forgejo-runner
+    mode: "0600"
+
+# GitHub's published key and pistis's pinned one, so nothing is trusted on first use.
+- name: Pin both destinations' host keys
+  ansible.builtin.copy:
+    content: |
+      {{ talos_github_key }}
+      {{ lookup('ansible.builtin.file', playbook_dir ~ '/known_hosts') | regex_search('(?m)^192\.168\.8\.55 .*$') }}
+    dest: "{{ talos_home }}/.ssh/known_hosts"
+    owner: forgejo-runner
+    group: forgejo-runner
+    mode: "0600"
+
+- name: Create the configuration directory
+  ansible.builtin.file:
+    path: /etc/forgejo-runner
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# The state database and a Proxmox token that can only read.
+- name: Install OpenTofu's secrets
+  ansible.builtin.copy:
+    src: "{{ talos_private }}/tofu/secrets.env"
+    dest: /etc/forgejo-runner/tofu.env
+    owner: root
+    group: forgejo-runner
+    mode: "0640"
+  no_log: true

@@ -1,0 +1,17 @@
+---
+- name: Refuse a host whose identity does not match
+  ansible.builtin.command: ip -4 addr show dev dummy0
+  register: outside_host_dummy
+  changed_when: false
+  check_mode: false
+  failed_when: ('inet ' ~ outside_addr ~ '/') not in outside_host_dummy.stdout
+
+- name: Set up the blackbox exporter
+  ansible.builtin.import_tasks: blackbox.yml
+
+- name: Set up log shipping
+  ansible.builtin.import_tasks: alloy.yml
+
+- name: Set up what only ruby runs
+  ansible.builtin.include_tasks: ruby.yml
+  when: inventory_hostname == 'ruby'

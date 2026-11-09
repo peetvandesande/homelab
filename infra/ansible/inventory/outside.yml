@@ -1,0 +1,16 @@
+---
+# ruby and jennie, which only a person runs against: outside.yml says how. Kept apart
+# from fleet.py so nothing that targets the fleet can ever reach them.
+all:
+  children:
+    outside:
+      hosts:
+        ruby:
+          ansible_host: 192.168.254.254
+          outside_addr: 192.168.254.254
+        jennie:
+          ansible_host: 192.168.254.2
+          outside_addr: 192.168.254.2
+      vars:
+        ansible_user: peet
+        ansible_become: true

@@ -1,0 +1,78 @@
+---
+- name: Install the pinned Alloy
+  ansible.builtin.apt:
+    name: "alloy={{ outside_host_alloy_version }}-1"
+    state: present
+    allow_downgrade: true
+  notify: Restart Alloy
+
+- name: Hold Alloy at that version
+  ansible.builtin.dpkg_selections:
+    name: alloy
+    selection: hold
+
+- name: Let Alloy read the journal
+  ansible.builtin.user:
+    name: alloy
+    groups: [systemd-journal, adm]
+    append: true
+  notify: Restart Alloy
+
+- name: Create Alloy's data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: alloy
+    group: alloy
+    mode: "0750"
+  loop:
+    - /var/lib/alloy
+    - /var/lib/alloy/data
+
+- name: Create its drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/alloy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Trust the lab root for Loki
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/ca/rootca/certs/root.crt"
+    dest: /etc/alloy/homelab-root-g2.crt
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Alloy
+
+- name: Label this host's logs
+  vars:
+    HOST: "{{ inventory_hostname }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ outside_host_repo }}/alloy/outside/etc/alloy/config.alloy"
+    dest: /etc/alloy/config.alloy
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: alloy
+    mode: "0640"
+  notify: Restart Alloy
+
+- name: Install Alloy's settings
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/alloy/outside/{{ item }}"
+    dest: "/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etc/default/alloy
+    - etc/systemd/system/alloy.service.d/outside.conf
+  notify: Restart Alloy
+
+- name: Keep Alloy enabled and running
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: started

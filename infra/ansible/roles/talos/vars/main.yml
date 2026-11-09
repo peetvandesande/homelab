@@ -1,0 +1,12 @@
+---
+talos_repo: "{{ role_path }}/../../../.."
+talos_versions: "{{ lookup('ansible.builtin.file', talos_repo ~ '/infra/versions.env') }}"
+talos_tofu_version: "{{ talos_versions | regex_search('(?m)^TOFU_VERSION=(.*)$', '\\1') | first }}"
+talos_tofu_sha256: "{{ talos_versions | regex_search('(?m)^TOFU_SHA256_LINUX_AMD64=(.*)$', '\\1') | first }}"
+talos_gitleaks_version: "{{ talos_versions | regex_search('(?m)^GITLEAKS_VERSION=(.*)$', '\\1') | first }}"
+talos_gitleaks_sha256: "{{ talos_versions | regex_search('(?m)^GITLEAKS_SHA256_LINUX_AMD64=(.*)$', '\\1') | first }}"
+talos_core_version: "{{ talos_versions | regex_search('(?m)^ANSIBLE_CORE_VERSION=(.*)$', '\\1') | first }}"
+talos_lint_version: "{{ talos_versions | regex_search('(?m)^ANSIBLE_LINT_VERSION=(.*)$', '\\1') | first }}"
+talos_home: /var/lib/forgejo-runner
+talos_github_key: github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+talos_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"

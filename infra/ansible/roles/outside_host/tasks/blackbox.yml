@@ -1,0 +1,48 @@
+---
+- name: Install the blackbox exporter
+  ansible.builtin.apt:
+    name: prometheus-blackbox-exporter
+    state: present
+    install_recommends: false
+
+- name: Install its probes
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/outside/etc/prometheus/blackbox.yml"
+    dest: /etc/prometheus/blackbox.yml
+    owner: root
+    group: root
+    mode: "0644"
+    validate: prometheus-blackbox-exporter --config.check --config.file=%s
+  notify: Restart the blackbox exporter
+
+- name: Create its drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/prometheus-blackbox-exporter.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Bind it to this host's tunnel address
+  vars:
+    ADDR: "{{ outside_addr }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ outside_host_repo }}/outside/{{ item.src }}"
+    dest: "/{{ item.src }}"
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: etc/default/prometheus-blackbox-exporter }
+    - { src: etc/systemd/system/prometheus-blackbox-exporter.service.d/outside.conf }
+  loop_control:
+    label: "{{ item.src }}"
+  notify: Restart the blackbox exporter
+
+- name: Keep the exporter enabled and running
+  ansible.builtin.systemd_service:
+    name: prometheus-blackbox-exporter
+    enabled: true
+    state: started

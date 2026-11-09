@@ -108,6 +108,9 @@ ansible-playbook monitoring.yml --check --diff                 # Prometheus, Lok
 ansible-playbook dns.yml --check --diff                        # pythia, then delphi, then themis; a person runs this until task 13
 ansible-playbook apps.yml --check --diff                       # Jellyfin, Navidrome, moby, Forgejo; a person runs this until task 13
 ansible-playbook platform.yml --limit '!hermes' --check --diff # lenora, metis; hermes when a lab has it running
+ansible-playbook ci.yml --check --diff                         # lexie's and talos's runners, the responder; always a person
+ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff  # ruby and jennie; always a person
+../../router/scripts/check.sh                                  # the live router against the settings the lab needs; read-only
 ```
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes

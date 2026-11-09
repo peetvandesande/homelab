@@ -1,0 +1,56 @@
+---
+- name: Install the job search deploy's YAML reader
+  ansible.builtin.apt:
+    name: python3-yaml
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# Generated once; moby's role authorises the public half for the schema command.
+- name: Generate the key for moby
+  ansible.builtin.command:
+    cmd: runuser -u forgejo-runner -- ssh-keygen -q -t ed25519 -N "" -C forgejo-runner@lexie -f /var/lib/forgejo-runner/.ssh/id_ed25519
+    creates: /var/lib/forgejo-runner/.ssh/id_ed25519
+
+# IPv4 only: moby accepts this key from lexie's address alone.
+- name: Reach moby as its forced-command account
+  ansible.builtin.copy:
+    content: |
+      Host moby
+        HostName 192.168.8.27
+        User jobsearch-ci
+        IdentityFile /var/lib/forgejo-runner/.ssh/id_ed25519
+        IdentitiesOnly yes
+        AddressFamily inet
+        BatchMode yes
+    dest: /var/lib/forgejo-runner/.ssh/config
+    owner: forgejo-runner
+    group: forgejo-runner
+    mode: "0600"
+
+- name: Trust moby's pinned host key
+  ansible.builtin.known_hosts:
+    path: /var/lib/forgejo-runner/.ssh/known_hosts
+    name: 192.168.8.27
+    key: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/known_hosts') | regex_search('(?m)^192\\.168\\.8\\.27 .*$') }}"
+
+- name: Keep that file private to the runner
+  ansible.builtin.file:
+    path: /var/lib/forgejo-runner/.ssh/known_hosts
+    owner: forgejo-runner
+    group: forgejo-runner
+    mode: "0600"
+
+- name: Install the job search deploy's secrets
+  vars:
+    jobsearch_secrets: "{{ lookup('ansible.builtin.file', forgejo_runner_private ~ '/jobsearch/secrets.env') }}"
+  ansible.builtin.copy:
+    content: |
+      SOGODE_N8N_API_KEY={{ jobsearch_secrets | regex_search('(?m)^SOGODE_N8N_API_KEY=(.*)$', '\1') | first }}
+      PERSONAL_N8N_API_KEY={{ jobsearch_secrets | regex_search('(?m)^PERSONAL_N8N_API_KEY=(.*)$', '\1') | first }}
+      FORGEJO_TOKEN={{ jobsearch_secrets | regex_search('(?m)^FORGEJO_TOKEN=(.*)$', '\1') | first }}
+    dest: /etc/forgejo-runner/jobsearch.env
+    owner: root
+    group: forgejo-runner
+    mode: "0640"
+  no_log: true

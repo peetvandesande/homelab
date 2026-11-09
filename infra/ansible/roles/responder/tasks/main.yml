@@ -1,0 +1,83 @@
+---
+# The account gets its Claude login by hand: responder/CLAUDE.md.
+- name: Create the account
+  ansible.builtin.user:
+    name: responder
+    system: true
+    create_home: true
+    home: /var/lib/responder
+    shell: /bin/bash
+    comment: alert responder
+    groups: tlscert
+    append: true
+  notify: Restart the responder
+
+- name: Create its directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: responder
+    group: responder
+    mode: "0700"
+  loop:
+    - /var/lib/responder
+    - /var/lib/responder/.ssh
+
+- name: Generate its key once
+  ansible.builtin.command:
+    cmd: runuser -u responder -- ssh-keygen -q -t ed25519 -N "" -C responder@lexie -f /var/lib/responder/.ssh/id_ed25519
+    creates: /var/lib/responder/.ssh/id_ed25519
+
+# IPv4 only: the fleet accepts this key from lexie's IPv4 address alone.
+- name: Keep it on IPv4
+  ansible.builtin.copy:
+    content: |
+      Host *
+        AddressFamily inet
+    dest: /var/lib/responder/.ssh/config
+    owner: responder
+    group: responder
+    mode: "0600"
+
+- name: Create the settings directory
+  ansible.builtin.file:
+    path: /etc/responder
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the program and its settings
+  ansible.builtin.copy:
+    src: "{{ responder_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/bin/responder, mode: "0755" }
+    - { path: etc/systemd/system/responder.service, mode: "0644" }
+    - { path: etc/homelab-tls/post-renew.d/30-responder, mode: "0755" }
+    - { path: etc/responder/allowed-alerts, mode: "0644" }
+    - { path: etc/responder/prompt.md, mode: "0644" }
+  notify: Restart the responder
+
+- name: Install its token and webhook
+  ansible.builtin.copy:
+    content: |
+      RESPONDER_BIND={{ ansible_host }}
+      RESPONDER_TOKEN={{ responder_token }}
+      RESPONDER_HA_URL=https://192.168.8.90/api/webhook/{{ responder_ha_webhook_id }}
+    dest: /etc/responder/responder.env
+    owner: root
+    group: responder
+    mode: "0640"
+  no_log: true
+  notify: Restart the responder
+
+- name: Keep the responder enabled and running
+  ansible.builtin.systemd_service:
+    name: responder
+    enabled: true
+    state: started
+    daemon_reload: true

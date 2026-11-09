@@ -1,0 +1,9 @@
+---
+outside_host_repo: "{{ role_path }}/../../../.."
+# Same pin as the fleet's alloy role: bump the two together.
+outside_host_alloy_version: 1.19.2
+outside_host_vhosts:
+  - { src: forgejo/ruby/etc/nginx/sites-available/git.peetvandesande.com, name: git.peetvandesande.com }
+  - { src: moby/ruby/etc/nginx/sites-available/n8n.peetvandesande.com, name: n8n.peetvandesande.com }
+  - { src: moby/ruby/etc/nginx/sites-available/n8n.sogode.com, name: n8n.sogode.com }
+  - { src: moby/ruby/etc/nginx/sites-available/ntfy.sogode.com, name: ntfy.sogode.com }
