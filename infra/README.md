@@ -73,6 +73,14 @@ any plan that deletes or replaces something, so a person applies those. Its Prox
 token is `tofu-apply@pve!apply`, with the `TofuApply` role: guest configuration and
 power, but no console, guest agent or rights over users.
 
+## Action log
+
+Every automated action writes to the audit trail before it acts and again when it
+finishes, using `infra/scripts/action-log`: who, the trigger, the action, the commit,
+the targets, the outcome and a link to the run. Query it in Grafana with
+`{identifier="homelab-action"}`. A `started` line with no matching `finished` line is
+an action that died halfway. If the entry cannot be written, the action does not run.
+
 ## Kept out of the automation
 
 These change the router, the ONT or Home Assistant OS, so a person runs them, from

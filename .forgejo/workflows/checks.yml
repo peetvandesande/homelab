@@ -27,9 +27,19 @@ jobs:
       # until a person has turned it on.
       - name: Apply
         if: forgejo.ref == 'refs/heads/main'
+        env:
+          ACTION_ACTOR: ${{ forgejo.actor }}
+          ACTION_TRIGGER: merge ${{ forgejo.event.before }}..${{ forgejo.sha }}
+          ACTION_COMMIT: ${{ forgejo.sha }}
+          ACTION_URL: ${{ forgejo.server_url }}/${{ forgejo.repository }}/actions/runs/${{ forgejo.run_number }}
         run: repo/infra/scripts/apply.sh "${{ forgejo.event.before }}" "${{ forgejo.sha }}"
       - name: Apply OpenTofu
         if: forgejo.ref == 'refs/heads/main'
+        env:
+          ACTION_ACTOR: ${{ forgejo.actor }}
+          ACTION_TRIGGER: merge ${{ forgejo.event.before }}..${{ forgejo.sha }}
+          ACTION_COMMIT: ${{ forgejo.sha }}
+          ACTION_URL: ${{ forgejo.server_url }}/${{ forgejo.repository }}/actions/runs/${{ forgejo.run_number }}
         run: repo/infra/scripts/tofu-apply.sh "${{ forgejo.event.before }}" "${{ forgejo.sha }}"
       # After publishing, so that a guest changed by hand reports drift without
       # holding up the code. Exit code 2 from plan means something differs.

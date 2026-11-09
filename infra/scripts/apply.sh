@@ -58,16 +58,31 @@ fi
 export ANSIBLE_PRIVATE_KEY_FILE=$DEPLOY/key HOMELAB_PRIVATE=$DEPLOY/private
 export HOMELAB_DNS_SECRETS=$DEPLOY/private/dns/secrets.env
 export PATH=/opt/ci/bin:$PATH
+log=$PWD/infra/scripts/action-log
 cd infra/ansible || exit 1
 
-run() { echo "== ansible-playbook $*"; ansible-playbook "$@" || exit 1; }
+# run <name> <targets> <ansible-playbook arguments>. Nothing is applied unless the
+# action can be recorded first.
+run() {
+  local name=playbook:$1 targets=$2 id
+  shift 2
+  echo "== ansible-playbook $*"
+  id=$("$log" start --action "$name" --targets "$targets") \
+    || { echo "== cannot write the action log; refusing to apply"; exit 1; }
+  if ansible-playbook "$@"; then
+    "$log" end "$id" --action "$name" succeeded || exit 1
+  else
+    "$log" end "$id" --action "$name" failed
+    exit 1
+  fi
+}
 for item in "${need[@]}"; do
   case $item in
-    fleet) run fleet.yml --limit "$LIMIT" ;;
-    monitoring) run monitoring.yml ;;
-    dns) run dns.yml ;;
-    apps) run apps.yml ;;
-    metis) run platform.yml --limit metis ;;
+    fleet) run fleet "$LIMIT" fleet.yml --limit "$LIMIT" ;;
+    monitoring) run monitoring prometheus,loki,grafana monitoring.yml ;;
+    dns) run dns pythia,delphi,themis dns.yml ;;
+    apps) run apps jellyfin,navidrome,moby,forgejo apps.yml ;;
+    metis) run metis metis platform.yml --limit metis ;;
   esac
 done
 echo "== applied"

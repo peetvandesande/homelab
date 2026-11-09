@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""Record an automated action in the audit trail.
+
+  id=$(action-log start --action playbook:dns --targets dns)
+  action-log end "$id" --action playbook:dns succeeded
+
+Each call writes one JSON line to the journal under the identifier homelab-action.
+Alloy ships it to Loki: query {identifier="homelab-action"}. An entry that has a
+started line and no outcome is an action that died halfway.
+
+Who, why and which commit come from the environment: ACTION_ACTOR, ACTION_TRIGGER,
+ACTION_COMMIT and ACTION_URL. Exits non-zero if the line could not be written or
+the trigger or commit is missing, and the caller must then not act.
+"""
+import argparse
+import datetime
+import getpass
+import json
+import os
+import socket
+import subprocess
+import sys
+import uuid
+
+IDENTIFIER = "homelab-action"
+
+
+def fail(message):
+    print(f"action-log: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def write(entry):
+    entry.update(
+        time=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        host=socket.gethostname(),
+        actor=os.environ.get("ACTION_ACTOR") or getpass.getuser(),
+        trigger=os.environ.get("ACTION_TRIGGER", ""),
+        commit=os.environ.get("ACTION_COMMIT", ""),
+        url=os.environ.get("ACTION_URL", ""),
+    )
+    if not entry["trigger"] or not entry["commit"]:
+        fail("ACTION_TRIGGER and ACTION_COMMIT are required")
+    try:
+        result = subprocess.run(
+            ["systemd-cat", "-t", IDENTIFIER],
+            input=json.dumps(entry, sort_keys=True) + "\n",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as error:
+        fail(f"cannot write to the journal: {error}")
+    if result.returncode:
+        fail(f"cannot write to the journal: {result.stderr.strip()}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    start = commands.add_parser("start")
+    start.add_argument("--action", required=True)
+    start.add_argument("--targets", required=True)
+
+    end = commands.add_parser("end")
+    end.add_argument("id")
+    end.add_argument("--action", required=True)
+    end.add_argument("outcome", choices=["succeeded", "failed", "refused"])
+    end.add_argument("--detail", default="")
+
+    args = parser.parse_args()
+    if args.command == "start":
+        action_id = uuid.uuid4().hex[:12]
+        write({"id": action_id, "phase": "started", "action": args.action, "targets": args.targets})
+        print(action_id)
+    else:
+        write({"id": args.id, "phase": "finished", "action": args.action,
+               "outcome": args.outcome, "detail": args.detail})
+
+
+if __name__ == "__main__":
+    main()

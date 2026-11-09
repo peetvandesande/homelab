@@ -9,6 +9,7 @@
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$repo"
+log=$repo/infra/scripts/action-log
 
 plan_only=0
 [[ ${1:-} == --plan ]] && { plan_only=1; shift; }
@@ -47,9 +48,21 @@ sys.exit(1 if bad else 0)
 PY
 then
   echo "== refused: this plan deletes or replaces something, so a person has to apply it"
+  if ((!plan_only)); then
+    id=$("$log" start --action tofu:apply --targets proxmox)
+    "$log" end "$id" --action tofu:apply refused --detail "plan deletes or replaces a resource"
+  fi
   exit 1
 fi
 
 ((plan_only)) && { echo "== plan is safe to apply; stopping here"; exit 0; }
-infra/scripts/tofu.sh apply -input=false -no-color "$out/plan"
-echo "== applied"
+# Nothing is applied unless the action can be recorded first.
+id=$("$log" start --action tofu:apply --targets proxmox) \
+  || { echo "== cannot write the action log; refusing to apply"; exit 1; }
+if infra/scripts/tofu.sh apply -input=false -no-color "$out/plan"; then
+  "$log" end "$id" --action tofu:apply succeeded
+  echo "== applied"
+else
+  "$log" end "$id" --action tofu:apply failed
+  exit 1
+fi
