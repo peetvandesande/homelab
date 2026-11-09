@@ -226,6 +226,18 @@ Enrolled hosts get `/etc/homelab-tls/`:
 Renewal is a daily timer running `step ca renew`, authenticated by the existing
 certificate over mTLS — no provisioner secret on the host.
 
+`infra/ansible/enrol.yml` does the same thing and leaves a valid certificate
+alone; `ca.yml` builds pistis, run by a person because it installs the G3 key.
+`enrol.sh` and `deploy.sh` stay until task 13.
+
+**talos has an SSH key on pistis forced to `homelab-mint-token --restricted`**, so
+it can mint tokens only for a host that does not exist yet: a `.home` name and lab
+addresses, none on `/etc/step-ca/mint-protected`, which `ca.yml` writes from
+`FLEET`, DNS and the role's own list. It cannot impersonate an existing host or
+obtain a public name; those need a person, as does re-enrolling a host. Add a host
+to `FLEET` and re-run `ca.yml` so it becomes protected. Every request is logged
+under the `homelab-mint-token` tag, which ships to Loki.
+
 ## Fleet TLS invariants — do not "simplify" these away
 
 Each of these was found by something breaking.

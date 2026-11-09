@@ -18,8 +18,8 @@ def fleet():
     if not match:
         sys.exit(f"no FLEET array found in {ENROL}")
     hosts = {}
-    for ip, name in re.findall(r'^\s*"(\d+\.\d+\.\d+\.\d+)\s+([^\s"]+)', match[1], re.M):
-        hosts[name] = {"ansible_host": ip}
+    for ip, name, extra in re.findall(r'^\s*"(\d+\.\d+\.\d+\.\d+)\s+([^\s"]+)([^"]*)"', match[1], re.M):
+        hosts[name] = {"ansible_host": ip, "extra_sans": extra.split()}
     if not hosts:
         sys.exit(f"FLEET in {ENROL} holds no hosts")
     return hosts

@@ -1,0 +1,84 @@
+#!/bin/bash
+# Mint a single-use enrolment token for one host, printed on stdout.
+#
+#   homelab-mint-token <name>.home [san ...]              as root, for a person
+#   homelab-mint-token --restricted                       forced by talos's SSH key
+#
+# With --restricted the arguments come from SSH_ORIGINAL_COMMAND and may only ask
+# for a NEW host: a .home name and lab addresses, none of them in use. So a
+# compromised talos cannot impersonate a host that exists, nor obtain a public
+# name. Re-enrolling an existing host, or any public name, takes a person.
+#
+# Every request is logged, and the journal ships to Loki.
+set -euo pipefail
+
+PROTECTED=/etc/step-ca/mint-protected
+CA_URL=https://192.168.8.55:8443
+LOG_TAG=homelab-mint-token
+
+restricted=0
+if [[ ${1:-} == --restricted ]]; then
+  restricted=1
+  read -ra args <<<"${SSH_ORIGINAL_COMMAND:-}"
+else
+  args=("$@")
+fi
+
+# True if the address is on the protected list, or is not a valid address at
+# all. Compares parsed values, so another spelling of an address cannot pass.
+address_protected() {
+  python3 -I - "$1" "$PROTECTED" <<'PY'
+import ipaddress
+import sys
+
+try:
+    wanted = ipaddress.ip_address(sys.argv[1])
+except ValueError:
+    sys.exit(0)
+for line in open(sys.argv[2]):
+    try:
+        if ipaddress.ip_address(line.strip()) == wanted:
+            sys.exit(0)
+    except ValueError:
+        pass
+sys.exit(1)
+PY
+}
+
+clean() { printf '%s' "$*" | tr -c 'A-Za-z0-9.:_ -' '_'; }
+refuse() {
+  logger -t "$LOG_TAG" "refused restricted=$restricted request=[$(clean "${args[*]:-}")] reason=[$1]"
+  echo "refused: $1" >&2
+  exit 1
+}
+
+((${#args[@]} >= 1)) || refuse "no host name given"
+name=${args[0]}
+sans=("${args[@]:1}")
+
+if ((restricted)); then
+  [[ $name =~ ^[a-z0-9-]+\.home$ ]] || refuse "only a .home name may be requested"
+  short=${name%.home}
+  [[ -r $PROTECTED ]] || refuse "no protected list"
+  grep -qxF "$short" "$PROTECTED" && refuse "$name already exists"
+  for san in "${sans[@]}"; do
+    case $san in
+      "$name" | "$short" | localhost | 127.0.0.1) ;;
+      *)
+        if [[ $san =~ ^192\.168\.8\.[0-9]{1,3}$ || $san =~ ^fd33:5692:1834:1000:[0-9a-f:]+$ ]]; then
+          address_protected "$san" && refuse "$san is in use"
+        else
+          refuse "$san is not a lab address or this host's name"
+        fi
+        ;;
+    esac
+  done
+fi
+
+sanargs=()
+for san in "${sans[@]}"; do sanargs+=(--san "$san"); done
+
+logger -t "$LOG_TAG" "minted restricted=$restricted name=[$(clean "$name")] sans=[$(clean "${sans[*]:-}")]"
+exec step ca token "$name" "${sanargs[@]}" \
+  --provisioner admin --provisioner-password-file /etc/step-ca/secrets/jwk-password \
+  --ca-url "$CA_URL" --root /etc/step-ca/certs/root_ca.crt

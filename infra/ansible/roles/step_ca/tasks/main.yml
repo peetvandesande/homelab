@@ -1,0 +1,222 @@
+---
+# A CRL past its date fails closed in anything that checks it, and silently until
+# that day. openssl crl has no -checkend, so compare the date here.
+- name: Read the root CRL's expiry
+  ansible.builtin.command: openssl crl -in {{ step_ca_repo }}/rootca/crl/root.crl -noout -nextupdate
+  delegate_to: localhost
+  register: step_ca_crl
+  changed_when: false
+  check_mode: false
+
+- name: Refuse to publish an expired CRL
+  ansible.builtin.assert:
+    that: >-
+      (step_ca_crl.stdout.split('=', 1)[1] | to_datetime('%b %d %H:%M:%S %Y %Z'))
+      > now(utc=true, fmt='%Y-%m-%d %H:%M:%S') | to_datetime('%Y-%m-%d %H:%M:%S')
+    fail_msg: "rootca/crl/root.crl has expired: run ca/scripts/root-crl.sh"
+    quiet: true
+
+- name: Install web and helper packages
+  ansible.builtin.apt:
+    name: [curl, ca-certificates, nginx, jq]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Read the installed smallstep versions
+  ansible.builtin.command: dpkg-query -W -f=${Version} {{ item.name }}
+  loop: "{{ step_ca_packages }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: step_ca_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Download smallstep packages that differ
+  ansible.builtin.get_url:
+    url: "{{ item.item.url }}"
+    dest: "/tmp/{{ item.item.name }}.deb"
+    checksum: "sha256:{{ item.item.sha256 }}"
+    mode: "0644"
+  loop: "{{ step_ca_installed.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stdout != item.item.version
+
+- name: Install those packages
+  ansible.builtin.apt:
+    deb: "/tmp/{{ item.item.name }}.deb"
+  loop: "{{ step_ca_installed.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stdout != item.item.version
+  notify: Restart step-ca
+
+- name: Create the step user
+  ansible.builtin.user:
+    name: step
+    system: true
+    home: /var/lib/step-ca
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/lib/step-ca, owner: step, mode: "0700" }
+    - { path: /etc/step-ca/secrets, owner: step, mode: "0700" }
+    - { path: /etc/step-ca, owner: step, mode: "0755" }
+    - { path: /etc/step-ca/config, owner: step, mode: "0755" }
+    - { path: /etc/step-ca/certs, owner: step, mode: "0755" }
+    - { path: /var/www, owner: root, mode: "0755" }
+    - { path: /var/www/g3, owner: root, mode: "0755" }
+
+- name: Install the CA certificates
+  ansible.builtin.copy:
+    src: "{{ step_ca_repo }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: step
+    group: step
+    mode: "0644"
+  loop:
+    - { src: rootca/certs/root.crt, dest: /etc/step-ca/certs/root_ca.crt }
+    - { src: intermediate/certs/intermediate-g3.crt, dest: /etc/step-ca/certs/intermediate_ca.crt }
+  notify: Restart step-ca
+
+- name: Install the intermediate key
+  ansible.builtin.copy:
+    src: "{{ step_ca_repo }}/intermediate/private/intermediate-g3.key"
+    dest: /etc/step-ca/secrets/intermediate_ca_key
+    owner: step
+    group: step
+    mode: "0600"
+  no_log: true
+  notify: Restart step-ca
+
+- name: Install the passphrases
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "/etc/step-ca/secrets/{{ item.file }}"
+    owner: step
+    group: step
+    mode: "0400"
+  loop:
+    - { file: password, value: "{{ step_ca_key_password }}" }
+    - { file: jwk-password, value: "{{ step_ca_jwk_password }}" }
+  no_log: true
+  notify: Restart step-ca
+
+- name: Publish the certificates and CRL
+  ansible.builtin.copy:
+    src: "{{ step_ca_repo }}/{{ item.src }}"
+    dest: "/var/www/g3/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: rootca/certs/root.crt, dest: root.crt }
+    - { src: rootca/crl/root.crl, dest: root.crl }
+    - { src: intermediate/certs/intermediate-g3.crt, dest: intermediate.crt }
+    - { src: intermediate/certs/chain-g3.pem, dest: chain.pem }
+
+# The files keep the @@NAME@@ placeholders the old deploy script filled in. A
+# template with @@ as its delimiter leaves everything else in the JSON untouched.
+- name: Install the CA's configuration
+  vars:
+    ROOT_FINGERPRINT: "{{ step_ca_root_fingerprint }}"  # noqa: var-naming[pattern]
+    JWK_PROVISIONER: "{{ step_ca_jwk_provisioner }}"  # noqa: var-naming[pattern]
+  ansible.builtin.template:
+    src: "{{ step_ca_repo }}/pistis/etc/step-ca/config/{{ item.file }}"
+    dest: "/etc/step-ca/config/{{ item.file }}"
+    variable_start_string: "@@"
+    variable_end_string: "@@"
+    owner: step
+    group: step
+    mode: "{{ item.mode }}"
+  loop:
+    - { file: ca.json, mode: "0640" }
+    - { file: defaults.json, mode: "0644" }
+  loop_control:
+    label: "{{ item.file }}"
+  no_log: true
+  notify: Restart step-ca
+
+- name: Install the service
+  ansible.builtin.copy:
+    src: "{{ step_ca_repo }}/pistis/etc/systemd/system/step-ca.service"
+    dest: /etc/systemd/system/step-ca.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart step-ca
+
+- name: Install the publishing site
+  ansible.builtin.copy:
+    src: "{{ step_ca_repo }}/pistis/etc/nginx/sites-available/g3.conf"
+    dest: /etc/nginx/sites-available/g3.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Remove nginx's default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Enable the publishing site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/g3.conf
+    dest: /etc/nginx/sites-enabled/g3.conf
+    state: link
+  notify: Reload nginx
+
+- name: Keep the services on
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - nginx
+    - step-ca
+
+- name: Install the token minter
+  ansible.builtin.copy:
+    src: "{{ step_ca_repo }}/pistis/usr/local/sbin/homelab-mint-token"
+    dest: /usr/local/sbin/homelab-mint-token
+    owner: root
+    group: root
+    mode: "0755"
+
+# Every name and address in use, which the restricted minter refuses to issue.
+- name: Write the protected list
+  vars:
+    step_ca_fleet: "{{ groups['fleet'] | map('extract', hostvars, 'ansible_host') | list }}"
+    step_ca_lines: >-
+      {{ (groups['fleet'] + step_ca_fleet + step_ca_ulas
+          + (step_ca_extra_protected | map(attribute='name') | list)
+          + (step_ca_extra_protected | map(attribute='address') | list))
+         | unique | sort }}
+  ansible.builtin.copy:
+    content: "{{ step_ca_lines | join('\n') }}\n"
+    dest: /etc/step-ca/mint-protected
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Let talos mint tokens for new hosts, and nothing else
+  ansible.builtin.lineinfile:
+    path: /root/.ssh/authorized_keys
+    line: >-
+      from="192.168.8.59",restrict,command="/usr/local/sbin/homelab-mint-token --restricted"
+      {{ lookup('ansible.builtin.file', role_path ~ '/../../../../talos/pistis-mint.pub') }}
+    owner: root
+    group: root
+    mode: "0600"

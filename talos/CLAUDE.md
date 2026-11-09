@@ -30,10 +30,11 @@ checks, so a person can run them without the runner.
 2. **Registered for one repository.** A wider scope would let any other
    repository's workflow use the GitHub key.
 
-3. **The only write access here is the GitHub key and OpenTofu's state.**
-   `verify.sh` asserts the key is the only one. The key never leaves this host,
-   and the runner's own secret is made here too, so neither is in Bitwarden: a
-   rebuild makes new ones. `/etc/forgejo-runner/tofu.env` holds the state
+3. **The only write access here is the GitHub key, OpenTofu's state and minting
+   tokens for new hosts.** `verify.sh` asserts those two keys are the only ones.
+   The keys never leave this host, and the runner's own secret is made here too,
+   so none is in Bitwarden: a rebuild makes new ones. The minting key is forced to
+   `homelab-mint-token --restricted` on pistis (`ca/CLAUDE.md`). `/etc/forgejo-runner/tofu.env` holds the state
    database password and passphrase and a Proxmox token that can only read.
 
 4. **Never force-push to GitHub.** If GitHub has commits Forgejo lacks, the

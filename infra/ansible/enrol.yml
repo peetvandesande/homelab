@@ -1,0 +1,12 @@
+---
+# Give hosts a lab certificate and a renewal timer. A host that already holds a
+# valid certificate is left alone; add -e enrol_force=true to re-issue. Run
+# before fleet.yml on a new host:
+#
+#   ansible-playbook enrol.yml --limit <host>
+- name: Enrol with the lab CA
+  hosts: fleet
+  gather_facts: false
+  force_handlers: true
+  roles:
+    - enrol

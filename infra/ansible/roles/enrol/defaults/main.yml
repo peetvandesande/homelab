@@ -1,0 +1,16 @@
+---
+enrol_force: false
+# How to ask pistis for a token. A person's key gets a root shell and names the
+# script; talos overrides this with its restricted key, which is forced to it.
+enrol_minter:
+  - ssh
+  - -o
+  - BatchMode=yes
+  - -o
+  - StrictHostKeyChecking=yes
+  - -o
+  - "UserKnownHostsFile={{ playbook_dir }}/known_hosts"
+  - -o
+  - HostKeyAlgorithms=ssh-ed25519
+  - root@192.168.8.55
+  - /usr/local/sbin/homelab-mint-token

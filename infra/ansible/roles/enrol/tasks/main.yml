@@ -1,0 +1,150 @@
+---
+- name: Check for step
+  ansible.builtin.command: sh -c 'command -v step'
+  register: enrol_step
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install step
+  when: enrol_step.rc != 0
+  block:
+    - name: Install what fetching it needs
+      ansible.builtin.apt:
+        name: [curl, ca-certificates]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Download the pinned package
+      ansible.builtin.get_url:
+        url: "https://github.com/smallstep/cli/releases/download/v{{ enrol_step_version | regex_replace('-.*$', '') }}/step-cli_{{ enrol_step_version }}_amd64.deb"
+        dest: /tmp/step-cli.deb
+        checksum: "sha256:{{ enrol_step_sha256 }}"
+        mode: "0644"
+
+    - name: Install the package
+      ansible.builtin.apt:
+        deb: /tmp/step-cli.deb
+
+    - name: Remove the download
+      ansible.builtin.file:
+        path: /tmp/step-cli.deb
+        state: absent
+
+- name: Create the certificate group
+  ansible.builtin.group:
+    name: tlscert
+    system: true
+
+- name: Create the certificate directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/homelab-tls
+    - /etc/homelab-tls/post-renew.d
+
+# The target needs the root to verify the CA before it can redeem anything. The
+# intermediate goes in the store as well, because .NET sends a bare leaf otherwise.
+- name: Install the trust anchors
+  ansible.builtin.copy:
+    src: "{{ enrol_ca_source }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: rootca/certs/root.crt, dest: /etc/homelab-tls/root_ca.crt }
+    - { src: rootca/certs/root.crt, dest: /usr/local/share/ca-certificates/homelab-root-g2.crt }
+    - { src: intermediate/certs/intermediate-g3.crt, dest: /usr/local/share/ca-certificates/homelab-intermediate-g3.crt }
+  notify: Update the trust store
+
+- name: Apply the trust store now
+  ansible.builtin.meta: flush_handlers
+
+- name: Install the renewal job
+  ansible.builtin.copy:
+    src: "{{ enrol_ca_source }}/fleet/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: etc/systemd/system/homelab-tls-renew.service, mode: "0644" }
+    - { path: etc/systemd/system/homelab-tls-renew.timer, mode: "0644" }
+    - { path: usr/local/bin/homelab-tls-renew, mode: "0755" }
+
+- name: Keep the renewal timer on
+  ansible.builtin.systemd_service:
+    name: homelab-tls-renew.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# The key is generated here and never moves. A valid certificate is left alone:
+# renewal looks after it, and re-issuing would restart services for nothing.
+- name: Check for a current certificate
+  ansible.builtin.command: openssl x509 -in /etc/homelab-tls/host.crt -noout -checkend 86400
+  register: enrol_current
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Issue a certificate
+  when: enrol_force | bool or enrol_current.rc != 0
+  block:
+    - name: Find this host's ULA
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail; ip -6 addr show scope global -tentative -deprecated
+          | grep -v ' temporary' | grep -oE 'fd33:5692:1834:1000:[0-9a-f:]+' | head -1
+        executable: /bin/bash
+      register: enrol_ula
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Ask pistis for a single-use token
+      vars:
+        enrol_sans: >-
+          {{ [enrol_fqdn, inventory_hostname, ansible_host, 'localhost', '127.0.0.1']
+             + (extra_sans | default([]))
+             + ([enrol_ula.stdout] if enrol_ula.stdout else []) }}
+      ansible.builtin.command:
+        argv: "{{ enrol_minter + [enrol_fqdn] + enrol_sans }}"
+      delegate_to: localhost
+      register: enrol_token
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Redeem the token
+      ansible.builtin.shell:
+        cmd: >-
+          umask 077 && step ca certificate {{ enrol_fqdn | quote }}
+          /etc/homelab-tls/host.crt.new /etc/homelab-tls/host.key.new
+          --token {{ enrol_token.stdout | quote }} --ca-url {{ enrol_ca_url | quote }}
+          --root /etc/homelab-tls/root_ca.crt --force
+      changed_when: true
+      no_log: true
+
+    - name: Put the certificate in place
+      ansible.builtin.shell:
+        cmd: |
+          set -e
+          cd /etc/homelab-tls
+          mv -f host.crt.new host.crt
+          mv -f host.key.new host.key
+          chown root:tlscert host.crt host.key
+          chmod 0644 host.crt
+          chmod 0640 host.key
+      changed_when: true
+
+    - name: Let services pick up the new certificate
+      ansible.builtin.shell:
+        cmd: for hook in /etc/homelab-tls/post-renew.d/*; do [ -x "$hook" ] && "$hook" || true; done
+      changed_when: true

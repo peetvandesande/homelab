@@ -1,0 +1,36 @@
+---
+step_ca_repo: "{{ role_path }}/../../../../ca"
+step_ca_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+step_ca_secrets: "{{ lookup('ansible.builtin.file', step_ca_private ~ '/ca/secrets.env') }}"
+step_ca_key_password: "{{ step_ca_secrets | regex_search(\"(?m)^STEP_CA_KEY_PASSWORD='?(.*?)'?$\", '\\1') | first }}"
+step_ca_jwk_password: "{{ step_ca_secrets | regex_search(\"(?m)^STEP_CA_JWK_PASSWORD='?(.*?)'?$\", '\\1') | first }}"
+step_ca_jwk_provisioner: "{{ step_ca_secrets | regex_search(\"(?m)^JWK_PROVISIONER='?(.*?)'?$\", '\\1') | first }}"
+step_ca_root_fingerprint: >-
+  {{ lookup('ansible.builtin.pipe',
+     'openssl x509 -in ' ~ step_ca_repo ~ '/rootca/certs/root.crt -outform DER | openssl dgst -sha256')
+     | split | last }}
+# The ULAs published in DNS, so the minter refuses those addresses as well.
+step_ca_ulas: >-
+  {{ lookup('ansible.builtin.file', role_path ~ '/../../../../dns/ansible/group_vars/all.yml')
+     | regex_findall("data6: '(fd33:[0-9a-f:]+)'") }}
+step_ca_packages:
+  - name: step-ca
+    version: 0.30.2-1
+    url: https://github.com/smallstep/certificates/releases/download/v0.30.2/step-ca_0.30.2-1_amd64.deb
+    sha256: "f8e43f0f2ba1e37121b75623993ea0bece5cc3a02b73eefc16e414d41c9fec71"
+  - name: step-cli
+    version: 0.30.6-1
+    url: https://github.com/smallstep/cli/releases/download/v0.30.6/step-cli_0.30.6-1_amd64.deb
+    sha256: 5845c181251ffe43ca2331bc171e0b92324a71be9cf4ef76cd6fbbba4f2a3cc6
+# Hosts outside FLEET that hold or will hold lab certificates, and names the
+# restricted minter must never issue.
+step_ca_extra_protected:
+  - { name: sally, address: 192.168.8.22 }
+  - { name: homeassistant, address: 192.168.8.90 }
+  - { name: gw, address: 192.168.8.1 }
+  - { name: ca, address: 192.168.8.55 }
+  - { name: dns, address: 192.168.8.50 }
+  - { name: pve, address: 192.168.8.21 }
+  - { name: n8n, address: 192.168.8.27 }
+  - { name: ollama, address: 192.168.8.58 }
+  - { name: mail, address: 192.168.8.57 }

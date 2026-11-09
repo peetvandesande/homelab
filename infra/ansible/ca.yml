@@ -1,0 +1,11 @@
+---
+# The certificate authority on pistis. Run by a person: it installs the G3 key
+# and passphrases, read from the local secrets cache (infra/scripts/vault.py pull).
+#
+#   ansible-playbook ca.yml --check --diff
+- name: Certificate authority
+  hosts: pistis
+  gather_facts: false
+  force_handlers: true
+  roles:
+    - step_ca

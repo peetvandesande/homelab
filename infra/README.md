@@ -60,7 +60,7 @@ Each task ends with a checkpoint before the next begins.
 | 4 | PBS on sally, guest backups, a tested restore | |
 | 5 | Import all guests into OpenTofu, with a no-change plan | Done |
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | Done |
-| 7 | CA and enrolment | |
+| 7 | CA and enrolment | Done |
 | 8 | Prometheus, Loki, Grafana | |
 | 9 | DNS stack | |
 | 10 | Application services: Forgejo, moby, media | |
@@ -86,11 +86,13 @@ ansible fleet -m ansible.builtin.ping
 ansible-inventory --graph
 ansible-playbook fleet.yml --limit '!hermes' --check --diff   # what would change
 ansible-playbook fleet.yml --limit '!hermes'                   # apply
+ansible-playbook enrol.yml --limit <host>                      # certificate for a host
+ansible-playbook ca.yml --check --diff                         # the CA on pistis; a person runs this
 ```
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes
-nothing. For a new host: add it to `FLEET`, enrol it with `ca/scripts/enrol.sh`,
-and run the playbook limited to it. hermes is off unless a lab is running, so
+nothing. For a new host: add it to `FLEET`, then run `enrol.yml` and `fleet.yml`
+limited to it, then `ca.yml` so its name becomes protected. hermes is off unless a lab is running, so
 leave it out of the run while it is off. sally is not in `FLEET`, by design.
 
 | Path | Holds |

@@ -19,6 +19,7 @@ $SSH "root@$HOST" "
   gitleaks=$GITLEAKS_VERSION gitleaks_sum=$GITLEAKS_SHA256_LINUX_AMD64
   core=$ANSIBLE_CORE_VERSION lint=$ANSIBLE_LINT_VERSION
   github_key='$GITHUB_HOST_KEY'
+  pistis_key='$(grep '^192.168.8.55 ' ../infra/ansible/known_hosts)'
 "'
   set -e
   export DEBIAN_FRONTEND=noninteractive
@@ -59,9 +60,13 @@ $SSH "root@$HOST" "
   install -d -o forgejo-runner -g forgejo-runner -m 0700 $h/.ssh
   [ -f $h/.ssh/github ] || runuser -u forgejo-runner -- \
     ssh-keygen -q -t ed25519 -N "" -C forgejo-runner@talos -f $h/.ssh/github
-  printf "Host github.com\n  User git\n  IdentityFile %s/.ssh/github\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  UpdateHostKeys no\n" "$h" > $h/.ssh/config
+  # Forced on pistis to homelab-mint-token, so this key can mint tokens for new
+  # hosts and do nothing else.
+  [ -f $h/.ssh/pistis-mint ] || runuser -u forgejo-runner -- \
+    ssh-keygen -q -t ed25519 -N "" -C forgejo-runner@talos-mint -f $h/.ssh/pistis-mint
+  printf "Host github.com\n  User git\n  IdentityFile %s/.ssh/github\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  UpdateHostKeys no\n\nHost pistis-mint\n  HostName 192.168.8.55\n  User root\n  IdentityFile %s/.ssh/pistis-mint\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  UpdateHostKeys no\n" "$h" "$h" > $h/.ssh/config
   # GitHub'"'"'s published key, so the first push trusts nothing it is told.
-  printf "%s\n" "$github_key" > $h/.ssh/known_hosts
+  printf "%s\n%s\n" "$github_key" "$pistis_key" > $h/.ssh/known_hosts
   rm -f $h/.ssh/known_hosts.old
   chown forgejo-runner:forgejo-runner $h/.ssh/config $h/.ssh/known_hosts
   chmod 0600 $h/.ssh/config $h/.ssh/known_hosts
@@ -69,3 +74,6 @@ $SSH "root@$HOST" "
 echo "   tools and account ready"
 echo "   deploy key for GitHub:"
 $SSH "root@$HOST" 'cat /var/lib/forgejo-runner/.ssh/github.pub'
+# Committed, because the step_ca role installs it on pistis.
+$SSH "root@$HOST" 'cat /var/lib/forgejo-runner/.ssh/pistis-mint.pub' > pistis-mint.pub
+echo "   minting key written to talos/pistis-mint.pub; run ansible-playbook ca.yml"

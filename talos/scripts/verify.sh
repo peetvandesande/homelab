@@ -20,10 +20,10 @@ check tofu "$TOFU_VERSION" "$(on tofu version | sed -n 's/^OpenTofu v//p' | head
 check gitleaks "$GITLEAKS_VERSION" "$(on gitleaks version)"
 check ansible-core "$ANSIBLE_CORE_VERSION" "$(on ansible --version | sed -n 's/^ansible \[core \(.*\)\]$/\1/p')"
 
-echo "== what a job can reach: only the GitHub key"
+echo "== what a job can reach: only the GitHub and minting keys"
 keys=$(on 'ls /var/lib/forgejo-runner/.ssh | tr "\n" " "')
-[[ $keys == "config github github.pub known_hosts " ]] && pass "the account holds only the GitHub key" \
-  || bad "the account holds only the GitHub key" "$keys"
+[[ $keys == "config github github.pub known_hosts pistis-mint pistis-mint.pub " ]] && pass "the account holds only the GitHub and minting keys" \
+  || bad "the account holds only the GitHub and minting keys" "$keys"
 groups=$(on id -Gn forgejo-runner)
 [[ $groups == forgejo-runner ]] && pass "no group beyond its own" || bad "no group beyond its own" "$groups"
 on 'test ! -e /etc/sudoers.d/forgejo-runner && ! command -v bws >/dev/null' \
