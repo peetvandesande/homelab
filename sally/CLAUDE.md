@@ -24,10 +24,18 @@ stops the power-off altogether.
 
 ## Access
 
-Root SSH accepts only `~/.ssh/sally`, whose passphrase is in Bitwarden, so nothing
-automated can reach this host. To run a script here, load the key briefly:
-`ssh-add -t 15m ~/.ssh/sally`. While it is loaded any process on that machine can
-use it, Claude sessions included, so do not leave it loaded.
+Root SSH accepts only the key in the owner's Bitwarden vault, through the
+Bitwarden desktop app's SSH agent with authorisation set to ask every time. The
+key is never on disk, and each use needs a person to approve a pop-up, so nothing
+automated can reach this host. Decline a pop-up you did not cause.
+
+```sh
+ssh -o IdentityAgent=~/.bitwarden-ssh-agent.sock -o IdentitiesOnly=yes -i ~/.ssh/sally.pub root@sally.home
+SSH_AUTH_SOCK=~/.bitwarden-ssh-agent.sock sally/scripts/power-schedule.sh off
+```
+
+`sally.pub` is the public half, copied from the same vault item. Its fingerprint
+is `SHA256:vr1UyIm9zWOkxUO29KZ5NFu9L/XjTczaV3V9tPEx8RI`.
 
 ## Restoring
 
