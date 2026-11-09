@@ -126,6 +126,16 @@ scrape_configs:
       - targets: ['forgejo.home:12345']
         labels: {role: forgejo }
 
+  # sally, the backup server, is off for most of the day, so it has a job of its
+  # own that the target-down rules do not cover. Missed backups alert from lenora.
+  - job_name: sally
+    scheme: https
+    tls_config:
+      ca_file: /etc/homelab-tls/root_ca.crt
+    static_configs:
+      - targets: ['sally.home:9100']
+        labels: {role: sally }
+
   # Known broken, and not a TLS problem: prometheus-pve-exporter is not running
   # on 127.0.0.1:9221. Pre-existing.
   - job_name: pve

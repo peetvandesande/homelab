@@ -1,0 +1,10 @@
+[Unit]
+Description=Monthly scrub of the backup pool, inside the hours sally is on
+
+[Timer]
+# Debian's own scrub is a cron job at 00:24, when this machine is off. A running
+# scrub holds off the power-off.
+OnCalendar=Sun *-*-08..14 05:05:00
+
+[Install]
+WantedBy=timers.target

@@ -23,6 +23,8 @@ for t in d["data"]["activeTargets"]:
 PY
 while read -r job inst health err; do
   if [[ $health == up ]]; then pass "$job $inst up"
+  elif [[ $job == sally ]]; then
+    warn "$job $inst is down" "expected for most of the day: sally powers off when its backups finish"
   elif [[ $job == pve ]]; then
     warn "$job $inst is down" "pre-existing: prometheus-pve-exporter is not running on 127.0.0.1:9221"
   else bad "$job $inst up" "$health $err"; fi
@@ -39,9 +41,9 @@ done
 # running); jellyfin and navidrome are plain HTTP on purpose, /metrics sharing
 # a listener with the deliberately unencrypted UI; traefik is a stack migrated
 # from the old moby that carries its own certificates. The blackbox jobs carry
-# no scheme. So 11 is the correct answer.
+# no scheme. So 12 is the correct answer.
 n=$(ssh -o BatchMode=yes root@$HOST "grep -cE '^[[:space:]]+scheme: https' /etc/prometheus/prometheus.yml" 2>/dev/null)
-if [[ "$n" == 11 ]]; then pass "11 jobs configured with scheme: https (prometheus, node, alloy, dns, loki, docker, grafana, forgejo, n8n, n8n-sogode, nvidia-gpu)"
-else bad "11 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
+if [[ "$n" == 12 ]]; then pass "12 jobs configured with scheme: https (sally, prometheus, node, alloy, dns, loki, docker, grafana, forgejo, n8n, n8n-sogode, nvidia-gpu)"
+else bad "12 jobs configured with scheme: https" "found $n - did a job lose or gain its scheme?"; fi
 
 echo; (( fail )) && echo "$fail check(s) failed" || echo "all checks passed"; exit $fail

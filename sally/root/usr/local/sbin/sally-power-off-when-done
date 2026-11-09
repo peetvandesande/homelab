@@ -1,0 +1,64 @@
+#!/bin/bash
+# Power sally off once the day's work is finished. A timer runs this every five
+# minutes; the BIOS turns the machine back on each night.
+#
+# "Finished" means nothing has been busy for IDLE_SECONDS, after the time by
+# which the backup and maintenance schedules have all started. Anything unclear
+# counts as busy, because staying on is the safe mistake.
+#
+# To keep sally on for a while: touch /run/sally-hold. Gone at the next boot.
+# An interactive login holds it on as well.
+set -u
+
+IDLE_SECONDS=1200
+BOOT_GRACE_SECONDS=3600
+NOT_BEFORE=0515
+IDLE_FILE=/run/sally-idle-since
+TEXTFILE=/var/lib/node_exporter/textfile/sally.prom
+
+# Publish failed server tasks on every run, since Prometheus can only read this
+# while the machine is on.
+publish() {
+  local since failed tmp
+  since=$(($(date +%s) - 86400))
+  failed=$(proxmox-backup-manager task list --all --limit 200 --output-format json 2>/dev/null |
+    jq --argjson since "$since" \
+      '[.[] | select(.starttime >= $since and .endtime != null and (.status | test("^(OK|WARNINGS)") | not))] | length') || return
+  [[ -n $failed ]] || return
+  tmp=$(mktemp "$TEXTFILE.XXXXXX")
+  echo "homelab_sally_failed_tasks $failed" > "$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$TEXTFILE"
+}
+
+busy_reason() {
+  local uptime running
+  [[ -e /run/sally-hold ]] && { echo "/run/sally-hold is present"; return; }
+  [[ -n $(who) ]] && { echo "someone is logged in"; return; }
+  uptime=$(cut -d. -f1 /proc/uptime)
+  ((uptime < BOOT_GRACE_SECONDS)) && { echo "booted ${uptime}s ago"; return; }
+  ((10#$(date +%H%M) < 10#$NOT_BEFORE)) && { echo "before $NOT_BEFORE"; return; }
+  running=$(proxmox-backup-manager task list --output-format json 2>/dev/null | jq length)
+  [[ $running =~ ^[0-9]+$ ]] || { echo "cannot read the task list"; return; }
+  ((running > 0)) && { echo "$running task(s) running"; return; }
+  zpool status | grep -q "scrub in progress" && { echo "scrub in progress"; return; }
+  systemctl is-active --quiet apt-daily.service apt-daily-upgrade.service && { echo "apt is running"; return; }
+}
+
+publish
+reason=$(busy_reason)
+if [[ -n $reason ]]; then
+  rm -f "$IDLE_FILE"
+  echo "staying on: $reason"
+  exit 0
+fi
+
+now=$(date +%s)
+[[ -s $IDLE_FILE ]] || echo "$now" > "$IDLE_FILE"
+idle=$((now - $(cat "$IDLE_FILE")))
+if ((idle >= IDLE_SECONDS)); then
+  echo "idle for ${idle}s, powering off"
+  systemctl poweroff
+else
+  echo "idle for ${idle}s of ${IDLE_SECONDS}s"
+fi

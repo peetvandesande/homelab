@@ -125,7 +125,10 @@ treats NoData as alerting**, deliberately — a host publishing nothing cannot b
 called patched — so this group must not be provisioned until every host in
 `apt/` has been deployed, or it fires once per host that is still missing.
 
-Fifty-one rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+`backup.yaml` covers the backups to sally (`sally/CLAUDE.md`): its two staleness
+rules treat NoData as alerting, so it must follow the first backup job.
+
+Fifty-six rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so

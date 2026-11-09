@@ -1,0 +1,6 @@
+[Unit]
+Description=Scrub the backup pool
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/zpool scrub hddpool

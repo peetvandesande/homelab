@@ -1,0 +1,6 @@
+[Unit]
+Description=Power sally off if the day's work is finished
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sally-power-off-when-done

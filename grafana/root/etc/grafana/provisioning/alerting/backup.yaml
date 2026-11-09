@@ -1,0 +1,261 @@
+# Backups from lenora to sally (homelab/sally). sally is powered off for most of
+# the day, so anything that has to notice a missed backup comes from lenora, and
+# sally's own figures are read over the last two days. Managed from homelab/grafana.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: backup
+    folder: Homelab
+    interval: 5m
+    rules:
+      - uid: backup-stale
+        title: "Guest has no recent backup"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.guest }} has not been backed up in over 36h"
+          description: >-
+            The nightly job on lenora writes this metric as each guest finishes. Check that sally came on (BIOS schedule), then the sally-nightly task log on lenora. A new guest reads as never backed up until it is added to GUESTS in sally/scripts/backups.sh. NoData means no job has published since node-exporter last had the file.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - homelab_backup_last_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [129600]
+      - uid: backup-restore-test-stale
+        title: "Backup restore test is overdue"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No backup has been proven restorable in over 40 days"
+          description: >-
+            homelab-backup-restore-test runs on lenora after the first Sunday's backups and restores pythia into CT 199. journalctl -u homelab-backup-restore-test on lenora.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - homelab_backup_restore_test_last_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [3456000]
+      - uid: sally-certificate-expiring
+        title: "sally's certificate is close to expiry"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "sally's certificate expires in under 10 days"
+          description: >-
+            It renews itself each day that sally is on. If this fires the renewal timer is failing: journalctl -u homelab-tls-renew on sally. Measured by lenora at the end of each backup job.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'homelab_sally_certificate_expiry_timestamp_seconds - time()'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [864000]
+      - uid: sally-tasks-failed
+        title: "A task failed on sally"
+        condition: B
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "A backup, prune, verify or garbage collection failed on sally"
+          description: >-
+            Counted over the previous day while sally was on. See Tasks in sally's web interface. A failed verify can mean a damaged backup.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 172800
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max_over_time(homelab_sally_failed_tasks{job="sally"}[2d])'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      - uid: sally-pool-unhealthy
+        title: "sally's backup pool is unhealthy"
+        condition: B
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "The ZFS pool on sally is not online"
+          description: >-
+            sally has one disk, so a degraded pool puts every backup at risk. zpool status on sally.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 172800
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max by (zpool) (max_over_time(node_zfs_zpool_state{job="sally",state!="online"}[2d]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]

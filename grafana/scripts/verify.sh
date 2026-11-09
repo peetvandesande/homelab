@@ -105,6 +105,9 @@ RULE_UIDS=(
   # homelab.yaml, group fleet
   disk-low host-down mailcow-container-down memory-low service-target-down
   systemd-unit-activating systemd-unit-failed textfile-collector-error
+  # backup.yaml
+  backup-restore-test-stale backup-stale sally-certificate-expiring
+  sally-pool-unhealthy sally-tasks-failed
   # apt.yaml
   apt-not-patching apt-reboot-required apt-security-pending
   apt-services-need-restart

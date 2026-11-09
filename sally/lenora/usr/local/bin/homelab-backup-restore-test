@@ -1,0 +1,40 @@
+#!/bin/bash
+# Prove the backups can be restored: restore the newest backup of pythia into a
+# temporary container, check real content came back, and destroy it.
+#
+# The copy is never started, so its address and name cannot clash with the real
+# one. pythia is chosen because it is small and its zone data is easy to recognise.
+set -euo pipefail
+
+SOURCE=107
+TEMP=199
+TEXTFILE=/var/lib/node_exporter/textfile/backup_restore.prom
+
+if pct status "$TEMP" >/dev/null 2>&1; then
+  echo "CT $TEMP already exists; refusing to touch it" >&2
+  exit 1
+fi
+
+latest=$(pvesm list sally --vmid "$SOURCE" --content backup | awk 'NR>1 {print $1}' | sort | tail -1)
+[[ -n $latest ]] || { echo "no backup of $SOURCE on sally" >&2; exit 1; }
+echo "restoring $latest"
+
+cleanup() {
+  pct unmount "$TEMP" 2>/dev/null || true
+  pct destroy "$TEMP" --purge 2>/dev/null || true
+}
+trap cleanup EXIT
+
+pct restore "$TEMP" "$latest" --storage ssdpool --unprivileged 1 --onboot 0
+pct mount "$TEMP" >/dev/null
+root=/var/lib/lxc/$TEMP/rootfs
+
+[[ $(cat "$root/etc/hostname") == pythia ]] || { echo "hostname did not come back" >&2; exit 1; }
+grep -q 'IN  SOA pythia.home.' "$root/var/lib/powerdns/zones/home.zone" \
+  || { echo "zone data did not come back" >&2; exit 1; }
+
+tmp=$(mktemp "$TEXTFILE.XXXXXX")
+echo "homelab_backup_restore_test_last_success_timestamp_seconds $(date +%s)" > "$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$TEXTFILE"
+echo "restore test passed for $latest"
