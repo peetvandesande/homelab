@@ -38,7 +38,7 @@ The host list is read out of `ca/scripts/enrol.sh`, not copied here — the same
 reasoning as `fleet/`, which already refuses to keep a fourth copy.
 
 Independent of every other deploy order, with one dependency: the textfile
-drop-box that `node-exporter/scripts/deploy.sh` creates. Deploy refuses without
+drop-box that `infra/ansible/fleet.yml` creates. Deploy refuses without
 it rather than publishing metrics nothing will scrape.
 
 **Deploy here before `grafana/`, and not the other way round.**
@@ -59,7 +59,7 @@ for every one of them. Finish the fleet first, then deploy `grafana/`.
    defining `Origins-Pattern` in a later file adds to what
    `50unattended-upgrades` already set rather than replacing it, so without the
    clear the package's defaults stay active alongside ours and the origin list
-   is not what this directory says it is. `deploy.sh` and `verify.sh` both
+   is not what this directory says it is. `fleet.yml` and `verify.sh` both
    assert the list has exactly one entry, which is how that is caught.
 
 3. **Security origin only, and what it excludes is the safety mechanism.** Not
@@ -155,7 +155,7 @@ assumptions behind it were wrong:
 
 - **`apt-config dump --no-empty --format "%v%n" <list key>` prints one line per
   entry**, and two `-o Unattended-Upgrade::Origins-Pattern::=` flags produce two
-  lines — so apt config lists do append, and the assertion in `deploy.sh` that
+  lines — so apt config lists do append, and the assertion in `fleet.yml` that
   there is exactly one entry does detect a missing `#clear`. (pythia)
 - **The origins pattern was wrong**, as above: `codename=${distro_codename}`
   against a security archive whose Codename is `trixie-security`.
@@ -166,9 +166,9 @@ assumptions behind it were wrong:
 - **`/var/lib/apt/periodic/` is empty on a host that has never run the timers**,
   which is why an absent stamp publishes 0 rather than being omitted.
 - **`unattended-upgrade --dry-run` advances the stamp**, which was the third
-  thing wrong: the validation step in `deploy.sh` was quietly resetting the very
+  thing wrong: the validation step in `fleet.yml` was quietly resetting the very
   clock the alert reads, so deploying to a host that had never patched was
-  enough to make it look freshly patched. `deploy.sh` now saves the stamp's
+  enough to make it look freshly patched. `fleet.yml` now saves the stamp's
   mtime around the dry-run and puts it back, removing the file again if it did
   not exist. Found by watching `apt_periodic_stamp_seconds` move on a host whose
   pending count had not.

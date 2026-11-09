@@ -48,7 +48,7 @@ for entry in "${HOSTS[@]}"; do
 
   if [[ "$(sed -n 's/^needrestart=//p' <<<"$out")" == reports ]]; then
     pass "$name: needrestart installed"
-  else bad "$name: needrestart installed" "not installed - run scripts/deploy.sh $ip"; fi
+  else bad "$name: needrestart installed" "not installed - run infra/ansible/fleet.yml $ip"; fi
 done
 
 echo "== timers"
@@ -57,7 +57,7 @@ for entry in "${HOSTS[@]}"; do
   for t in apt-daily-upgrade.timer homelab-apt-textfile.timer; do
     if $SSH "root@$ip" "systemctl is-enabled --quiet $t" 2>/dev/null; then
       pass "$name: $t enabled"
-    else bad "$name: $t enabled" "not enabled - run scripts/deploy.sh $ip"; fi
+    else bad "$name: $t enabled" "not enabled - run infra/ansible/fleet.yml $ip"; fi
   done
 done
 
@@ -69,7 +69,7 @@ for entry in "${HOSTS[@]}"; do
   read -r ip name <<<"$entry"
   prom=$($SSH "root@$ip" 'cat /var/lib/node_exporter/textfile/apt.prom' 2>/dev/null)
   if [[ -z "$prom" ]]; then
-    bad "$name: apt.prom present" "missing - run scripts/deploy.sh $ip"; continue
+    bad "$name: apt.prom present" "missing - run infra/ansible/fleet.yml $ip"; continue
   fi
   mtime=$($SSH "root@$ip" 'stat -c %Y /var/lib/node_exporter/textfile/apt.prom' 2>/dev/null)
   age=$(( now - ${mtime:-0} ))

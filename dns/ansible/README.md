@@ -4,7 +4,7 @@ One place to describe every zone Pythia serves from its **bind** backend, and
 one command to render, push and reload it.
 
 This is the only Ansible in the repo. The rest of `dns/` is unchanged:
-`scripts/deploy.sh` still pushes `pythia/`, `delphi/` and `themis/` wholesale
+`infra/ansible/dns.yml` still pushes `pythia/`, `delphi/` and `themis/` wholesale
 and is still what builds the stack. This playbook narrows in on the one thing
 that was fiddly and easy to get wrong by hand — zone data.
 
@@ -25,7 +25,7 @@ carried — then copies those to Pythia and reloads only the zones that changed.
 So:
 
 - `git diff` is the review step, as it is for everything else here.
-- `scripts/deploy.sh` keeps pushing exactly the files it always did, and the
+- `infra/ansible/dns.yml` keeps pushing exactly the files it always did, and the
   two do not fight over the host.
 
 ## The shape of the data
@@ -165,7 +165,7 @@ It renders `pythia/var/lib/powerdns/zones/<name>.zone` and a block in
 changed zone with `pdns_control bind-reload-now`, and finishes with
 `pdnsutil check-zone` over every zone that exists.
 
-**5. Commit the generated files.** They are tracked, and `scripts/deploy.sh`
+**5. Commit the generated files.** They are tracked, and `infra/ansible/dns.yml`
 pushes them too, so a checkout that disagrees with the YAML will be pushed by
 the next deploy.
 
@@ -254,7 +254,7 @@ zone or drop its create and let it go straight to patching records.
 ## What it deliberately does not manage
 
 - **The lab's own records.** See above — only the skeleton is ours.
-- **`pdns.conf`, Delphi and Themis.** `scripts/deploy.sh` owns those.
+- **`pdns.conf`, Delphi and Themis.** `infra/ansible/dns.yml` owns those.
 - **DNSSEC.** These zones are unsigned by design; Delphi carries an NTA for
   each one.
 

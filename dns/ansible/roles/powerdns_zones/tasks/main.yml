@@ -1,6 +1,6 @@
 ---
 # Runs on localhost. Renders every zone in `zones` into the repo mirror under
-# dns/pythia/, which stays the source of truth scripts/deploy.sh pushes.
+# dns/pythia/, which stays the source of truth infra/ansible/dns.yml pushes.
 # Nothing here touches a host, so `--check --diff` is a safe preview.
 
 - name: Check the zone list is well formed

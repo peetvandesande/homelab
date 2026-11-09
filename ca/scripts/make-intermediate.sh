@@ -101,4 +101,4 @@ echo
 
 echo
 echo "== done - intermediate/certs/intermediate-g3.crt"
-echo "   next: scripts/deploy.sh"
+echo "   next: infra/ansible/ca.yml"

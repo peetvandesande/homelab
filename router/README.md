@@ -325,7 +325,7 @@ chmod 0755 /usr/local/bin/vpn-policy-dump
 
 # 2. authorise Themis's key, forced to that one command - it gets no shell.
 #    The public key is /etc/dnsdist/.ssh/router.pub on themis, and
-#    dns/scripts/deploy.sh prints it if the sync cannot connect.
+#    infra/ansible/dns.yml prints it if the sync cannot connect.
 echo 'command="/usr/local/bin/vpn-policy-dump",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... vpn-domain-sync@themis' \
   >> /etc/dropbear/authorized_keys
 ```

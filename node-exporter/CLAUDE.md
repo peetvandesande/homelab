@@ -10,8 +10,8 @@ shape the service stacks use.
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth; the same
-two files go to every host. `scripts/deploy.sh` pushes them,
-`scripts/verify.sh` checks all fourteen. `scripts/deploy.sh <ip>` does one host,
+two files go to every host. `infra/ansible/fleet.yml` pushes them,
+`scripts/verify.sh` checks all fourteen. `infra/ansible/fleet.yml` does one host,
 for bringing a new container in without bouncing the rest.
 
 Hosts must be enrolled first (`ca/scripts/enrol.sh --all`) — deploy refuses
@@ -32,7 +32,7 @@ and surfaces as a scrape error somewhere else entirely.
    Run them in that order, in the same sitting.
 
 3. **`prometheus` is the exporter's user on every host, including lenora**, and
-   must be in the `tlscert` group to read the key. `deploy.sh` does this.
+   must be in the `tlscert` group to read the key. `fleet.yml` does this.
 
 ## Gotcha
 
@@ -44,7 +44,7 @@ off curl's exit status will call a correctly-configured exporter broken. Assert
 ## The textfile collector is on everywhere
 
 The drop-in adds `--collector.textfile.directory=/var/lib/node_exporter/textfile`
-on all fourteen hosts, and `scripts/deploy.sh` creates that directory
+on all fourteen hosts, and `infra/ansible/fleet.yml` creates that directory
 `root:prometheus 0775`. It is how a job that is not a service publishes state to
 Prometheus — a `.prom` file written atomically into that directory, scraped as
 part of the `node` job with the host's own labels.

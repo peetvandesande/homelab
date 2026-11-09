@@ -99,4 +99,4 @@ pct exec "$VMID" -- bash -euo pipefail -c '
   install -d -m 0755 /opt/stacks
 '
 
-echo "== $HOST ready - now: ca/scripts/enrol.sh $IP $HOST; node-exporter/scripts/deploy.sh $IP; alloy/scripts/deploy.sh $IP; scripts/deploy.sh"
+echo "== $HOST ready - now: ca/scripts/enrol.sh $IP $HOST; infra/ansible/fleet.yml $IP; infra/ansible/fleet.yml $IP; infra/ansible/apps.yml"

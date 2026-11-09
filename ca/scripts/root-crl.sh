@@ -27,4 +27,4 @@ echo "== regenerating root CRL (enter the root key passphrase)"
 openssl ca -config "$WORKCNF" -gencrl -crldays "$CRL_DAYS" -out "$ROOTCA/crl/root.crl"
 
 openssl crl -in "$ROOTCA/crl/root.crl" -noout -lastupdate -nextupdate -issuer
-echo "== ok - re-run scripts/deploy.sh to publish it"
+echo "== ok - re-run infra/ansible/ca.yml to publish it"

@@ -6,7 +6,7 @@
 #   ansible-playbook zones.yml --tags render     # rewrite the repo files only
 #
 # Zone data lives in group_vars/all.yml. The playbook renders it into
-# dns/pythia/ - which stays what scripts/deploy.sh pushes - bumps each serial
+# dns/pythia/ - which stays what infra/ansible/dns.yml pushes - bumps each serial
 # only if that zone's contents changed, then pushes and reloads just those
 # zones.
 

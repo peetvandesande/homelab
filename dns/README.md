@@ -102,7 +102,7 @@ The updater refuses to install a feed that fails to download, has no SOA, or
 falls under the line-count tripwire in the config. A stale feed beats an empty
 one silently unblocking everything. A feed that has *never* downloaded has
 nothing to fall back on and `rpzFile()` on a missing file is a fatal startup
-error, so `deploy.sh` asserts every declared feed is present before it restarts
+error, so `dns.yml` asserts every declared feed is present before it restarts
 the recursor.
 
 Every hagezi list ships a canary domain named after the list file —
@@ -201,7 +201,7 @@ documented, not managed, in `router/` — and a firmware upgrade can remove both
 The `vpn_domain_sync_success` alert is what tells you, and
 **`router/README.md` has both to paste back**.
 
-`deploy.sh` mints the key if it is missing and prints exactly what to authorise,
+`dns.yml` mints the key if it is missing and prints exactly what to authorise,
 so a rebuilt Themis needs only that paste.
 
 Two traps the sync handles that a hand-written version gets wrong:
@@ -247,7 +247,7 @@ That renders the zone files into `pythia/`, generates the PTR, bumps only the
 serials of the zones that actually changed, pushes them to Pythia and reloads
 just those zones. `ansible/README.md` has the detail.
 
-The zone files are still in the repo and `scripts/deploy.sh` still pushes them,
+The zone files are still in the repo and `infra/ansible/dns.yml` still pushes them,
 so nothing else changes — but they are now **generated**, and editing one by
 hand will be overwritten on the next render. The old way, for reference: edit
 `pythia/var/lib/powerdns/zones/home.zone` and the reverse zone, **bump the
@@ -307,7 +307,7 @@ The fixed pieces are in this repo:
 - Themis and Delphi accept queries from `192.168.32.0/21`, so lab nodes and
   instances can use `192.168.8.50` as their resolver.
 
-`deploy.sh` installs `pdns-backend-sqlite3` and creates the database the
+`dns.yml` installs `pdns-backend-sqlite3` and creates the database the
 first time. After that it never touches the database's contents. To see
 what a lab has registered:
 
@@ -521,18 +521,18 @@ real access control is the `allow`/`deny` in the vhost.
 | Script                | Runs on      | Does                                       |
 |-----------------------|--------------|--------------------------------------------|
 | `scripts/bootstrap.sh`| Proxmox host | creates the three CTs; skips existing ones |
-| `scripts/deploy.sh`   | workstation  | pushes config, validates, enables services |
+| `infra/ansible/dns.yml`   | workstation  | pushes config, validates, enables services |
 | `scripts/verify.sh`   | workstation  | end-to-end smoke test; exits non-zero on failure |
 | `ansible/zones.yml`   | workstation  | renders, pushes and reloads Pythia's zones |
 | `vpn-domain-sync`     | themis (hourly) | pulls the VPN domain policy from the router |
 
-`deploy.sh` copies files one at a time and writes them atomically as
+`dns.yml` copies files one at a time and writes them atomically as
 `root:root`. It does **not** stream a tarball into `/` — tar carries the
 workstation's uid/gid and mode on the archive's own top-level entry, which
 rewrites `/` itself to `0700` owned by uid 501 and breaks every service on the
 box.
 
-Secrets live in `secrets.env` (git-ignored, mode 600). `deploy.sh` substitutes
+Secrets live in `secrets.env` (git-ignored, mode 600). `dns.yml` substitutes
 them into the `@@PLACEHOLDER@@` slots at push time, so no key is stored in the
 config files here. dnsdist wants a scrypt hash rather than a plaintext key;
 that is minted once on first deploy and cached back into `secrets.env`, because
@@ -586,7 +586,7 @@ labels now describe this stack, and the two service jobs were repointed.
   which blocks the netlink socket `ip` uses.
 - A `systemctl restart` of pdns can report failure while the outgoing process
   still holds its control socket. `Restart=on-failure` recovers within a
-  second, so `deploy.sh` asserts the end state rather than trusting the
+  second, so `dns.yml` asserts the end state rather than trusting the
   restart's exit code.
 - After `systemctl restart dnsdist`, Themis drops queries for up to ~5s until
   the backend's first health check passes. Harmless, but don't panic-debug an

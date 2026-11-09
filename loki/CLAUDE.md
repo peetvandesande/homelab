@@ -7,7 +7,7 @@ with filesystem storage and 30-day retention.
 
 `root/` mirrors the container filesystem and is the source of truth.
 `scripts/bootstrap.sh` creates the container on lenora (run it *on* lenora);
-`scripts/deploy.sh` pushes the config; `scripts/verify.sh` checks the API, the
+`infra/ansible/monitoring.yml` pushes the config; `scripts/verify.sh` checks the API, the
 chain, an ingest/query round-trip, the Prometheus scrape and the trust path
 from Grafana.
 
@@ -45,7 +45,7 @@ over TLS. So do ruby and jennie, over the tunnels (`alloy/CLAUDE.md`, "ruby and 
 
 The router cannot run Alloy, so it sends syslog **to** Loki's own Alloy:
 `root/etc/alloy/router.alloy`, a UDP listener on `:1514` beside the fleet
-`config.alloy`, labelled `host="router"`. `scripts/deploy.sh` pushes it and
+`config.alloy`, labelled `host="router"`. `infra/ansible/monitoring.yml` pushes it and
 proves the listener is open; `scripts/verify.sh` fails if no router line has
 arrived in 15 minutes. Two things in that file are not obvious:
 

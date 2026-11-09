@@ -20,7 +20,7 @@ for entry in "${HOSTS[@]}"; do
     done" 2>/dev/null) || { bad "$name ($ip) reachable" "ssh failed"; continue; }
   wrong=$(grep -v '=masked$' <<<"$out" | tr '\n' ' ')
   if [[ -z "$wrong" ]]; then pass "$name: all listed units masked"
-  else bad "$name: all listed units masked" "${wrong:-unknown} - run scripts/deploy.sh $ip"; fi
+  else bad "$name: all listed units masked" "${wrong:-unknown} - run infra/ansible/fleet.yml $ip"; fi
 done
 
 echo "== no failed units anywhere"

@@ -77,4 +77,4 @@ $SSH "root@$HOST" "
   fi
 "
 
-echo "== $FQDN ready - now: ca/scripts/enrol.sh $HOST hermes; node-exporter/scripts/deploy.sh $HOST; alloy/scripts/deploy.sh $HOST; hermes/scripts/deploy.sh"
+echo "== $FQDN ready - now: ca/scripts/enrol.sh $HOST hermes; infra/ansible/fleet.yml $HOST; infra/ansible/fleet.yml $HOST; hermes/scripts/deploy.sh"

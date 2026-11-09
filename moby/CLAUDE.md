@@ -18,7 +18,7 @@ stack this repo owns, behind the host nginx on .27 as `n8n.peetvandesande.com`
 
 `root/` mirrors the container filesystem and is the source of truth.
 `scripts/bootstrap.sh` creates the container on lenora (run it *on* lenora);
-`scripts/deploy.sh` pushes the config; `scripts/verify.sh` checks the intent —
+`infra/ansible/apps.yml` pushes the config; `scripts/verify.sh` checks the intent —
 that a container actually runs, that the metrics are TLS and reachable only by
 Prometheus, and that the journal lands in Loki.
 
@@ -37,7 +37,7 @@ of the metrics names the certificate and will not start without it.
 2. **Container workloads are Docker's, not Proxmox's.** A stack gets a
    directory under `/opt/stacks/<name>` with its own `compose.yaml` and named
    volumes under `/var/lib/docker`; it does not get its own LXC. A stack this
-   repo owns lives in `root/opt/stacks/` and `deploy.sh` converges it; the
+   repo owns lives in `root/opt/stacks/` and `apps.yml` converges it; the
    three that came from the old moby are host-owned, carry their own secrets,
    and nothing here starts or stops them. The rootfs is
    80G on `ssdpool` and holds images, volumes and build cache alike — grow the
@@ -55,7 +55,7 @@ of the metrics names the certificate and will not start without it.
    `127.0.0.1:9324` and nginx fronts it on `:9323`, allowing only .53. The
    pattern, and the reasoning, is the same as the three PowerDNS webservers.
 
-5. **`deploy.sh` restarts the engine rather than reloading it.**
+5. **`apps.yml` restarts the engine rather than reloading it.**
    `log-driver` and `metrics-addr` are read at daemon start; SIGHUP does not
    pick them up. `live-restore: true` keeps running containers alive across
    the restart, so this is safe once stacks are on here — but it is only safe
@@ -109,7 +109,7 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
 - **One proxy hop, both ways.** moby's nginx trusts `X-Forwarded-For` from
   ruby's ranges (`real_ip`) and passes the real client on, so
   `N8N_PROXY_HOPS=1` is right whether a request came via ruby or not.
-- **`.env` is the secrets, generated once by `deploy.sh`.**
+- **`.env` is the secrets, generated once by `apps.yml`.**
   `N8N_ENCRYPTION_KEY` encrypts every stored credential; regenerating it
   orphans them. It and the `n8n_db` volume are one backup – and there is no
   backup yet.
@@ -141,7 +141,7 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
 - **Mail** goes out as `n8n@peetvandesande.com` through ruby's submission
   port, as Forgejo's does. The password is in
   `homelab-private/n8n/secrets.env` (`SMTP_PASSWD=`) and the mailbox; change
-  both, then `deploy.sh`, which rewrites it into `.env` every time.
+  both, then `apps.yml`, which rewrites it into `.env` every time.
 
 ## n8n-sogode
 
@@ -149,7 +149,7 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
 use**, at `https://n8n.sogode.com/` – its own Postgres, encryption key,
 sandbox service, task runners and SearXNG, published on `127.0.0.1:5680`
 behind `n8n-sogode.conf`. Keep the two compose files in step: they differ
-only in the name, port, URLs and mailbox, and `deploy.sh` converges both with
+only in the name, port, URLs and mailbox, and `apps.yml` converges both with
 one function.
 
 - **The name works from three sides.** Publicly an A/AAAA to ruby (not a
@@ -187,7 +187,7 @@ stacks and whose profile, CV, prompts and workflow generator live in the
   ruby (`scripts/install-ruby-ntfy.sh`). render and ntfy join both n8n
   networks; Gotenberg only this stack's own.
 
-- **`.env` per stack, generated once** by `deploy.sh`: the database password
+- **`.env` per stack, generated once** by `apps.yml`: the database password
   for each instance, and ntfy's two user passwords. ntfy is deny-all; `n8n`
   may publish to `jobs-*`, `peet` may read them, and the users are rewritten
   on every deploy.
@@ -216,10 +216,10 @@ instance's database with `docker exec … psql`.
   because the command needs `docker exec` and there is no sudo. The forced
   command is what stops that from being anything more: never authorise
   another key for it, or loosen the `command=`.
-- `deploy.sh` reads the key from lexie, so run `forgejo-runner/scripts/deploy.sh`
+- `apps.yml` reads the key from lexie, so run `infra/ansible/ci.yml`
   first; without it the step is skipped with a message.
 - The runner itself ran here briefly on 5 November 2026 before moving to
-  lexie. `deploy.sh` removes its remains idempotently; `python3-yaml`,
+  lexie. `apps.yml` removes its remains idempotently; `python3-yaml`,
   installed for it, was left.
 
 ## Home Assistant is gone

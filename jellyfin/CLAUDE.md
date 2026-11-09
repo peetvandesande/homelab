@@ -23,7 +23,7 @@ here.
 
 2. **The host stays enrolled in the CA** because node-exporter on `:9100`
    still serves the lab certificate. Jellyfin itself no longer reads the key,
-   so it is not in `tlscert` and has no `post-renew.d` hook; `deploy.sh`
+   so it is not in `tlscert` and has no `post-renew.d` hook; `apps.yml`
    removes both, and the old `jellyfin.pfx`, from a host that still has them.
 
 3. **`EnableIPv6` is on**, since the lab's IPv6 rollout. Kestrel then binds

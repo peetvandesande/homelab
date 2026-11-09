@@ -27,8 +27,8 @@ scripts/verify.sh      TLS, relay policy, containers, scrape and logs
 
 From scratch: router reservation for `BC:24:11:1B:5D:14` → `create-vm.sh` →
 `bootstrap.sh` → `ca/scripts/enrol.sh 192.168.8.57 hermes` →
-`node-exporter/scripts/deploy.sh 192.168.8.57` →
-`alloy/scripts/deploy.sh 192.168.8.57` → `prometheus/scripts/deploy.sh` →
+`infra/ansible/fleet.yml 192.168.8.57` →
+`infra/ansible/fleet.yml 192.168.8.57` → `infra/ansible/monitoring.yml` →
 `deploy.sh` → `verify.sh`.
 
 ## Why a VM

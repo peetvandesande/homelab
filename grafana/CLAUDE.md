@@ -5,7 +5,7 @@ CT 104, **192.168.8.54**. UI over TLS on `:3000`, reaching Prometheus over TLS.
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth.
-`scripts/deploy.sh` pushes it; `scripts/verify.sh` checks the UI, the chain and
+`infra/ansible/monitoring.yml` pushes it; `scripts/verify.sh` checks the UI, the chain and
 the trust path to Prometheus.
 
 Deploy **after** `prometheus/` — the datasource pushed here points at `https`,
@@ -42,7 +42,7 @@ uses. A pass there means the datasource can connect.
    exists.** Grafana 13 looks the existing one up by that uid, fails with
    "data source not found", and refuses to start — the whole UI goes down,
    and `is-active` still flickers true because `Restart=on-failure` keeps
-   relaunching it. `deploy.sh` therefore waits for a 200 from `/api/health`
+   relaunching it. `monitoring.yml` therefore waits for a 200 from `/api/health`
    before reporting success. To pin a uid, delete the datasource in the UI
    first so provisioning creates it fresh.
 
@@ -61,7 +61,7 @@ Provisioned from files too: the provider is
 per dashboard under `root/var/lib/grafana/dashboards/`, and they land in the
 "Homelab" folder, read-only in the UI. Edit the JSON and deploy; Grafana
 re-reads the directory every 30 s, so a changed dashboard only needs the push
-(a *new provider* needs the restart `deploy.sh` does anyway). To prototype in
+(a *new provider* needs the restart `monitoring.yml` does anyway). To prototype in
 the UI, "Save as" a copy, export its JSON model, paste it back over the file
 and keep the `uid` - the uid is the URL (`/d/<uid>`).
 
@@ -141,7 +141,7 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
 7. **Alert rules carry the datasource uid, substituted at deploy time.** A rule
    needs `datasourceUid`, and the provisioned datasources have no pinned uid —
    invariant 4 says why one must never be added to a live one. So the files
-   carry `@@PROM_DS_UID@@` and `@@LOKI_DS_UID@@`, and `scripts/deploy.sh` reads
+   carry `@@PROM_DS_UID@@` and `@@LOKI_DS_UID@@`, and `infra/ansible/monitoring.yml` reads
    the uids Grafana actually generated out of `grafana.db` and substitutes both,
    the same way `homelab/dns` substitutes secrets at push time. Nothing is
    hardcoded and a rebuild needs no edit.
@@ -234,11 +234,11 @@ not investigate reaches nobody – which is what happened from 26 October to
 
 12. **The webhook id is a secret, substituted at deploy time.** It is the only
     credential an HA webhook has, so the file carries `@@HA_WEBHOOK_ID@@` and
-    `deploy.sh` fills it from `homelab-private/grafana/secrets.env` (mode 600:
+    `monitoring.yml` fills it from `homelab-private/grafana/secrets.env` (mode 600:
     `HA_WEBHOOK_ID=...`, plus `HEALTHCHECKS_PING_URL` below), sending the
     substituted copy over stdin and leaving it `0640 root:grafana`. The same id goes into the HA automation, which is
     pasted into HA's UI by hand; the automation also sets `local_only`.
-    `deploy.sh` refuses to run without it.
+    `monitoring.yml` refuses to run without it.
 
 13. **This path cannot report a home outage.** HA reaches the phone through the
     companion app's push relay, over the home internet connection, and Grafana,

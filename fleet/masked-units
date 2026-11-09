@@ -1,6 +1,6 @@
 # Units masked on every enrolled host, one per line, with the reason.
 #
-# This file is the source of truth: scripts/deploy.sh masks everything listed
+# This file is the source of truth: infra/ansible/fleet.yml masks everything listed
 # here, on every host in FLEET. It does NOT unmask anything, so removing a line
 # is not enough to undo it - see CLAUDE.md.
 #

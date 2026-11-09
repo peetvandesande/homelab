@@ -11,7 +11,7 @@
 #
 # RE-RUN THIS AFTER scripts/root-crl.sh. The /g2/ copy of the root CRL is the
 # one thing here that is not proxied, so a regenerated CRL reaches pistis by
-# deploy.sh and reaches ruby only by `git pull` and this script.
+# ca.yml and reaches ruby only by `git pull` and this script.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
@@ -133,7 +133,7 @@ if [[ -s "$tmp/g3-root.crl" && -s "$tmp/g2-root.crl" ]]; then
     echo "   /g2/root.crl is byte-identical to pistis's /g3/root.crl"
   else
     echo "!! /g2/root.crl has drifted from /g3/root.crl - one root must have"
-    echo "   one CRL. git pull in this clone and re-run, or deploy.sh on pistis."
+    echo "   one CRL. git pull in this clone and re-run, or ca.yml on pistis."
     fail=1
   fi
 fi

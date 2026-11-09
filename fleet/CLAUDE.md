@@ -19,7 +19,7 @@ that shape rather than fitting into it. Patching is not here.
 
 ## Working on this
 
-`masked-units` is the source of truth. `scripts/deploy.sh` masks everything
+`masked-units` is the source of truth. `infra/ansible/fleet.yml` masks everything
 listed, on every host in the fleet; `scripts/verify.sh` asserts it stuck and
 that no host has a failed unit.
 
@@ -37,7 +37,7 @@ directory owns, so run it whenever.
 1. **The fleet list is read out of `ca/scripts/enrol.sh`, not copied here.**
    That list is already duplicated in `prometheus.yml`'s `node` job and in
    `node-exporter/`'s `FLEET`, and a third copy to forget is not an
-   improvement. `scripts/deploy.sh` parses the `FLEET=(...)` block, so adding a
+   improvement. `infra/ansible/fleet.yml` parses the `FLEET=(...)` block, so adding a
    host there is enough.
 
 2. **`reset-failed` follows every `mask`.** Masking does not clear a state that
@@ -89,5 +89,5 @@ someone wants to talk to a BMC over the network.
 
 The enforcement loop was tested rather than assumed: unmasking and starting
 `openipmi` on pythia made `verify.sh` fail that host (and warn about the failed
-unit), `deploy.sh 192.168.8.52` repaired it, and the fleet-wide failed-unit
+unit), `fleet.yml 192.168.8.52` repaired it, and the fleet-wide failed-unit
 count in Prometheus went back to zero on the next scrape.

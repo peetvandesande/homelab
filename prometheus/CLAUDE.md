@@ -6,7 +6,7 @@ migrated services over TLS.
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth. **Never
-edit `/etc/prometheus/prometheus.yml` on prometheus.** `scripts/deploy.sh` pushes and
+edit `/etc/prometheus/prometheus.yml` on prometheus.** `infra/ansible/monitoring.yml` pushes and
 validates with `promtool`; `scripts/verify.sh` asserts every target is up.
 
 Deploy **after** `node-exporter/`, and **before** `grafana/`.

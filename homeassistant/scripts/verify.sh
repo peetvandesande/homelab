@@ -52,7 +52,7 @@ fi
 echo "== renewal path on $LENORA"
 for f in /usr/local/bin/homelab-ha-tls-renew /usr/local/share/homelab/ha-tls.py; do
   $SSH "root@$LENORA" "test -s $f" 2>/dev/null \
-    && pass "$f installed" || bad "$f installed" "missing - run scripts/deploy.sh"
+    && pass "$f installed" || bad "$f installed" "missing - run infra/ansible/platform.yml"
 done
 
 state=$($SSH "root@$LENORA" "systemctl is-enabled homelab-ha-tls-renew.timer 2>/dev/null" || echo unknown)

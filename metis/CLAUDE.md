@@ -14,8 +14,8 @@ scripts/verify.sh      GPU, Ollama, the embed path from n8n, exposure, monitorin
 From scratch: router reservation for `BC:24:11:6E:7A:19` → `gpu_worker = false`
 in `uc1-lab/terraform.tfvars` and `tofu apply` → `create-vm.sh` →
 `bootstrap.sh` → `dns/ansible` zones → `ca/scripts/enrol.sh 192.168.8.58 metis`
-→ `bootstrap.sh` again, which starts the GPU exporter now there is a certificate → `node-exporter/scripts/deploy.sh 192.168.8.58` →
-`alloy/scripts/deploy.sh 192.168.8.58` → `prometheus/scripts/deploy.sh` →
+→ `bootstrap.sh` again, which starts the GPU exporter now there is a certificate → `infra/ansible/fleet.yml 192.168.8.58` →
+`infra/ansible/fleet.yml 192.168.8.58` → `infra/ansible/monitoring.yml` →
 `verify.sh`.
 
 ## Why a VM

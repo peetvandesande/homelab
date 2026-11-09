@@ -60,7 +60,7 @@
       - not pythia_api_key.startswith('@@')
     fail_msg: >-
       /etc/powerdns/pdns.conf still carries the @@AUTH_API_KEY@@ placeholder,
-      so the API is unusable. Run dns/scripts/deploy.sh first - it substitutes
+      so the API is unusable. Run infra/ansible/dns.yml first - it substitutes
       secrets.env into the config.
     quiet: true
   when: api_zones | length > 0

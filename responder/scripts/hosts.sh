@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
 LEXIE=192.168.8.24
 
-# Same source as fleet/scripts/deploy.sh - one list, not another copy.
+# Same source as infra/ansible/fleet.yml - one list, not another copy.
 mapfile -t HOSTS < <(sed -n '/^FLEET=(/,/^)/p' ../ca/scripts/enrol.sh \
   | sed -n 's/^[[:space:]]*"\([0-9.][0-9.]*\)[[:space:]]\([a-z0-9-]*\).*/\1 \2/p')
 if (( $# )); then
@@ -20,7 +20,7 @@ fi
 (( ${#HOSTS[@]} )) || { echo "no hosts"; exit 1; }
 
 PUB=$($SSH "root@$LEXIE" 'cat /var/lib/responder/.ssh/id_ed25519.pub')
-[[ $PUB == ssh-ed25519\ * ]] || { echo "no responder key on lexie - run deploy.sh first"; exit 1; }
+[[ $PUB == ssh-ed25519\ * ]] || { echo "no responder key on lexie - run ci.yml first"; exit 1; }
 
 rc=0
 for entry in "${HOSTS[@]}"; do

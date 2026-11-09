@@ -39,7 +39,7 @@ wrong.
 
 **Never edit config on the hosts.** Everything under `themis/`, `delphi/` and
 `pythia/` mirrors the container filesystem and is the source of truth.
-`scripts/deploy.sh` pushes it and enables services; `scripts/verify.sh` is an
+`infra/ansible/dns.yml` pushes it and enables services; `scripts/verify.sh` is an
 end-to-end smoke test that exits non-zero on failure. Run it after any change.
 
 Secrets are in `secrets.env` (git-ignored, mode 600) and substituted into
@@ -47,7 +47,7 @@ Secrets are in `secrets.env` (git-ignored, mode 600) and substituted into
 
 **Pythia's zone files and `bindbackend.conf` are generated**, by
 `ansible/zones.yml` from `ansible/group_vars/all.yml`. They are still committed
-and `deploy.sh` still pushes them, so nothing downstream changed - but edit the
+and `dns.yml` still pushes them, so nothing downstream changed - but edit the
 YAML, not the zone file, or the next render reverts you. The playbook generates
 every PTR from the forward zone's A records and bumps a serial only when that
 zone's contents actually changed, so "keep both zones in step and bump both

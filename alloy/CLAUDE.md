@@ -10,9 +10,9 @@ service replicated, not a per-container concern.
 ## Working on this
 
 `root/` mirrors the host filesystem and is the source of truth; the same four
-files go to every host. `scripts/deploy.sh` installs the pinned package where
+files go to every host. `infra/ansible/fleet.yml` installs the pinned package where
 missing, pushes them and proves each host is serving TLS *and* landing lines
-in Loki. `scripts/verify.sh` checks all fourteen. `scripts/deploy.sh <ip>` does
+in Loki. `scripts/verify.sh` checks all fourteen. `infra/ansible/fleet.yml` does
 one host, for bringing a new container in.
 
 Hosts must be enrolled first (`ca/scripts/enrol.sh`) — the listener and the
@@ -51,7 +51,7 @@ push both need the certificate material. Loki must be up, or deploy refuses.
    files; a per-host file forwards into the fleet file's `loki.write.loki`
    rather than declaring its own writer.
 
-6. **The package is pinned and held** (`ALLOY_VER` in `deploy.sh`,
+6. **The package is pinned and held** (`ALLOY_VER` in `fleet.yml`,
    `apt-mark hold`), like Loki. The config language moves between minors;
    bump the pin and the config together and let `alloy validate` on the
    deploy prove the pair. Deploying adds the Grafana apt repo to the eight

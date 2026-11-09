@@ -167,7 +167,7 @@ print(r[0] if r else \"\")" '"${ds%%:*} ${ds##*:}" 2>/dev/null)
     pass "alert rules point at the live ${ds##*:} datasource ($live)"
   else
     bad "alert rules point at the live ${ds##*:} datasource" \
-        "Grafana has '${live:-none}', not among the rules' uids - re-run deploy.sh"
+        "Grafana has '${live:-none}', not among the rules' uids - re-run monitoring.yml"
   fi
 done
 
@@ -180,7 +180,7 @@ done
 # themselves are names - asserted separately, just below each.
 if ssh -o BatchMode=yes root@$HOST \
      'grep -l "@@[A-Z_]*_DS_UID@@" /etc/grafana/provisioning/alerting/*.yaml' >/dev/null 2>&1; then
-  bad "no unsubstituted datasource placeholders" "a rule still carries @@..._DS_UID@@ - re-run deploy.sh"
+  bad "no unsubstituted datasource placeholders" "a rule still carries @@..._DS_UID@@ - re-run monitoring.yml"
 else
   pass "no unsubstituted datasource placeholders"
 fi
@@ -202,10 +202,10 @@ hb=[r[\"receiver\"] for r in am.get(\"route\", {}).get(\"routes\", [])[:1]
 print(root, *types.get(root, []), \"|\", *hb, *types.get(hb[0] if hb else \"\", []))"' 2>/dev/null)
 if [[ "${recv%% |*}" == "home-assistant webhook" ]]; then
   pass "notification policy delivers to the home-assistant webhook"
-else bad "notification policy delivers to the home-assistant webhook" "got: ${recv:-none} - re-run deploy.sh"; fi
+else bad "notification policy delivers to the home-assistant webhook" "got: ${recv:-none} - re-run monitoring.yml"; fi
 if [[ "${recv##*| }" == "healthchecks webhook" ]]; then
   pass "first route sends the heartbeat to the healthchecks webhook"
-else bad "first route sends the heartbeat to the healthchecks webhook" "got: ${recv:-none} - re-run deploy.sh"; fi
+else bad "first route sends the heartbeat to the healthchecks webhook" "got: ${recv:-none} - re-run monitoring.yml"; fi
 perm=$(ssh -o BatchMode=yes root@$HOST \
   'f=/etc/grafana/provisioning/alerting/notifications.yaml; grep -q "@@" $f && echo placeholder || stat -c "%a %U:%G" $f' 2>/dev/null)
 if [[ "$perm" == "640 root:grafana" ]]; then

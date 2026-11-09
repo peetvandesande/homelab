@@ -32,7 +32,7 @@ revoke one, what is not done yet. This file is the part you must not get wrong.
 
 **Never edit config on the hosts.** Everything under `pistis/` mirrors the container
 filesystem and is the source of truth.
-`scripts/deploy.sh` pushes it and enables services; `scripts/verify.sh` is an
+`infra/ansible/ca.yml` pushes it and enables services; `scripts/verify.sh` is an
 end-to-end smoke test that exits non-zero on failure. Run it after any change.
 
 Secrets are in `homelab-private/ca/secrets.env` (mode 600) and substituted into
@@ -93,7 +93,7 @@ The existing root CA files are in `rootca/`.
    `crlDistributionPoints`, and a CDP pointing at an expired CRL is worse than
    no CDP — clients that honour it reject the whole chain, silently, on the day
    it lapses. The CRL in this repo had been expired since January 2017.
-   `deploy.sh` refuses to publish an expired one.
+   `ca.yml` refuses to publish an expired one.
 
 7. **The URLs in the certificate name a domain, never a host.** They are frozen
    for G3's full ten years and cannot be changed without reissuing it and every
@@ -141,7 +141,7 @@ changes only when something is revoked off the root. `install-ruby.sh` installs
 it into `/var/www/ca.g2` from `rootca/crl/root.crl` in ruby's clone, so it
 exists once in git. It is the same object as `/g3/root.crl` — one root, one CRL
 — but a copy rather than a proxy, so **re-run `install-ruby.sh` after any
-`root-crl.sh`**: `deploy.sh` reaches pistis and nothing reaches ruby. Both that
+`root-crl.sh`**: `ca.yml` reaches pistis and nothing reaches ruby. Both that
 script and `verify.sh` assert the two still match, so forgetting fails a check
 rather than leaving two CRLs for one root.
 
@@ -228,7 +228,7 @@ certificate over mTLS — no provisioner secret on the host.
 
 `infra/ansible/enrol.yml` does the same thing and leaves a valid certificate
 alone; `ca.yml` builds pistis, run by a person because it installs the G3 key.
-`enrol.sh` and `deploy.sh` stay until task 13.
+`enrol.sh` and `ca.yml` stay until task 13.
 
 **talos has an SSH key on pistis forced to `homelab-mint-token --restricted`**, so
 it can mint tokens only for a host that does not exist yet: a `.home` name and lab
@@ -295,5 +295,5 @@ Each of these was found by something breaking.
 
 The homelab rule applies here as everywhere: add its A and PTR records to
 `dns/pythia/var/lib/powerdns/zones/`, bump both serials, run
-`dns/scripts/deploy.sh`, and add the `node` target on prometheus.
+`infra/ansible/dns.yml`, and add the `node` target on prometheus.
 `pistis` (`.55`) and the `ca.home` CNAME are already done.

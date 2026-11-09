@@ -82,4 +82,4 @@ pct exec "$VMID" -- bash -euo pipefail -c "
   install -d -o loki -g loki -m 0750 /var/lib/loki
 "
 
-echo "== $HOST ready - now: ca/scripts/enrol.sh $IP $HOST; node-exporter/scripts/deploy.sh $IP; scripts/deploy.sh"
+echo "== $HOST ready - now: ca/scripts/enrol.sh $IP $HOST; infra/ansible/fleet.yml $IP; infra/ansible/monitoring.yml"

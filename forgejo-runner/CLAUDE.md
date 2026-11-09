@@ -7,16 +7,16 @@ the label **`lexie`**, one at a time. Built 5 November 2026 so the job search
 repos deploy on push (`sogode-jobsearch/ci/deploy.sh`); first built on moby
 the same day and moved here, so moby stays a Docker host only.
 
-`root/` mirrors lexie's filesystem for this service. `scripts/deploy.sh`
+`root/` mirrors lexie's filesystem for this service. `infra/ansible/ci.yml`
 installs it.
 
 ## Deploy order
 
-1. `forgejo/scripts/deploy.sh` – registers the runner (`--scope peet`, label
+1. `infra/ansible/apps.yml` – registers the runner (`--scope peet`, label
    `lexie`) with the shared secret.
-2. `scripts/deploy.sh` – this: account, key, binary, config, secrets. It also
+2. `infra/ansible/ci.yml` – this: account, key, binary, config, secrets. It also
    stops the old runner on moby, so two daemons never poll with one token.
-3. `moby/scripts/deploy.sh` – authorises this runner's key for
+3. `infra/ansible/apps.yml` – authorises this runner's key for
    `jobsearch-schema` (and removes what is left of the old runner there).
    Until then the job search deploy fails at its schema step.
 
@@ -41,16 +41,16 @@ installs it.
    (`create-runner-file` is deprecated in v13). The token is the shared
    secret `RUNNER_LEXIE_SECRET` from `homelab-private/forgejo/secrets.env`,
    root-only in `/etc/forgejo-runner/token` and handed to the service by
-   `LoadCredential`; `deploy.sh` fills the UUID in `config.yml`, derived from
+   `LoadCredential`; `ci.yml` fills the UUID in `config.yml`, derived from
    the secret the way Forgejo derives it (first 16 characters as bytes).
    Rotate: change the secret, then steps 1 and 2 above.
-4. **Jobs' secrets live here, not in Forgejo.** `deploy.sh` writes
+4. **Jobs' secrets live here, not in Forgejo.** `ci.yml` writes
    `jobsearch.env` (root:forgejo-runner 0640) from
    `homelab-private/jobsearch/secrets.env` on every run; a rotated n8n key or
    Forgejo token needs a re-run.
 5. **IPv4 to moby, host key seeded.** The runner's `~/.ssh/config` names moby
    `moby` (192.168.8.27, user `jobsearch-ci`, `AddressFamily inet`), because
-   the key is accepted from 192.168.8.24 only; `deploy.sh` scans moby's host
+   the key is accepted from 192.168.8.24 only; `ci.yml` scans moby's host
    key into `known_hosts` instead of trusting it on first use. Rerun after
    rebuilding moby.
 

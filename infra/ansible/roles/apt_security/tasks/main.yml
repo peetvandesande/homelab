@@ -25,7 +25,7 @@
 
 # apt lists append, so the policy's #clear has to have worked for this to be the
 # only origin. The -security form matters: the codename alone patches nothing.
-# Unlike apt/scripts/deploy.sh there is no unattended-upgrade --dry-run here,
+# There is no unattended-upgrade --dry-run here,
 # because that advances the stamp the "stopped patching" alert reads.
 - name: Read the allowed update origins
   ansible.builtin.command: apt-config dump --no-empty --format "%v%n" Unattended-Upgrade::Origins-Pattern

@@ -5,19 +5,19 @@ as its own `responder` user; Grafana's webhook calls it, Claude (`claude -p`)
 looks into the alert **read-only**, and the finding goes to the phone through
 the existing Home Assistant webhook as a warning titled `Responder: <alert>`.
 
-`root/` mirrors lexie's filesystem. `scripts/deploy.sh` pushes it,
+`root/` mirrors lexie's filesystem. `infra/ansible/ci.yml` pushes it,
 `scripts/hosts.sh` creates the matching unprivileged account on the fleet, and
 `scripts/verify.sh` checks it. `homelab-private/responder/secrets.env` holds
-`HA_WEBHOOK_ID` and the generated `RESPONDER_TOKEN`; `grafana/scripts/deploy.sh`
+`HA_WEBHOOK_ID` and the generated `RESPONDER_TOKEN`; `infra/ansible/monitoring.yml`
 reads the token from there.
 
 ## First-time setup
 
-1. `scripts/deploy.sh`, then log Claude in as the account – it cannot be
+1. `infra/ansible/ci.yml`, then log Claude in as the account – it cannot be
    scripted: `ssh peet@lexie`, `sudo -iu responder`, `claude auth login`.
 2. `scripts/hosts.sh` to let it SSH to the fleet (journal and adm groups, key
    accepted from lexie only).
-3. `grafana/scripts/deploy.sh` to add the `responder` contact point. Do this
+3. `infra/ansible/monitoring.yml` to add the `responder` contact point. Do this
    last: it rewrites the live notification policy.
 4. `scripts/verify.sh`.
 

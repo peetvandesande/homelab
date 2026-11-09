@@ -23,7 +23,7 @@
 # asserts both before it writes anything. See dns/CLAUDE.md invariant 5.
 
 # Where the rendered zone files land in this repo. The playbook writes them
-# here first, so `git diff` is the review step, and scripts/deploy.sh keeps
+# here first, so `git diff` is the review step, and infra/ansible/dns.yml keeps
 # pushing the same files it always has.
 repo_root:       "{{ dns_repo_root | default(playbook_dir ~ '/..') }}"
 zone_src_dir:    "{{ repo_root }}/pythia/var/lib/powerdns/zones"

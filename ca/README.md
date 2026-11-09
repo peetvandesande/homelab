@@ -27,7 +27,7 @@ script and delete it again. Pistis holds only the G3 key. See "Losing pistis is
 a restore, not a rebuild" and `CLAUDE.md` invariant 1.
 
 Everything else is the usual repo-is-the-truth arrangement: **never edit config
-on pistis**, edit `pistis/` here and run `scripts/deploy.sh`.
+on pistis**, edit `pistis/` here and run `infra/ansible/ca.yml`.
 
 ## Scripts
 
@@ -36,11 +36,11 @@ on pistis**, edit `pistis/` here and run `scripts/deploy.sh`.
 | `scripts/bootstrap.sh` | the Proxmox host | Creates CT 101 and installs step-ca/step-cli. Idempotent. |
 | `scripts/make-intermediate.sh` | workstation | Mints the G3 key and CSR, signs it with the root, regenerates the root CRL. **Prompts for the root passphrase.** |
 | `scripts/root-crl.sh` | workstation | Regenerates the root CRL on its own. Run after any `openssl ca -revoke`. |
-| `scripts/deploy.sh` | workstation | Pushes `pistis/`, installs CA material, brings step-ca and nginx up. Idempotent. |
+| `infra/ansible/ca.yml` | workstation | Pushes `pistis/`, installs CA material, brings step-ca and nginx up. Idempotent. |
 | `scripts/install-ruby.sh` | **ruby**, from `~/homelab` | Installs the public `ca.peetvandesande.com` vhost that proxies `/g2/` and `/g3/` back to pistis. Idempotent. |
 | `scripts/verify.sh` | workstation | End-to-end smoke test, including a real certificate issuance. Exits non-zero on failure. |
 
-Order from nothing: `bootstrap.sh` → `make-intermediate.sh` → `deploy.sh` →
+Order from nothing: `bootstrap.sh` → `make-intermediate.sh` → `ca.yml` →
 `verify.sh`. `install-ruby.sh` is separate because it runs on a host outside
 the lab and only has to be re-run when its own vhost changes — it serves
 whatever pistis is publishing at the time.
@@ -170,7 +170,7 @@ with `BRXF64EB4AEDD38.local` among its SANs, and expires on
 step ca bootstrap --ca-url https://pistis.home:8443 --fingerprint <root fingerprint> --install
 ```
 
-`deploy.sh` prints the fingerprint when it finishes. Without step-cli, fetch
+`ca.yml` prints the fingerprint when it finishes. Without step-cli, fetch
 <http://pistis.home/g3/root.crt> and add it to the system store by hand.
 
 ## Where the published files are served
@@ -185,7 +185,7 @@ the lab's edge:
 
 **The two generations are served differently on purpose.** `/g3/` belongs to
 the live issuing CA, so ruby reverse-proxies it and pistis stays the single
-origin — `scripts/deploy.sh` publishes there and nothing has to be synced
+origin — `infra/ansible/ca.yml` publishes there and nothing has to be synced
 outward, so the inside and outside views cannot drift. `/g2/` belongs to a
 hierarchy that is not live: its one file changes only when something is
 revoked off the root, and pistis is a G3 host that holds no `/g2/` at all, so
@@ -233,7 +233,7 @@ It is the same object as `/g3/root.crl` — one root, one CRL — but a local co
 rather than a proxy, so the two *can* drift. `install-ruby.sh` installs it from
 `rootca/crl/root.crl` in the clone, so it exists once in git, and asserts it
 still matches what pistis is serving. **Re-run it after any `root-crl.sh`**:
-`deploy.sh` reaches pistis, nothing reaches ruby. `verify.sh` checks the same
+`ca.yml` reaches pistis, nothing reaches ruby. `verify.sh` checks the same
 equality from the workstation, so a forgotten update fails the smoke test.
 
 Three things in ruby's config are load-bearing and easy to undo by accident:
@@ -267,7 +267,7 @@ Two separate mechanisms, and it matters which one you need.
   the result from its own CRL at <https://pistis.home:8443/1.0/crl>.
 - **The G3 intermediate itself** — that is the root's job:
   `openssl ca -config … -revoke intermediate/certs/intermediate-g3.crt`, then
-  `scripts/root-crl.sh`, then `scripts/deploy.sh` to publish the new CRL.
+  `scripts/root-crl.sh`, then `infra/ansible/ca.yml` to publish the new CRL.
 
 The root CRL is generated with a **ten-year** validity. An offline root cannot
 honour a 30-day CRL, and an expired CRL fails closed in anything that checks
@@ -317,7 +317,7 @@ target. The certificate needs no backup — `intermediate/certs/
 intermediate-g3.crt` is committed, because a certificate is public.
 
 To restore: put the key back at `intermediate/private/intermediate-g3.key` and
-run `scripts/deploy.sh`, which pushes the key and certificate and brings
+run `infra/ansible/ca.yml`, which pushes the key and certificate and brings
 step-ca up. **Nothing is re-issued and no client re-bootstraps**, because the
 G3 key is unchanged and every leaf under it still chains to the same root.
 `make-intermediate.sh` is for a *lost key*, not a lost host — running it would

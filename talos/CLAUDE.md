@@ -14,10 +14,12 @@ checks, so a person can run them without the runner.
 ## Rebuilding
 
 1. Reservation, `pct create`, then `ca/scripts/enrol.sh 192.168.8.59 talos`.
-2. `scripts/bootstrap.sh`, which prints a new public key. A person adds it to
-   the GitHub repository as a deploy key with write access, and removes the old.
-3. `scripts/deploy.sh`, then the fleet deploys for `node-exporter/`, `alloy/`,
-   `apt/`, `fleet/` and `responder/scripts/hosts.sh`.
+2. `ansible-playbook ci.yml --limit talos` from `infra/ansible`, then `fleet.yml`
+   limited to it, and `responder/scripts/hosts.sh`.
+3. A rebuilt `talos` has new keys. A person adds the new
+   `/var/lib/forgejo-runner/.ssh/github.pub` to the GitHub repository as a deploy key
+   with write access and removes the old one, copies `.ssh/pistis-mint.pub` over
+   `talos/pistis-mint.pub`, and runs `ansible-playbook ca.yml`.
 4. `scripts/verify.sh`.
 
 ## Invariants

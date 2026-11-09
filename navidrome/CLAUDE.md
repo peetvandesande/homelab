@@ -5,7 +5,7 @@ CT 301, **192.168.8.61**. Plain HTTP on `:4533`, UI and `/metrics` alike.
 ## Working on this
 
 `root/` mirrors the container filesystem and is the source of truth.
-`scripts/deploy.sh` pushes it; `scripts/verify.sh` checks the result.
+`infra/ansible/apps.yml` pushes it; `scripts/verify.sh` checks the result.
 
 ## Invariants
 

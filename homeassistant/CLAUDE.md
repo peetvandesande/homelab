@@ -7,7 +7,7 @@ the certificate and the files it pushes into `/config/www`.
 
 ```
 scripts/issue.sh    first issue, and recovery after an expiry
-scripts/deploy.sh   install the renewal driver, VM metrics and timers on lenora
+infra/ansible/platform.yml   install the renewal driver, VM metrics and timers on lenora
 scripts/verify.sh   smoke test TLS and the renewal path
 scripts/deploy-card.sh  push the radio search card into /config/www
 haos/ha-tls.py      runs inside the core container - CSR, renew, info

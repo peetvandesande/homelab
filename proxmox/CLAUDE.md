@@ -9,7 +9,7 @@ itself and not a container — it is the one entry here that is not a CT.
 ## Working on this
 
 `root/` mirrors the host filesystem and is the source of truth.
-`scripts/deploy.sh` installs the certificate; `scripts/verify.sh` checks the
+`infra/ansible/platform.yml` installs the certificate; `scripts/verify.sh` checks the
 GUI, the chain and — importantly — that the cluster's own certificate was left
 alone.
 
@@ -19,7 +19,7 @@ stack adds is a post-renew hook. There is no separate certificate for it.
 ## The NFS export
 
 `root/etc/exports` publishes `/hddpool/media` to **192.168.8.0/24**, read-write
-with `all_squash` to `nobody:nogroup` (65534). `deploy.sh` reapplies it with
+with `all_squash` to `nobody:nogroup` (65534). `platform.yml` reapplies it with
 `exportfs -ra`, which re-reads the export set without restarting `nfs-server`
 or disturbing existing mounts.
 
@@ -51,7 +51,7 @@ The Quadro P2200 is bound to `vfio-pci` for passthrough to uc1-lab
 (`/etc/modprobe.d/uc1-vfio.conf`) and `nvidia` is blacklisted, so lenora never
 loads the driver. `nvidia-devnodes.service` and `nvidia-persistenced.service`,
 shipped by the driver package, therefore failed on every boot and kept
-`systemd-unit-failed` firing. `deploy.sh` masks both and resets them, as of
+`systemd-unit-failed` firing. `platform.yml` masks both and resets them, as of
 26 October 2026. They stay out of `fleet/masked-units`, which is for units
 masked on the whole fleet. If the card is ever handed back to the host, unmask
 them by hand and drop the stanza.
@@ -80,7 +80,7 @@ has neither file, so the stanza's plain `mask` is enough.
    at start. The GUI is gone for a second or two; running VMs and containers
    are unaffected, because nothing in their data path goes through pveproxy.
 
-4. **`deploy.sh` rolls back on its own.** This is the hypervisor's management
+4. **`platform.yml` rolls back on its own.** This is the hypervisor's management
    interface: if pveproxy does not come back on the new certificate, the script
    restores the previous one and restarts, so the GUI is never left down. It
    also refuses to install a certificate and key that do not match, rather than

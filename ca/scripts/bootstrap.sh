@@ -85,4 +85,4 @@ pct exec "$VMID" -- bash -euo pipefail -c "
   install -d -o root -g root -m 0755 /var/www /var/www/g3
 "
 
-echo "== $HOST ready - now run scripts/make-intermediate.sh, then scripts/deploy.sh"
+echo "== $HOST ready - now run scripts/make-intermediate.sh, then infra/ansible/ca.yml"

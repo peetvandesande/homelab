@@ -16,7 +16,7 @@ else
 fi
 echo "== $host"
 
-# Same pin as the lab fleet (ALLOY_VER in deploy.sh); bump the two together.
+# Same pin as the lab fleet (ALLOY_VER in fleet.yml); bump the two together.
 ALLOY_VER="1.19.2"
 LOKI=https://loki.home:3100
 ROOT_CA=/etc/alloy/homelab-root-g2.crt

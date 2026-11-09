@@ -48,6 +48,19 @@ The router and Home Assistant OS cannot be fully managed by Ansible, so they
 stay documented or specially handled. ruby and jennie get Ansible roles that a
 person runs.
 
+## Apply on merge
+
+After the checks and the GitHub publish, `infra/scripts/apply.sh` runs the playbooks
+whose sources a merge to `main` changed. It is built but **off**: nothing happens until
+a person runs `ansible-playbook deploy-access.yml`, which gives `talos` a deploy key
+and a copy of the secrets those playbooks read. See what a merge would do without
+applying it: `infra/scripts/apply.sh --plan <old> <new>`.
+
+It can only reach the services whose roles are safe to run unattended. `pistis`,
+`lenora`, `talos`, `lexie`, `ruby` and `jennie` are out of its reach, and a change to
+any of them is printed for a person. OpenTofu still only reports drift: applying from
+CI needs a Proxmox token that can write, which a person has to create.
+
 ## Kept out of the automation
 
 These change the router, the ONT or Home Assistant OS, so a person runs them, from
@@ -81,8 +94,8 @@ Each task ends with a checkpoint before the next begins.
 | 9 | DNS stack | Done |
 | 10 | Application services: Forgejo, moby, media | Done |
 | 11 | lenora, metis, hermes, watchdogs (hermes's role first runs when a lab next has it on) | Done |
-| 12 | ruby and jennie, run by a person; router documented | |
-| 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | |
+| 12 | ruby and jennie, run by a person; router documented; lexie and talos | Built: a person still has to run the `outside.yml` check |
+| 13 | Apply on merge, retire the old scripts; drop the old `192.168.1.1` nameserver from themis, delphi and pythia | Built: a person still has to turn on the apply step and branch protection |
 | 14 | Action log for the audit trail | |
 | 15 | Runbook engine in shadow mode | |
 | 16 | Runbooks go live one at a time | |
@@ -235,18 +248,18 @@ access the automation does not have.
 
 | Secrets | Origin | Then run |
 |---|---|---|
-| `dns/*` | Generate new; `DNSDIST_API_KEY_HASHED` is derived from `DNSDIST_API_KEY` | `dns/scripts/deploy.sh` |
+| `dns/*` | Generate new; `DNSDIST_API_KEY_HASHED` is derived from `DNSDIST_API_KEY` | `infra/ansible/dns.yml` |
 | `hermes/API_KEY` | mailcow admin | `hermes/scripts/deploy.sh` |
-| `forgejo/SMTP_PASSWD` | Mailbox on ruby – *person* | `forgejo/scripts/deploy.sh` |
-| `forgejo/RUNNER_LEXIE_SECRET` | Generate 40 hex characters | `forgejo/scripts/deploy.sh`, then `forgejo-runner/scripts/deploy.sh` |
-| `grafana-admin/GRAFANA_PASSWORD` | Grafana | `grafana/scripts/deploy.sh` |
+| `forgejo/SMTP_PASSWD` | Mailbox on ruby – *person* | `infra/ansible/apps.yml` |
+| `forgejo/RUNNER_LEXIE_SECRET` | Generate 40 hex characters | `infra/ansible/apps.yml`, then `infra/ansible/ci.yml` |
+| `grafana-admin/GRAFANA_PASSWORD` | Grafana | `infra/ansible/monitoring.yml` |
 | `grafana/viewer-token` | Grafana service account | Nothing; read at use |
-| `grafana/HA_WEBHOOK_ID`, `responder/HA_WEBHOOK_ID` | Home Assistant automation | `grafana/scripts/deploy.sh`, `responder/scripts/deploy.sh` |
-| `grafana/HEALTHCHECKS_PING_URL` | Healthchecks.io – *person* | `grafana/scripts/deploy.sh` |
-| `responder/RESPONDER_TOKEN` | Generate new | `responder/scripts/deploy.sh` |
-| `n8n/SMTP_PASSWD`, `n8n-sogode/SMTP_PASSWD` | Mailbox on ruby – *person* | `moby/scripts/deploy.sh` |
-| `jobsearch/*` | n8n, Forgejo or Anthropic console, or the mailbox on ruby – *person* | `forgejo-runner/scripts/deploy.sh` |
+| `grafana/HA_WEBHOOK_ID`, `responder/HA_WEBHOOK_ID` | Home Assistant automation | `infra/ansible/monitoring.yml`, `infra/ansible/ci.yml` |
+| `grafana/HEALTHCHECKS_PING_URL` | Healthchecks.io – *person* | `infra/ansible/monitoring.yml` |
+| `responder/RESPONDER_TOKEN` | Generate new | `infra/ansible/ci.yml` |
+| `n8n/SMTP_PASSWD`, `n8n-sogode/SMTP_PASSWD` | Mailbox on ruby – *person* | `infra/ansible/apps.yml` |
+| `jobsearch/*` | n8n, Forgejo or Anthropic console, or the mailbox on ruby – *person* | `infra/ansible/ci.yml` |
 | `esp32/kitchen-api-key` | ESPHome config | Reflash the device |
-| `ca/*` | `ca/README.md` – *person* | `ca/scripts/deploy.sh` |
+| `ca/*` | `ca/README.md` – *person* | `infra/ansible/ca.yml` |
 | `wireguard/*` | `wireguard/README.md` – *person* | Install on the router, ruby and jennie |
 | `router/ORANGE_*` | Orange – *person* | `router/ORANGE.md` |

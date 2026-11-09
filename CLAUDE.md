@@ -268,7 +268,7 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   and moby directly. See "Public services" below.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
-  `dns/scripts/deploy.sh`.
+  `infra/ansible/dns.yml`.
 - **Clients use Themis.** `dhcp.lan.dhcp_option` is `6,192.168.8.50`, with
   `15,home`. The first attempt at this, in early October 2026, was reverted on
   9 October because sending clients straight to Themis stopped the router
@@ -339,7 +339,7 @@ Reach for a container on moby when a service ships as an image and wants
 nothing from the host; reach for an LXC when it wants to look like a machine.
 
 **n8n** is the first stack the repo owns there (`moby/root/opt/stacks/n8n`,
-converged by `moby/scripts/deploy.sh`), behind moby's host nginx on
+converged by `infra/ansible/apps.yml`), behind moby's host nginx on
 192.168.8.27:443, built fresh rather than migrated. The stack includes n8n's sandbox
 service for Instance AI, which runs a privileged Docker-in-Docker runner.
 
@@ -432,7 +432,7 @@ next deploy.
 **Fleet-wide host hygiene lives in `fleet/`** — units masked on every host, and
 anything else that belongs to no single service. `fleet/scripts/verify.sh`
 answers "is the fleet clean?" and asserts no host has a failed unit;
-`fleet/scripts/deploy.sh <ip>` reapplies it to one host after a rebuild. It
+`infra/ansible/fleet.yml` reapplies it to one host after a rebuild. It
 reads the host list from `ca/scripts/enrol.sh` rather than keeping a fourth
 copy. Today it masks `openipmi.service`, which was the fleet's only failed unit
 and made the `systemd-unit-failed` alert useless — see `fleet/CLAUDE.md`.
@@ -462,9 +462,9 @@ service is not finished:
    `FLEET` in `ca/scripts/enrol.sh` — the `node` job for host metrics, plus a
    service-specific job if it exports its own. Give it `scheme: https` and the
    `tls_config` block if the service holds a lab certificate.
-4. Ship its logs: `alloy/scripts/deploy.sh <ip>`, and add the host to the
+4. Ship its logs: `infra/ansible/fleet.yml`, and add the host to the
    `alloy` job in `prometheus.yml` alongside its `node` entry.
-5. `prometheus/scripts/deploy.sh`, then `prometheus/scripts/verify.sh`.
+5. `infra/ansible/monitoring.yml`, then `prometheus/scripts/verify.sh`.
 
 Prometheus targets are static and hand-maintained, so they rot when a service
 moves. They have been wrong before — the `node` job was scraping .50/.51 as

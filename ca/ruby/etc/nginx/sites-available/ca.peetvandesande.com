@@ -11,7 +11,7 @@
 # THE TWO GENERATIONS ARE SERVED DIFFERENTLY, ON PURPOSE:
 #
 #   /g3/  reverse-proxied to pistis, which is the live issuing CA. Its files
-#         change whenever deploy.sh publishes, so a copy here would be a
+#         change whenever ca.yml publishes, so a copy here would be a
 #         second source of truth that silently goes stale.
 #   /g2/  served statically from /var/www/ca.g2. The pre-G3 hierarchy is not
 #         live: its one file is the root CRL, which only changes when something
