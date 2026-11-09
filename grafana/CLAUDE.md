@@ -226,6 +226,12 @@ The policy groups by folder and alert name, sends after 30 s (criticals 10 s)
 and repeats every 12 h (criticals 4 h). Provisioning it replaces the policy
 tree set in the UI.
 
+The last route is a catch-all to `home-assistant`, and it has to stay last. The
+responder's route matches every alert and continues, so the policy's own
+receiver is never used, and without the catch-all a warning the responder does
+not investigate reaches nobody – which is what happened from 26 October to
+9 November 2026.
+
 12. **The webhook id is a secret, substituted at deploy time.** It is the only
     credential an HA webhook has, so the file carries `@@HA_WEBHOOK_ID@@` and
     `deploy.sh` fills it from `homelab-private/grafana/secrets.env` (mode 600:

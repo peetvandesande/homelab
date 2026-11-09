@@ -100,3 +100,9 @@ policies:
           - [severity, "=", critical]
         group_wait: 10s
         repeat_interval: 4h
+      # Everything else. The responder route above matches every alert, so this
+      # policy's own receiver is never used: without this route, a warning the
+      # responder does not investigate reaches nobody.
+      - receiver: home-assistant
+        object_matchers:
+          - [alertname, "=~", ".+"]
