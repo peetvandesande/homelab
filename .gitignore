@@ -19,3 +19,8 @@ __pycache__/
 # WireGuard keys and PSKs - kept in ~/projects/homelab-private, never here
 *.key
 *.psk
+
+# OpenTofu working files. State can hold secrets and never belongs in Git.
+.terraform/
+*.tfstate
+*.tfstate.*

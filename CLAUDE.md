@@ -88,6 +88,12 @@ passwords for Forgejo and both n8n stacks, Grafana's and the responder's alertin
 secrets, and the CA's passphrases – each in `<service>/secrets.env` there,
 read by that service's deploy script.
 
+## Autonomy programme
+
+`infra/README.md` holds the intent, decisions and task list for moving this
+estate to OpenTofu, Ansible and GitOps and then making it run itself. Check any
+change to that work against it, and finish each task with a checkpoint.
+
 ## Storage
 
 Three ZFS mirrors. The pool names and the Proxmox storage IDs are not the same
