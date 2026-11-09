@@ -4,7 +4,7 @@ A three-tier private PKI for the lab: an offline RSA-4096 root from 2016, a new
 ECDSA P-256 intermediate, and leaf certificates issued by step-ca.
 
 ```
-Peet van de Sande Root Certificate G2      rootca/ — offline, on the workstation
+Peet van de Sande Root Certificate G2      rootca/ — offline, key in Bitwarden only
   C=GB, ST=England, L=London               RSA-4096, expires Dec 2046
         │
         ▼
@@ -17,13 +17,14 @@ leaf certificates                          ACME (auto) or JWK (by hand)
 
 ## The one thing to understand
 
-**The root key never touches a host.** `rootca/private/root.key` is
-passphrase-protected and is used exactly twice in normal life: to sign a new
-intermediate, and to regenerate the root CRL. Both are workstation-side scripts
-that prompt for the passphrase and never store it. Pistis holds only the G3 key.
-The key and both passphrases are backed up in a password manager — see "Losing
-pistis is a restore, not a rebuild" and `CLAUDE.md` invariant 1 — so "never
-leaves the workstation" is not the rule; "never reaches a server" is.
+**The root key never touches a host, and is kept only in Bitwarden** – since
+9 November 2026 there is no copy on the workstation. It is passphrase-protected
+and is used exactly twice in normal life: to sign a new intermediate, and to
+regenerate the root CRL. Both are workstation-side scripts that prompt for the
+passphrase and never store it, and both expect the key at
+`rootca/private/root.key`: put it there from Bitwarden with mode 0400, run the
+script and delete it again. Pistis holds only the G3 key. See "Losing pistis is
+a restore, not a rebuild" and `CLAUDE.md` invariant 1.
 
 Everything else is the usual repo-is-the-truth arrangement: **never edit config
 on pistis**, edit `pistis/` here and run `scripts/deploy.sh`.

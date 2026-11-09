@@ -14,7 +14,7 @@ The intent is to use privately signed certificates across all services in homela
 The three tiers are **root → intermediate → leaf**:
 
 ```
-Peet van de Sande Root Certificate G2      rootca/ — offline, on the workstation
+Peet van de Sande Root Certificate G2      rootca/ — offline, key in Bitwarden only
   C=GB, ST=England, L=London               RSA-4096, expires Dec 2046
         │
         ▼
@@ -50,7 +50,9 @@ The existing root CA files are in `rootca/`.
    of which are G3-level and below. Pistis holds the G3 key and nothing above
    it.
 
-   **The root key and both passphrases are in a password manager**, by choice,
+   **The root key and both passphrases are in Bitwarden, and since 9 November
+   2026 the key is nowhere else**. To use it, put it at `rootca/private/root.key`
+   with mode 0400, run the script and delete it again. This is by choice,
    so a dead workstation does not end the hierarchy's ability to mint a new
    intermediate or regenerate the root CRL. This file used to say the root key
    never left the workstation and its passphrase was never written down; that
