@@ -1,6 +1,7 @@
 ---
 grafana_source: "{{ role_path }}/../../../../grafana/root"
 grafana_version: 13.2.1
+grafana_alert_files: "{{ lookup('ansible.builtin.fileglob', grafana_source ~ '/etc/grafana/provisioning/alerting/*.yaml', wantlist=True) }}"
 grafana_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
 grafana_secrets: "{{ lookup('ansible.builtin.file', grafana_private ~ '/grafana/secrets.env') }}"
 grafana_responder_secrets: "{{ lookup('ansible.builtin.file', grafana_private ~ '/responder/secrets.env') }}"

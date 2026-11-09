@@ -1,8 +1,11 @@
 ---
+# The role asks Loki itself afterwards, which is the check that counts.
 - name: Restart Loki
-  ansible.builtin.shell:
-    cmd: systemctl daemon-reload; systemctl restart loki || true
-  changed_when: true
+  ansible.builtin.systemd_service:
+    name: loki
+    state: restarted
+    daemon_reload: true
+  failed_when: false
 
 # router.alloy sits beside the fleet's config.alloy and only parses as a pair.
 # The unit is active before its components have started, so the check is the
@@ -13,7 +16,7 @@
       set -e
       alloy validate /etc/alloy >/dev/null
       systemctl restart alloy
-      for _ in $(seq 10); do ss -uln | grep -q ':1514 ' && exit 0; sleep 1; done
+      for _ in $(seq 10); do [ -n "$(ss -Huln 'sport = :1514')" ] && exit 0; sleep 1; done
       echo "alloy is not listening on :1514" >&2
       exit 1
     executable: /bin/bash

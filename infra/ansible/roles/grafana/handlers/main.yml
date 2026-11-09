@@ -1,6 +1,8 @@
 ---
 # The role asks the API afterwards, which is the check that counts.
 - name: Restart Grafana
-  ansible.builtin.shell:
-    cmd: systemctl daemon-reload; systemctl restart grafana-server || true
-  changed_when: true
+  ansible.builtin.systemd_service:
+    name: grafana-server
+    state: restarted
+    daemon_reload: true
+  failed_when: false

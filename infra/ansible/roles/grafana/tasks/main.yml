@@ -111,7 +111,7 @@
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ lookup('ansible.builtin.fileglob', grafana_source ~ '/etc/grafana/provisioning/alerting/*.yaml', wantlist=True) | reject('search', '/notifications.yaml$') }}"
+  loop: "{{ grafana_alert_files | reject('search', '/notifications.yaml$') }}"
   loop_control:
     label: "{{ item | basename }}"
   notify: Restart Grafana
