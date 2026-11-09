@@ -43,7 +43,7 @@ resource "proxmox_virtual_environment_container" "themis" {
     hostname = "themis"
     dns {
       domain  = "home"
-      servers = ["192.168.1.1"]
+      servers = ["192.168.8.1"]
     }
     ip_config {
       ipv4 {
@@ -125,7 +125,7 @@ resource "proxmox_virtual_environment_container" "delphi" {
     hostname = "delphi"
     dns {
       domain  = "home"
-      servers = ["192.168.1.1"]
+      servers = ["192.168.8.1"]
     }
     ip_config {
       ipv4 {
@@ -654,7 +654,7 @@ resource "proxmox_virtual_environment_container" "pythia" {
     hostname = "pythia"
     dns {
       domain  = "home"
-      servers = ["192.168.1.1"]
+      servers = ["192.168.8.1"]
     }
     ip_config {
       ipv4 {
