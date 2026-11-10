@@ -1,0 +1,8 @@
+---
+offsite_source: "{{ role_path }}/../../../../offsite/root"
+offsite_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+offsite_secrets: "{{ lookup('ansible.builtin.file', offsite_private ~ '/offsite/secrets.env') }}"
+offsite_job:
+  paths: "{{ offsite_paths }}"
+  excludes: "{{ offsite_excludes }}"
+  dumps: "{{ offsite_dumps }}"

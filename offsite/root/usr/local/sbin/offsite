@@ -1,0 +1,291 @@
+#!/usr/bin/env python3
+"""The off-site copy: restic to an Object Lock bucket at Hetzner.
+
+  offsite backup     this host's dumps and paths, from /etc/offsite/job.json
+  offsite maintain   forget, prune without repacking, renew the locks, measure the bucket
+  offsite test       read a fixed sample of packs and restore a dump and some files
+  offsite undelete --since TIME [--apply]
+                     after a deletion: remove the delete markers written since TIME
+
+Settings and secrets are in /etc/offsite/offsite.env, written by
+infra/ansible/offsite.yml. Each command publishes its outcome to node-exporter's
+textfile collector, which is what the alerts in grafana/ read.
+"""
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import random
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+ENV = Path("/etc/offsite/offsite.env")
+JOB = Path("/etc/offsite/job.json")
+TEXTFILE = Path("/var/lib/node_exporter/textfile")
+CACHE = "/var/cache/restic"
+
+# Each lock is renewed to LOCK_DAYS whenever under RENEW_DAYS remain, so a file that
+# is current at a weekly run stays undeletable for at least RENEW_DAYS - 7 days.
+LOCK_DAYS = 90
+RENEW_DAYS = 80
+# Routine reads are budgeted (offsite/CLAUDE.md, "Limits"): a fixed size, never a share.
+CHECK_SUBSET = "5G"
+SAMPLE_FILES = 20
+KEEP = ["--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12"]
+
+
+def log(message):
+    print(message, flush=True)
+
+
+def die(message):
+    print(f"offsite: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_env():
+    env = dict(os.environ)
+    for line in ENV.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            key, _, value = line.partition("=")
+            env[key.strip()] = value.strip().strip("'\"")
+    env["RESTIC_CACHE_DIR"] = CACHE
+    return env
+
+
+def restic(env, *args, capture=False, check=True):
+    command = ["restic", "--retry-lock", "2h", *args]
+    result = subprocess.run(command, env=env, text=True,
+                            stdout=subprocess.PIPE if capture else None)
+    if check and result.returncode != 0:
+        die(f"restic {args[0]} exited {result.returncode}")
+    return result
+
+
+def publish(name, metrics):
+    """Writes name.prom atomically; metrics maps a metric name to a value."""
+    TEXTFILE.mkdir(parents=True, exist_ok=True)
+    lines = [f"# TYPE {key} gauge\n{key} {value}" for key, value in metrics.items()]
+    handle, temp = tempfile.mkstemp(dir=TEXTFILE, prefix=f".{name}-")
+    with os.fdopen(handle, "w") as out:
+        out.write("\n".join(lines) + "\n")
+    os.chmod(temp, 0o644)
+    os.replace(temp, TEXTFILE / f"{name}.prom")
+
+
+def summary(output):
+    for line in reversed(output.splitlines()):
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if message.get("message_type") == "summary":
+            return message
+    die("restic gave no summary")
+
+
+def cmd_backup(env, _args):
+    job = json.loads(JOB.read_text())
+    host = os.uname().nodename
+    started = time.time()
+    seed = not json.loads(restic(env, "snapshots", "--json", "--host", host,
+                                 "--tag", "files", capture=True).stdout or "[]")
+
+    for dump in job.get("dumps", []):
+        log(f"== dump {dump['name']}")
+        restic(env, "backup", "--tag", "dump", "--stdin-from-command",
+               "--stdin-filename", dump["name"], "--", "sh", "-c", dump["command"])
+
+    log("== files " + " ".join(job["paths"]))
+    excludes = [arg for pattern in job.get("excludes", []) for arg in ("--exclude", pattern)]
+    result = restic(env, "backup", "--tag", "files", "--json", "--one-file-system",
+                    *excludes, "--", *job["paths"], capture=True)
+    files = summary(result.stdout)
+    log(f"   added {files['data_added']} bytes; "
+        f"{files['files_new']} new, {files['files_changed']} changed, "
+        f"{files['files_unmodified']} unmodified")
+
+    publish("offsite_backup", {
+        "offsite_backup_last_success_timestamp_seconds": int(time.time()),
+        "offsite_backup_duration_seconds": int(time.time() - started),
+        "offsite_backup_data_added_bytes": files["data_added"],
+        "offsite_backup_processed_bytes": files["total_bytes_processed"],
+        "offsite_backup_files_changed": files["files_new"] + files["files_changed"],
+        "offsite_backup_seed": int(seed),
+    })
+
+
+def s3_client(env):
+    import boto3
+    from botocore.config import Config
+
+    scheme, _, rest = env["RESTIC_REPOSITORY"].removeprefix("s3:").partition("://")
+    endpoint, _, bucket = rest.partition("/")
+    region = endpoint.split(".")[0]
+    client = boto3.client(
+        "s3", endpoint_url=f"{scheme}://{endpoint}", region_name=region,
+        aws_access_key_id=env["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=env["AWS_SECRET_ACCESS_KEY"],
+        config=Config(s3={"addressing_style": "path"},
+                      request_checksum_calculation="when_required",
+                      response_checksum_validation="when_required"))
+    return client, bucket.strip("/")
+
+
+def versions(client, bucket):
+    for page in client.get_paginator("list_object_versions").paginate(Bucket=bucket):
+        for version in page.get("Versions", []):
+            yield "version", version
+        for marker in page.get("DeleteMarkers", []):
+            yield "marker", marker
+
+
+def renew_locks(client, bucket):
+    now = dt.datetime.now(dt.timezone.utc)
+    floor, target = now + dt.timedelta(days=RENEW_DAYS), now + dt.timedelta(days=LOCK_DAYS)
+    stored = objects = renewed = 0
+    soonest = target
+    for kind, item in versions(client, bucket):
+        if kind != "version":
+            continue
+        objects += 1
+        stored += item["Size"]
+        if not item["IsLatest"]:
+            continue
+        until = client.get_object_retention(
+            Bucket=bucket, Key=item["Key"], VersionId=item["VersionId"]
+        )["Retention"]["RetainUntilDate"]
+        if until < floor:
+            client.put_object_retention(
+                Bucket=bucket, Key=item["Key"], VersionId=item["VersionId"],
+                Retention={"Mode": "COMPLIANCE", "RetainUntilDate": target})
+            renewed += 1
+            until = target
+        soonest = min(soonest, until)
+    log(f"   {objects} versions, {stored} bytes; renewed {renewed} locks")
+    return stored, objects, soonest
+
+
+def cmd_maintain(env, _args):
+    log("== forget")
+    restic(env, "forget", "--group-by", "host,tags", *KEEP)
+    log("== prune, never repacking")
+    restic(env, "prune", "--max-unused", "unlimited", "--max-repack-size", "0")
+    log("== renew locks")
+    client, bucket = s3_client(env)
+    stored, objects, soonest = renew_locks(client, bucket)
+    publish("offsite_maintain", {
+        "offsite_maintain_last_success_timestamp_seconds": int(time.time()),
+        "offsite_bucket_stored_bytes": stored,
+        "offsite_bucket_objects": objects,
+        "offsite_lock_soonest_expiry_timestamp_seconds": int(soonest.timestamp()),
+    })
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def whole_seconds(stamp):
+    """restic writes nanoseconds, which fromisoformat may refuse; drop the fraction."""
+    if "." in stamp:
+        head, _, tail = stamp.partition(".")
+        zone = next((i for i, c in enumerate(tail) if c in "+-Z"), len(tail))
+        stamp = head + tail[zone:]
+    return int(dt.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp())
+
+
+def latest(env, host, tag):
+    found = json.loads(restic(env, "snapshots", "--json", "--latest", "1",
+                              "--host", host, "--tag", tag, capture=True).stdout or "[]")
+    if not found:
+        die(f"no {tag} snapshot for {host}")
+    return found[-1]
+
+
+def cmd_test(env, _args):
+    log(f"== check, reading {CHECK_SUBSET} of packs")
+    restic(env, "check", f"--read-data-subset={CHECK_SUBSET}")
+
+    work = Path(tempfile.mkdtemp(prefix="offsite-test-", dir="/var/tmp"))
+    try:
+        for host in ("forgejo", "moby"):
+            snap = latest(env, host, "dump")
+            log(f"== restore {host}'s dump from {snap['time'][:19]}")
+            dump = restic(env, "dump", snap["id"], snap["paths"][0], capture=True).stdout
+            if "PostgreSQL database dump complete" not in dump[-4096:]:
+                die(f"{host}'s dump is incomplete")
+
+        host = os.uname().nodename
+        snap = latest(env, host, "files")
+        listing = restic(env, "ls", "--json", snap["id"], capture=True).stdout.splitlines()
+        nodes = [json.loads(line) for line in listing[1:]]
+        files = [n for n in nodes if n.get("type") == "file"
+                 and 0 < n.get("size", 0) < 64 << 20 and os.path.isfile(n["path"])
+                 and int(os.stat(n["path"]).st_mtime) == whole_seconds(n["mtime"])]
+        if len(files) < SAMPLE_FILES:
+            die(f"only {len(files)} unchanged files to sample")
+        sample = random.sample(files, SAMPLE_FILES)
+        log(f"== restore {SAMPLE_FILES} of {host}'s files and compare")
+        for node in sample:
+            restic(env, "restore", snap["id"], "--target", str(work), "--include", node["path"],
+                   capture=True)
+            if sha256(work / node["path"].lstrip("/")) != sha256(node["path"]):
+                die(f"{node['path']} restored differently")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    publish("offsite_test", {"offsite_test_last_success_timestamp_seconds": int(time.time())})
+    log("== restore test passed")
+
+
+def cmd_undelete(env, args):
+    since = dt.datetime.fromisoformat(args.since)
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=dt.timezone.utc)
+    client, bucket = s3_client(env)
+    markers, rewritten = [], set()
+    for kind, item in versions(client, bucket):
+        if item["LastModified"] < since:
+            continue
+        if kind == "marker":
+            markers.append(item)
+        elif item["IsLatest"]:
+            rewritten.add(item["Key"])
+    log(f"{len(markers)} delete markers since {since.isoformat()}")
+    for key in sorted(rewritten):
+        log(f"  written since then, check by hand: {key}")
+    if not args.apply:
+        log("dry run; pass --apply to remove the markers")
+        return
+    for marker in markers:
+        client.delete_object(Bucket=bucket, Key=marker["Key"], VersionId=marker["VersionId"])
+    log(f"removed {len(markers)} delete markers")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("backup")
+    commands.add_parser("maintain")
+    commands.add_parser("test")
+    undelete = commands.add_parser("undelete")
+    undelete.add_argument("--since", required=True, help="ISO time, UTC unless given")
+    undelete.add_argument("--apply", action="store_true")
+    args = parser.parse_args()
+    env = load_env()
+    {"backup": cmd_backup, "maintain": cmd_maintain,
+     "test": cmd_test, "undelete": cmd_undelete}[args.command](env, args)
+
+
+if __name__ == "__main__":
+    main()

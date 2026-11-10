@@ -1,0 +1,9 @@
+[Unit]
+Description=Off-site copy: read a sample back and restore from it (offsite/)
+Wants=network-online.target
+After=network-online.target offsite-maintain.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/offsite test
+Nice=10

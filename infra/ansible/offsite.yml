@@ -1,0 +1,54 @@
+---
+# The off-site copy (offsite/). Always run by a person: its secrets are in
+# homelab-restricted, which no automation can read. From infra/ansible:
+#
+#   ansible-playbook offsite.yml --check --diff
+#   ansible-playbook offsite.yml
+#
+# A new restic repository is initialised once, by hand, before the first backup:
+# offsite/CLAUDE.md, "First run".
+- name: Lexie, the photos and videos, and the maintenance
+  hosts: lexie
+  gather_facts: false
+  roles:
+    - role: offsite
+      vars:
+        offsite_maintainer: true
+        offsite_paths:
+          - /home/shared/pictures
+          - /home/shared/Giulia
+          - /home/shared/videos
+
+# The database is dumped first and the files after, without maintenance mode, so
+# Nextcloud never goes down for it. A file newer than the dump is found again by
+# occ files:scan after a restore.
+- name: Moby, Nextcloud
+  hosts: moby
+  gather_facts: false
+  roles:
+    - role: offsite
+      vars:
+        offsite_paths:
+          - /var/lib/docker/volumes/nextcloud_nextcloud/_data
+        offsite_excludes:
+          - /var/lib/docker/volumes/nextcloud_nextcloud/_data/data/appdata_*/preview
+          - "*.log"
+          - "*.log.[0-9]*"
+        offsite_dumps:
+          - name: nextcloud.sql
+            command: >-
+              docker compose -f /opt/stacks/nextcloud/docker-compose.yml exec -T db
+              sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"'
+
+- name: Forgejo
+  hosts: forgejo
+  gather_facts: false
+  roles:
+    - role: offsite
+      vars:
+        offsite_paths:
+          - /var/lib/forgejo
+          - /etc/forgejo
+        offsite_dumps:
+          - name: forgejo.sql
+            command: runuser -u postgres -- pg_dump forgejo

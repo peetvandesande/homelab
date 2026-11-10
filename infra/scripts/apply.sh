@@ -38,7 +38,7 @@ matches "^(jellyfin|navidrome|moby|forgejo)/root/|$(roles 'jellyfin|navidrome|mo
 matches "^metis/root/|$(roles 'metis')" && need+=(metis)
 
 person=$(printf '%s\n' "${changed[@]}" | grep -E \
-  "^(ca|responder|runbooks|forgejo-runner|talos|outside|estate-report|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|enrol|responder|runbook|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|enrol|outside|platform|deploy-access)\.yml" || true)
+  "^(ca|responder|runbooks|offsite|forgejo-runner|talos|outside|estate-report|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|enrol|responder|runbook|offsite|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|enrol|offsite|outside|platform|deploy-access)\.yml" || true)
 if [[ -n $person ]]; then
   echo "== needs a person: these do not reach their hosts through CI"
   printf '%s\n' "$person" | sed 's/^/   /'

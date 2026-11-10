@@ -1,0 +1,68 @@
+---
+- name: Install restic
+  ansible.builtin.apt:
+    name: "{{ ['restic'] + (['python3-boto3'] if offsite_maintainer else []) }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the settings and cache directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/offsite
+    - /var/cache/restic
+
+# The repository address, its password and the bucket key: the whole off-site copy.
+- name: Install the secrets
+  ansible.builtin.copy:
+    content: "{{ offsite_secrets }}\n"
+    dest: /etc/offsite/offsite.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install what this host backs up
+  ansible.builtin.copy:
+    content: "{{ offsite_job | to_nice_json }}\n"
+    dest: /etc/offsite/job.json
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install the script and the units
+  ansible.builtin.copy:
+    src: "{{ offsite_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/sbin/offsite, mode: "0755" }
+    - { path: etc/systemd/system/offsite-backup.service, mode: "0644" }
+    - { path: etc/systemd/system/offsite-backup.timer, mode: "0644" }
+    - { path: etc/systemd/system/offsite-maintain.service, mode: "0644" }
+    - { path: etc/systemd/system/offsite-maintain.timer, mode: "0644" }
+    - { path: etc/systemd/system/offsite-test.service, mode: "0644" }
+    - { path: etc/systemd/system/offsite-test.timer, mode: "0644" }
+
+- name: Run the nightly backup
+  ansible.builtin.systemd_service:
+    name: offsite-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Run maintenance and the restore test on the maintainer only
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: "{{ offsite_maintainer }}"
+    state: "{{ 'started' if offsite_maintainer else 'stopped' }}"
+  loop:
+    - offsite-maintain.timer
+    - offsite-test.timer

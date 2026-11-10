@@ -1,0 +1,7 @@
+---
+# Set per host in offsite.yml.
+offsite_paths: []
+offsite_excludes: []
+offsite_dumps: []
+# The one host that runs forget, prune, the lock renewal and the restore test.
+offsite_maintainer: false

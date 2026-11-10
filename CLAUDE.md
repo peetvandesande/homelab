@@ -323,6 +323,10 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
 destination. It is enrolled with the CA but kept out of `FLEET`, so the fleet's
 automation does not reach it – `sally/CLAUDE.md`.
 
+The **off-site copy** of what cannot be rebuilt – lexie's photos and videos,
+Nextcloud and Forgejo – goes nightly by restic to an Object Lock bucket at
+Hetzner, so malware in the lab cannot delete it – `offsite/CLAUDE.md`.
+
 ## Docker
 
 Container workloads that are not worth an LXC run on `moby` (CT 108,

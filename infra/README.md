@@ -124,7 +124,7 @@ Each task ends with a checkpoint before the next begins.
 | 16 | Runbooks go live one at a time | |
 | 17 | The responder gains authority to act | |
 | 18 | Weekly email | |
-| 19 | Off-site copy of critical backups | Started: Hetzner Object Storage, pricing and limits in `offsite/CLAUDE.md` |
+| 19 | Off-site copy of critical backups | Built: restic to Hetzner, `offsite/CLAUDE.md`; awaiting its first run |
 | 20 | Hands-off soak period | |
 | 21 | Human takeover drill | |
 
