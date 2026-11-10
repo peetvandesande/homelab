@@ -29,7 +29,8 @@ Success means all four of these:
 | Desired state | Changes only through Git and CI; runbooks do operational acts live and log each one |
 | Merging | The agent merges its own changes when checks pass |
 | Git home | Forgejo primary, mirrored to GitHub, with a separate deploy runner acting only on `main` |
-| Restarts | Staggered service restarts by runbook, DNS hosts one at a time; lenora reboots stay with a person |
+| Restarts | Staggered service restarts by runbook, DNS hosts one at a time |
+| Reboots | lenora, ruby and jennie may reboot unattended only for security updates, after a successful backup, before 06:00, with the reason recorded and service restoration verified afterwards (decided 10 November 2026) |
 | Order | Full migration to OpenTofu and Ansible first, then autonomy |
 | Backups | Proxmox Backup Server on sally, a dedicated Dell, out of the agent's reach; ruby and jennie rely on OVH's daily snapshots |
 | Secrets | Bitwarden Secrets Manager is the source of truth; `~/projects/homelab-private` is a cache of it. No encrypted copy in Git, and no separate break-glass export for now, by choice |
@@ -45,8 +46,12 @@ include secret scanning, and any change that exposes a service or touches an
 outward-facing path must wait for a person.
 
 The router and Home Assistant OS cannot be fully managed by Ansible, so they
-stay documented or specially handled. ruby and jennie get Ansible roles that a
-person runs.
+stay documented or specially handled.
+
+ruby and jennie run themselves day to day, security updates and the reboots above
+included. A material change to them – configuration, a new service, firewall or
+mail settings – lands by pull request with the owner's approval. So does a
+material change anywhere else in the estate.
 
 ## Changing main
 
@@ -104,6 +109,9 @@ PBS token.
 
 Each task ends with a checkpoint before the next begins.
 
+The order from here is 18, 16, 17, 22, 20 and 21; task 22 was added after the table was
+numbered.
+
 | # | Task | State |
 |---|---|---|
 | 1 | Repo layout, pinned tools, read-only Ansible reach | Done |
@@ -125,8 +133,9 @@ Each task ends with a checkpoint before the next begins.
 | 17 | The responder gains authority to act | |
 | 18 | Weekly email | |
 | 19 | Off-site copy of critical backups | Done: restic to Hetzner, first run 10 November 2026, `offsite/CLAUDE.md` |
-| 20 | Hands-off soak period | |
+| 20 | Hands-off soak period: 30 days; each unplanned intervention adds 7; material changes approved by the owner do not count against it | Planned, starts after 16, 17, 18 and 22 |
 | 21 | Human takeover drill | |
+| 22 | Unattended security updates and reboots for lenora, ruby and jennie | |
 
 ## Using it
 
