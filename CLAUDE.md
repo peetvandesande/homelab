@@ -431,9 +431,10 @@ ruby and jennie ship theirs over the tunnels too, as `{host="ruby"}` and
 The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
 instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
-A **weekly report** goes out from ruby every Monday morning, covering mail
-on ruby per domain, ruby itself and the lab's week from Prometheus, with the
-issues listed first – `estate-report/`.
+A **weekly report** goes out from lexie every Monday morning, covering the
+whole estate – incidents, automated actions, backups, every host, mail and web
+on ruby – with Claude's interpretation at the top: smooth sailing, or what needs
+attention and why – `estate-report/`.
 
 **Prometheus config now lives in `prometheus/`, not on the host.** Editing
 `/etc/prometheus/prometheus.yml` on prometheus directly will be overwritten by the

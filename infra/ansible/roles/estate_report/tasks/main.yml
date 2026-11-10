@@ -1,0 +1,40 @@
+---
+- name: Create the settings directory
+  ansible.builtin.file:
+    path: /etc/estate-report
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the report, its brief and its timer
+  ansible.builtin.copy:
+    src: "{{ estate_report_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/bin/estate-weekly, mode: "0755" }
+    - { path: etc/estate-report/prompt.md, mode: "0644" }
+    - { path: etc/systemd/system/estate-weekly.service, mode: "0644" }
+    - { path: etc/systemd/system/estate-weekly.timer, mode: "0644" }
+
+# The mail account, the recipient and Grafana's read-only token.
+- name: Install its secrets
+  ansible.builtin.copy:
+    content: |
+      {{ estate_report_secrets }}
+      {{ estate_report_grafana }}
+    dest: /etc/estate-report/report.env
+    owner: root
+    group: responder
+    mode: "0640"
+  no_log: true
+
+- name: Keep the timer on
+  ansible.builtin.systemd_service:
+    name: estate-weekly.timer
+    enabled: true
+    state: started
+    daemon_reload: true

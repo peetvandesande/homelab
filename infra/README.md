@@ -131,7 +131,7 @@ numbered.
 | 15 | Runbook engine in shadow mode | Built: shadowing until 16 November 2026, then reviewed before task 16 |
 | 16 | Runbooks go live one at a time | |
 | 17 | The responder gains authority to act | |
-| 18 | Weekly email | |
+| 18 | Weekly email | Built: on lexie, interpreted by Claude, `estate-report/CLAUDE.md`; waiting for its mail account and PR 18 |
 | 19 | Off-site copy of critical backups | Done: restic to Hetzner, first run 10 November 2026, `offsite/CLAUDE.md` |
 | 20 | Hands-off soak period: 30 days; each unplanned intervention adds 7; material changes approved by the owner do not count against it | Planned, starts after 16, 17, 18 and 22 |
 | 21 | Human takeover drill | |
