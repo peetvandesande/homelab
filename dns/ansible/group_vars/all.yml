@@ -93,6 +93,13 @@ zones:
       - title: non-production
         records:
           - { name: lexie, data: 192.168.8.24, data6: 'fd33:5692:1834:1000:be24:11ff:fe35:8257' }
+      # ruby and jennie, the two OVH servers, at their service addresses on
+      # dummy0: reached only over the tunnels, which is all the lab needs them
+      # for. Outside the lab's prefixes, so they get no PTR here.
+      - title: outside
+        records:
+          - { name: ruby,   data: 192.168.254.254, data6: 'fd33:5692:1834:0254:0000:0000:0000:0254', comment: 'OVH, over wgclient1' }
+          - { name: jennie, data: 192.168.254.2,   data6: 'fd33:5692:1834:0254:0000:0000:0000:0002', comment: 'OVH, over wgclient3' }
       # Client devices with a reservation in .240-.254 (router/README.md).
       - title: clients
         records:

@@ -9,7 +9,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026110902  ; serial
+                2026111001  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -62,6 +62,12 @@ homeassistant IN  A   192.168.8.90     ; HAOS VM 302 - outside the .60-.69 range
 ; --- non-production -------------------------------------------------
 lexie       IN  A   192.168.8.24
 lexie       IN  AAAA fd33:5692:1834:1000:be24:11ff:fe35:8257
+
+; --- outside --------------------------------------------------------
+ruby        IN  A   192.168.254.254  ; OVH, over wgclient1
+ruby        IN  AAAA fd33:5692:1834:0254:0000:0000:0000:0254 ; OVH, over wgclient1
+jennie      IN  A   192.168.254.2    ; OVH, over wgclient3
+jennie      IN  AAAA fd33:5692:1834:0254:0000:0000:0000:0002 ; OVH, over wgclient3
 
 ; --- clients --------------------------------------------------------
 printer     IN  A   192.168.8.241    ; Brother MFC-J4350DW, on Wi-Fi
