@@ -32,3 +32,5 @@
   any_errors_fatal: true
   roles:
     - outside_host
+    # Debian security updates, unattended, as on the fleet; never a reboot.
+    - apt_security

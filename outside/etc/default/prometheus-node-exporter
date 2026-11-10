@@ -1,0 +1,5 @@
+# Managed in homelab/outside; outside.yml fills in @@ADDR@@, this server's
+# dummy0 address. Listening there and nowhere else keeps the exporter off the
+# public interface - home Prometheus reaches it over this server's tunnel. Plain
+# HTTP, as for the blackbox exporter: this server holds no lab certificate.
+ARGS="--web.listen-address=@@ADDR@@:9100 --collector.textfile.directory=/var/lib/node_exporter/textfile"

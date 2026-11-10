@@ -1,4 +1,17 @@
 ---
+# Checked before it is installed; ruby has no provider firewall, so this file is
+# the only filtering it has. Run with --check --diff first: anything changed by
+# hand on ruby and not brought back here shows up as a difference.
+- name: Install the firewall
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/wireguard/ruby/nftables.conf"
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0755"
+    validate: nft -c -f %s
+  notify: Load the firewall
+
 - name: Create the report's settings directory
   ansible.builtin.file:
     path: /etc/estate-report

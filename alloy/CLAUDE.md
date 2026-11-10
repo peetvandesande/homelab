@@ -81,6 +81,11 @@ They are not part of the fleet, and differ from it in three ways:
   one rule each so a server that never ships is NoData and alerts, and
   `verify.sh` checks the same.
 
+ruby's nginx access logs and rspamd's log are files, so Alloy follows those
+too: `{host="ruby", job="nginx", site="git.peetvandesande.com"}`, with `site`
+from the file name, and `{host="ruby", job="rspamd"}`. Only from the live file
+onwards, so the first run sends no backlog for Loki to reject.
+
 The package pin is duplicated in `install-outside.sh`; bump both together.
 
 ## Gotcha
