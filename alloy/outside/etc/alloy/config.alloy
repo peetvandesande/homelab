@@ -12,8 +12,8 @@ logging {
   format = "logfmt"
 }
 
-// The journal is the only source; postfix, dovecot, nginx and sshd all log
-// there. max_age is just under Loki's reject_old_samples_max_age (168h), so
+// postfix, dovecot and sshd log to the journal; nginx's access logs are files,
+// read below. max_age is just under Loki's reject_old_samples_max_age (168h), so
 // the first run backfills a week without the oldest batch being rejected.
 loki.source.journal "host" {
   max_age       = "166h"
@@ -56,6 +56,67 @@ loki.relabel "journal" {
   rule {
     source_labels = ["__journal_container_name"]
     target_label  = "container"
+  }
+}
+
+// nginx writes its access logs to files, not the journal, one per site, named
+// after it. Only the live file is followed; Alloy keeps its place across
+// rotation. tail_from_end, so the first run does not send weeks of old lines
+// for Loki to reject. A host with no nginx simply matches nothing.
+local.file_match "nginx" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/*access.log",
+    host     = "@@HOST@@",
+    job      = "nginx",
+  }]
+}
+
+loki.source.file "nginx" {
+  targets       = local.file_match.nginx.targets
+  tail_from_end = true
+  forward_to    = [loki.process.nginx.receiver]
+}
+
+// rspamd logs its verdicts to a file too.
+local.file_match "rspamd" {
+  path_targets = [{
+    __path__ = "/var/log/rspamd/rspamd.log",
+    host     = "@@HOST@@",
+    job      = "rspamd",
+  }]
+}
+
+loki.source.file "rspamd" {
+  targets       = local.file_match.rspamd.targets
+  tail_from_end = true
+  forward_to    = [loki.process.drop_filename.receiver]
+}
+
+loki.process "drop_filename" {
+  forward_to = [loki.write.loki.receiver]
+
+  stage.label_drop {
+    values = ["filename"]
+  }
+}
+
+// The site from the file name, then the path dropped: one stream per site.
+loki.process "nginx" {
+  forward_to = [loki.write.loki.receiver]
+
+  stage.regex {
+    source     = "filename"
+    // ntfy.sogode.com.access.log and sogode.com-https-access.log both give the
+    // name; plain access.log, the default server, gets no site label.
+    expression = "/var/log/nginx/(?P<site>[^/]+?)(-https?)?[-.]access\\.log$"
+  }
+
+  stage.labels {
+    values = { site = "" }
+  }
+
+  stage.label_drop {
+    values = ["filename"]
   }
 }
 

@@ -10,12 +10,18 @@ over that server's own tunnel, and the rules in
 | jennie | ruby: SMTP :25 with STARTTLS, HTTPS sogode.com, ruby.peetvandesande.com, peetvandesande.com (404) – each over IPv4 and IPv6 | wg3, `192.168.254.2:9115` |
 | ruby | jennie: ping, IPv4 and IPv6 | wg1, `192.168.254.254:9115` |
 
+Each also runs `prometheus-node-exporter` on `:9100` of the same address, so
+their disk, load, patching and pending reboots are in Prometheus like every lab
+host's, and Debian security updates arrive unattended through `apt/`, never
+with a reboot. The `outside-node` job scrapes it as `ruby.home` and
+`jennie.home`, which name the dummy0 addresses.
+
 The probe list is the `outside-*` jobs in `prometheus/.../prometheus.yml`; this
 directory holds only what runs on the two servers.
 
 ```
 etc/prometheus/blackbox.yml       the modules, identical on both
-etc/default/...                   listen address (@@ADDR@@)
+etc/default/...                   listen addresses (@@ADDR@@), both exporters
 etc/systemd/system/...d/          wait for dummy0, CAP_NET_RAW
 install.sh                        sudo ~/homelab/outside/install.sh
 ```
@@ -40,8 +46,9 @@ evaluates no alerts.
 
 3. **The exporters listen only on dummy0, and scrapes are plain HTTP.**
    dummy0 is reachable only through WireGuard: jennie's input chain admits the
-   tunnels and drops the rest, and ruby's nftables admits `:9115` only from
-   `192.168.8.53` (`wireguard/ruby/nftables.conf`). Neither server holds a lab
+   tunnels and drops the rest, and ruby's nftables admits `:9100` and `:9115`
+   only from `192.168.8.53` (`wireguard/ruby/nftables.conf`, which `outside.yml`
+   installs, checked with `nft -c` first). Neither server holds a lab
    certificate, so this is a listed exception to the lab's TLS rule
    (`prometheus/CLAUDE.md` invariant 5).
 

@@ -9,6 +9,9 @@
 - name: Set up the blackbox exporter
   ansible.builtin.import_tasks: blackbox.yml
 
+- name: Set up node-exporter
+  ansible.builtin.import_tasks: node_exporter.yml
+
 - name: Set up log shipping
   ansible.builtin.import_tasks: alloy.yml
 
