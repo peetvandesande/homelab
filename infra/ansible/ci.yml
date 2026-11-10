@@ -12,6 +12,7 @@
   roles:
     - responder
     - runbook
+    - estate_report
     - role: forgejo_runner
       vars:
         forgejo_runner_source: "{{ playbook_dir }}/../../forgejo-runner/root"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Weekly estate report, interpreted by Claude (estate-report/)
+Wants=network-online.target
+After=network-online.target
+# Twelve tries over half a day, then the unit fails and its alert says so: a
+# broken report must not call Claude every half hour until next Monday.
+StartLimitIntervalSec=13h
+StartLimitBurst=12
+
+[Service]
+Type=oneshot
+# responder holds the Claude login, and nothing on the fleet lets it change anything.
+User=responder
+ExecStart=/usr/local/bin/estate-weekly
+Restart=on-failure
+RestartSec=30min

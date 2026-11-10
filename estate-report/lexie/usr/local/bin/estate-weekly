@@ -1,0 +1,836 @@
+#!/usr/bin/env python3
+"""Weekly estate report, written on lexie, interpreted by Claude, mailed to the owner.
+
+Covers the previous Monday-to-Monday week in REPORT_TZ, for the whole estate:
+  - incidents (Grafana's alert history) and automated actions (the action log);
+  - backups: sally, the off-site copy, both restore tests;
+  - the lab and ruby and jennie, from Prometheus: availability, reboots, disk,
+    probes, certificates, patching, failed units, pools, WAN, alerting;
+  - mail and web on ruby, from its logs in Loki.
+
+The figures are computed here, and every check that finds something wrong is an
+issue. Claude then reads a summary of them, never addresses, client IPs or
+message details, and writes the interpretation at the top. It has no tools. If
+it cannot be reached the report still goes, with the issues and a note.
+
+  estate-weekly                 mail the report for the week that just ended
+  estate-weekly --stdout        print it instead
+  estate-weekly --no-claude     skip the interpretation
+  estate-weekly --week-ending 2026-11-16
+"""
+import argparse
+import collections
+import datetime as dt
+import json
+import os
+import re
+import smtplib
+import socket
+import ssl
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+from email.message import EmailMessage
+from zoneinfo import ZoneInfo
+
+CONF = {
+    "REPORT_TO": "",
+    "REPORT_FROM": "",
+    "REPORT_TZ": "Europe/Paris",
+    "SMTP_HOST": "mail.peetvandesande.com",
+    "SMTP_PORT": "587",
+    "SMTP_USER": "",
+    "SMTP_PASSWORD": "",
+    "PROM_URL": "https://prometheus.home:9090",
+    "LOKI_URL": "https://loki.home:3100",
+    "GRAFANA_URL": "https://grafana.home:3000",
+    "GRAFANA_TOKEN": "",
+    "PROMPT": "/etc/estate-report/prompt.md",
+    # Scrape jobs known to be down, reported but not counted as issues.
+    "IGNORE_JOBS": "pve",
+    # Hosts off by choice most of the time: shown, never an issue. hermes runs
+    # only while a lab needs it.
+    "IGNORE_HOSTS": "hermes",
+}
+ENV_FILE = os.environ.get("ESTATE_REPORT_ENV", "/etc/estate-report/report.env")
+
+issues = []
+summary = []   # what Claude reads: totals and states only, no personal detail
+
+
+def issue(text):
+    issues.append(text)
+
+
+def note(text):
+    summary.append(text)
+
+
+def load_conf():
+    if os.path.exists(ENV_FILE):
+        for line in open(ENV_FILE):
+            if line.strip() and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                CONF[key.strip()] = value.strip().strip("'\"")
+    CONF.update({k: os.environ[k] for k in CONF if os.environ.get(k)})
+
+
+# ---------------------------------------------------------------- formatting
+
+def n(x):
+    return f"{x:,}"
+
+
+def table(rows, headers, indent="  "):
+    """Plain-text table; numeric columns are right-aligned."""
+    if not rows:
+        return [indent + "(none)"]
+    rows = [[str(c) for c in r] for r in rows]
+    w = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
+    num = [all(re.fullmatch(r"-?[\d,]+(\.\d+)?%?|–", r[i]) for r in rows) for i in range(len(headers))]
+
+    def line(cells):
+        return indent + "  ".join(c.rjust(w[i]) if num[i] else c.ljust(w[i])
+                                  for i, c in enumerate(cells)).rstrip()
+    return [line(headers), indent + "  ".join("-" * x for x in w)] + [line(r) for r in rows]
+
+
+def human(b):
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if b < 1024 or unit == "TiB":
+            return f"{b:.0f} {unit}" if unit == "B" else f"{b:.1f} {unit}"
+        b /= 1024
+
+
+def change(now, before):
+    """'+12%' style, or '' when there is nothing to compare."""
+    if not before:
+        return ""
+    return f"{100 * (now - before) / before:+.0f}%"
+
+
+SECOND_LEVEL = {"co", "com", "org", "net", "ac", "gov", "edu"}
+
+
+def org_domain(dom):
+    labels = dom.split(".")
+    keep = 3 if len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in SECOND_LEVEL else 2
+    return ".".join(labels[-keep:])
+
+
+def domain(addr):
+    addr = addr.strip().lower()
+    return addr.rsplit("@", 1)[1] if "@" in addr else (addr or "<>")
+
+
+# ---------------------------------------------------------------- sources
+
+CTX = ssl.create_default_context()   # lexie trusts the lab root system-wide
+
+
+def get_json(url, params=None, data=None, headers=None, timeout=60):
+    if params:
+        url = f"{url}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, data=data, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
+        return json.load(r)
+
+
+class Prom:
+    def __init__(self, url, at):
+        self.url, self.at = url.rstrip("/"), at
+
+    def q(self, expr, now=False, at=None):
+        """Evaluated at the end of the week, at report time with now=True, or at `at`."""
+        params = {"query": expr}
+        if not now:
+            params["time"] = at or self.at
+        res = get_json(f"{self.url}/api/v1/query",
+                       data=urllib.parse.urlencode(params).encode())
+        return [(x["metric"], float(x["value"][1])) for x in res["data"]["result"]]
+
+
+def loki_lines(selector, since, until, page=5000):
+    """(epoch, labels, line) for a stream selector, oldest first, paged forwards."""
+    start = int(since * 1e9)
+    end = int(until * 1e9)
+    seen_at_start = set()
+    while start < end:
+        res = get_json(f"{CONF['LOKI_URL'].rstrip('/')}/loki/api/v1/query_range", {
+            "query": selector, "start": start, "end": end, "limit": page,
+            "direction": "forward"})
+        batch = []
+        for stream in res["data"]["result"]:
+            for ts, line in stream["values"]:
+                batch.append((int(ts), stream["stream"], line))
+        if not batch:
+            return
+        batch.sort(key=lambda e: e[0])
+        last = batch[-1][0]
+        for ts, labels, line in batch:
+            key = (ts, line)
+            if ts == start and key in seen_at_start:
+                continue
+            yield ts / 1e9, labels, line
+        if len(batch) < page:
+            return
+        # The next page starts at the last timestamp, so lines sharing it are not
+        # lost; the ones already returned are skipped.
+        seen_at_start = {(ts, line) for ts, _, line in batch if ts == last}
+        if last == start:   # a whole page in one nanosecond: step past it
+            last += 1
+            seen_at_start = set()
+        start = last
+
+
+def grafana(path, params):
+    return get_json(f"{CONF['GRAFANA_URL'].rstrip('/')}{path}", params,
+                    headers={"Authorization": f"Bearer {CONF['GRAFANA_TOKEN']}"})
+
+
+# ---------------------------------------------------------------- incidents
+
+def incidents(annotations, until):
+    """Alert episodes from Grafana's state annotations: firing until normal again.
+
+    Returns {series: {"alert", "labels", "fired", "seconds", "open"}}. A series is
+    the rule's id and its labels other than the name, so one rule firing on two
+    hosts is two rows, and a rule renamed mid-episode is still one: Grafana
+    resolves it under the new name."""
+    out = {}
+    firing_since = {}
+    for a in sorted(annotations, key=lambda a: a["time"]):
+        labels = dict(re.findall(r"(\w+)=([^,}]+)", a.get("text", "").split(" - ")[0]))
+        name = labels.pop("alertname", None) or a.get("alertName", "?")
+        if name == "Heartbeat":
+            continue
+        series = (a.get("alertId"), tuple(sorted(labels.items())))
+        state = a.get("newState", "")
+        row = out.setdefault(series, {"alert": name, "labels": labels, "fired": 0,
+                                      "seconds": 0, "open": False})
+        row["alert"] = name   # the latest name, if it was renamed
+        if state.startswith("Alerting") and series not in firing_since:
+            firing_since[series] = a["time"] / 1000
+            row["fired"] += 1
+        elif state.startswith("Normal") and series in firing_since:
+            row["seconds"] += a["time"] / 1000 - firing_since.pop(series)
+    for series, since in firing_since.items():
+        out[series]["seconds"] += until - since
+        out[series]["open"] = True
+    return {k: v for k, v in out.items() if v["fired"]}
+
+
+def incident_section(since, until):
+    annotations = []
+    day = 86400
+    for t in range(int(since), int(until), day):   # a day at a time, under the 5000 limit
+        annotations += grafana("/api/annotations", {
+            "type": "alert", "from": t * 1000, "to": min(t + day, int(until)) * 1000,
+            "limit": 5000})
+    eps = incidents(annotations, until)
+    out = ["INCIDENTS (Grafana alert history, Heartbeat excluded)", ""]
+    rows = []
+    by_alert = collections.Counter()
+    for _, e in sorted(eps.items(), key=lambda kv: -kv[1]["seconds"]):
+        labels = e["labels"]
+        where = labels.get("instance") or labels.get("guest") or labels.get("subject") or ""
+        where = where.split(":")[0].removesuffix(".home")
+        rows.append([e["alert"], where, n(e["fired"]), f"{e['seconds'] / 60:.0f}",
+                     "still firing" if e["open"] else ""])
+        by_alert[e["alert"]] += e["fired"]
+    out += table(rows[:30], ["Alert", "Where", "Fired", "Minutes", ""])
+    if len(rows) > 30:
+        out.append(f"  ({len(rows) - 30} more)")
+    still = [r for r in rows if r[4]]
+    note(f"Incidents: {sum(by_alert.values())} alert firings across {len(rows)} alert/target "
+         f"pairs; {len(still)} still firing at the end of the week.")
+    for r in rows[:15]:
+        note(f"  incident: {r[0]} on {r[1] or '-'}, fired {r[2]}x, {r[3]} min{', ' + r[4] if r[4] else ''}")
+    return out
+
+
+# ---------------------------------------------------------------- actions
+
+def actions_section(since, until):
+    started, finished = {}, {}
+    for _, _, line in loki_lines('{identifier="homelab-action"}', since, until):
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        (started if e.get("phase") == "started" else finished)[e.get("id")] = e
+    rows = collections.Counter()
+    unfinished = [e for i, e in started.items() if i not in finished]
+    for e in finished.values():
+        rows[(e.get("actor", "?"), e.get("action", "?"), e.get("outcome", "?"))] += 1
+    out = ["AUTOMATED ACTIONS (action log)", ""]
+    out += table([[a, act, o, n(c)] for (a, act, o), c in sorted(rows.items())],
+                 ["Actor", "Action", "Outcome", "Count"])
+    for e in unfinished:
+        line = f"{e.get('action')} on {e.get('targets')} started {e.get('time')} and never finished"
+        out.append(f"  ✗ {line}")
+        issue(f"action log: {line}")
+    for (actor, act, outcome), c in rows.items():
+        if outcome == "failed":
+            issue(f"action log: {act} failed {c}x")
+    totals = collections.Counter()
+    for (_, _, o), c in rows.items():
+        totals[o] += c
+    note("Automated actions: " + (", ".join(f"{c} {o}" for o, c in sorted(totals.items())) or "none")
+         + f"; {len(unfinished)} started but never finished.")
+    for (actor, act, outcome), c in sorted(rows.items()):
+        note(f"  action: {act} by {actor}: {outcome} {c}x")
+    return out
+
+
+# ---------------------------------------------------------------- backups
+
+def backup_section(prom):
+    out = ["BACKUPS", ""]
+    rows = []
+    now = time.time()
+    for m, v in prom.q("homelab_backup_last_success_timestamp_seconds", now=True):
+        age = (now - v) / 3600
+        rows.append([f"sally: {m.get('guest', '?')}", f"{age:.0f} h ago"])
+        if age > 36:
+            issue(f"backup to sally: {m.get('guest')} last succeeded {age:.0f} h ago")
+    for m, v in prom.q("homelab_backup_restore_test_last_success_timestamp_seconds", now=True):
+        rows.append(["sally: restore test", f"{(now - v) / 86400:.0f} days ago"])
+    for m, v in prom.q("offsite_backup_last_success_timestamp_seconds", now=True):
+        host = m.get("instance", "?").split(":")[0].removesuffix(".home")
+        age = (now - v) / 3600
+        rows.append([f"off-site: {host}", f"{age:.0f} h ago"])
+        if age > 48:
+            issue(f"off-site backup: {host} last succeeded {age:.0f} h ago")
+    for expr, label in (("offsite_maintain_last_success_timestamp_seconds", "off-site: lock renewal"),
+                        ("offsite_test_last_success_timestamp_seconds", "off-site: restore test")):
+        for _, v in prom.q(expr, now=True):
+            rows.append([label, f"{(now - v) / 86400:.0f} days ago"])
+    for _, v in prom.q("max(offsite_bucket_stored_bytes)", now=True):
+        before = prom.q("max(offsite_bucket_stored_bytes)", at=prom.at - 7 * 86400)
+        b = before[0][1] if before else 0
+        rows.append(["off-site: stored", f"{human(v)} {change(v, b)}".strip()])
+        note(f"Off-site storage: {human(v)} of the 1 TB included ({change(v, b) or 'no earlier figure'} on last week).")
+    out += table(rows, ["Backup", "Last success, at report time"])
+    note("Backups: " + "; ".join(f"{r[0]} {r[1]}" for r in rows))
+    return out
+
+
+# ---------------------------------------------------------------- hosts
+
+def short(instance):
+    return instance.split(":")[0].removesuffix(".home")
+
+
+HOST_JOBS = 'job=~"node|outside-node"'
+
+
+def lab_section(prom, window):
+    W = f"{int(window)}s"
+    mins = window / 60
+    prev = prom.at - window
+    out = ["HOSTS AND SERVICES (Prometheus)", ""]
+    ignore = set(CONF["IGNORE_JOBS"].split())
+    quiet = set(CONF["IGNORE_HOSTS"].split())
+    # The same hosts as Prometheus instances: by name for scrapes, by address for
+    # probes, which target IP literals (prometheus/CLAUDE.md invariant 3).
+    names = [re.escape(f"{h}.home") for h in quiet]
+    for h in quiet:
+        try:
+            names.append(re.escape(socket.gethostbyname(f"{h}.home")))
+        except OSError:
+            pass
+    pattern = "|".join(names).replace("\\", "\\\\") or "^$"   # PromQL strings escape \\
+    skip = f'instance!~"({pattern})(:.*)?"'
+
+    avail = {short(m["instance"]): v for m, v in prom.q(
+        f'avg_over_time(up{{{HOST_JOBS}}}[{W}]) and on (instance) up{{{HOST_JOBS}}}')}
+    boots = {short(m["instance"]): v for m, v in prom.q(
+        f'changes(node_boot_time_seconds{{{HOST_JOBS}}}[{W}])')}
+    disk_expr = ('100 * (1 - node_filesystem_avail_bytes{%s,mountpoint="/"}'
+                 ' / node_filesystem_size_bytes{%s,mountpoint="/"})' % (HOST_JOBS, HOST_JOBS))
+    disk = {short(m["instance"]): v for m, v in prom.q(disk_expr)}
+    disk_before = {short(m["instance"]): v for m, v in prom.q(disk_expr, at=prev)}
+    rows = []
+    for h in sorted(avail):
+        down = (1 - avail[h]) * mins
+        growth = disk.get(h, 0) - disk_before.get(h, disk.get(h, 0))
+        rows.append([h, f"{100 * avail[h]:.2f}%", f"{down:.0f}" if down >= 1 else "–",
+                     n(int(boots.get(h, 0))), f"{disk.get(h, 0):.0f}%", f"{growth:+.1f}"])
+        if avail[h] < 0.99 and h not in quiet:
+            issue(f"{h}: scraped only {100 * avail[h]:.1f}% of the week ({down:.0f} min down)")
+        if disk.get(h, 0) > 85:
+            issue(f"{h}: root filesystem {disk[h]:.0f}% full")
+        if h in quiet:
+            note(f"  host {h}: off by choice, up {100 * avail[h]:.0f}% of the week")
+            continue
+        note(f"  host {h}: up {100 * avail[h]:.2f}%, {int(boots.get(h, 0))} reboots, "
+             f"disk {disk.get(h, 0):.0f}% ({growth:+.1f} points on last week)")
+    out.append(f"Hosts ({len(avail)})")
+    out += table(rows, ["Host", "Up", "Min down", "Reboots", "Disk /", "Change"])
+    if "ruby" not in avail or "jennie" not in avail:
+        issue("ruby or jennie is missing from Prometheus (outside-node job)")
+
+    rows = []
+    for m, v in sorted(prom.q(f'avg by (job) (avg_over_time(up{{job!~"node|outside-node",{skip}}}[{W}]) and on (instance, job) up)'),
+                       key=lambda x: x[0]["job"]):
+        known = m["job"] in ignore
+        rows.append([m["job"], f"{100 * v:.2f}%", "known down" if known else ""])
+        if v < 0.99 and not known:
+            issue(f"scrape job {m['job']}: up {100 * v:.1f}% of the week")
+    out += ["", "Scrape jobs"] + table(rows, ["Job", "Up", ""])
+
+    rows = []
+    for m, v in sorted(prom.q(f'avg by (kind) (avg_over_time(probe_success{{job="blackbox",{skip}}}[{W}]) and on (instance, job) probe_success)'),
+                       key=lambda x: x[0].get("kind", "")):
+        rows.append([f"LAN: {m.get('kind', '?')}", f"{100 * v:.2f}%", f"{(1 - v) * mins:.0f}"])
+    for m, v in sorted(prom.q(f'avg by (subject, check) (avg_over_time(probe_success{{job=~"outside-.*",job!="outside-node"}}[{W}]) and on (instance, job) probe_success)'),
+                       key=lambda x: (x[0].get("subject", ""), x[0].get("check", ""))):
+        rows.append([f"outside: {m.get('subject', '?')} {m.get('check', '')}".rstrip(),
+                     f"{100 * v:.2f}%", f"{(1 - v) * mins:.0f}"])
+    for r in rows:
+        if float(r[1][:-1]) < 99:
+            issue(f"probe {r[0]}: {r[1]} success over the week")
+        note(f"  probe {r[0]}: {r[1]}")
+    out += ["", "Probes"] + table(rows, ["Probe", "Success", "Min failing"])
+
+    rows = []
+    # The same thresholds as the alert rules: lab certificates renew themselves
+    # daily and alert at 7 days, certbot on ruby renews at 30 and alerts at 14.
+    for expr, label, floor in (
+        ('bottomk(1, min by (instance) (probe_ssl_earliest_cert_expiry'
+         '{job="blackbox",kind="tls",instance!="192.168.8.55:8443",%s}) - time())' % skip,
+         "lab, soonest:", 7),
+        ('min by (subject) (probe_ssl_earliest_cert_expiry{job=~"outside-.*"}) - time()', "public:", 14),
+    ):
+        for m, v in prom.q(expr, now=True):
+            name = f"{label} {m.get('subject') or short(m.get('instance', '?'))}"
+            rows.append([name, f"{v / 86400:.0f}"])
+            if v / 86400 < floor:
+                issue(f"certificate {name} expires in {v / 86400:.0f} days")
+    out += ["", "Certificates"] + table(rows, ["Certificate", "Days left"])
+    note("Certificates, days left: " + "; ".join(f"{r[0]} {r[1]}" for r in rows))
+
+    now = []
+    for expr, what in (
+        (f'node_systemd_unit_state{{{HOST_JOBS},state="failed"}} == 1', "unit failed"),
+        (f'min_over_time(node_systemd_unit_state{{{HOST_JOBS},state="activating"}}[15m]) == 1',
+         "unit stuck starting for 15 min or more"),
+        (f'apt_reboot_required{{{HOST_JOBS}}} == 1', "reboot required"),
+        (f'apt_upgrades_pending{{{HOST_JOBS},origin="security"}} > 0', "security upgrades pending"),
+        (f'apt_services_need_restart{{{HOST_JOBS}}} > 0', "services need restart after patching"),
+        ('node_zfs_zpool_state{instance=~"lenora.*",state!="online"} == 1', "ZFS pool not online"),
+    ):
+        for m, v in prom.q(expr, now=True):
+            detail = m.get("name") or m.get("zpool") or ""
+            line = f"{short(m.get('instance', '?'))}: {what}" + (f" ({detail}" + (f", {v:.0f})" if v > 1 else ")") if detail else "")
+            now.append(line)
+            issue(line)
+    pools = sorted({m["zpool"] for m, _ in prom.q('node_zfs_zpool_state{instance=~"lenora.*",state="online"} == 1', now=True)})
+    out += ["", "State at report time"]
+    out += ["  " + l for l in now] or ["  No failed units, pending reboots, held patches or degraded pools."]
+    out.append(f"  ZFS pools online on lenora: {', '.join(pools) or 'none reported'}")
+    if not pools:
+        issue("lenora reports no ZFS pool online")
+
+    rows = []
+    for _, v in prom.q(f'sum(increase(homelab_ont_lods_events_total[{W}]))'):
+        rows.append(["ONT lost downstream sync", n(round(v))])
+    for _, v in prom.q('max(homelab_router_uptime_seconds)', now=True):
+        rows.append(["Router up for", f"{v / 86400:.1f} days"])
+    for _, v in prom.q('max(homelab_router_ipv6_prefix_delegated)', now=True):
+        rows.append(["IPv6 prefix delegated", "yes" if v else "no"])
+        if not v:
+            issue("router holds no IPv6 prefix from Orange")
+    for _, v in prom.q('max(grafana_alerting_alerts{state="alerting"})', now=True):
+        rows.append(["Grafana alerts firing now (incl. heartbeat)", n(int(v))])
+    for _, v in prom.q(f'sum(increase(grafana_alerting_rule_evaluation_failures_total[{W}]))'):
+        rows.append(["Alert rule evaluation failures", n(round(v))])
+        if v >= 1:
+            issue(f"{v:.0f} Grafana alert rule evaluation failures this week")
+    out += ["", "WAN and alerting"] + table(rows, ["", "Value"])
+    note("WAN and alerting: " + "; ".join(f"{r[0]} {r[1]}" for r in rows))
+    return out
+
+
+# ---------------------------------------------------------------- mail on ruby
+
+QID = re.compile(r"^([0-9A-Za-z]{5,20}): (.*)$")
+DELIVERY = re.compile(r"to=<([^>]*)>,(?: orig_to=<[^>]*>,)? relay=([^,]+),.*? status=(\w+)")
+CLIENT = re.compile(r"^client=([^,]+)(?:, .*?sasl_username=(\S+))?")
+QFROM = re.compile(r"^from=<([^>]*)>, size=\d+, nrcpt=")
+REJECT = re.compile(r"(?:NOQUEUE|[0-9A-Za-z]{5,20}): (milter-)?reject: \S+ from \S*\[[^\]]*\](?::\d+)?: "
+                    r"(?:(\d)\d\d )?(?:(\d)\.\d+\.\d+ )?(.*?)(?:; from=<([^>]*)> to=<([^>]*)>|$)")
+RSPAMD = re.compile(r"qid: <([^>]*)>.*?\(default: [TFS] \(([^)]+)\): \[(-?[\d.]+)/")
+SUBMISSION = {"submission", "submission6", "smtps", "smtps6", "rc-sub"}
+PUBLIC = {"", "public"}
+MAILBOX_AGENTS = {"lmtp", "local", "virtual", "pipe"}
+
+
+def postfix_lines(since, until):
+    for t, labels, line in loki_lines('{host="ruby", identifier=~"postfix.*"}', since, until):
+        yield t, labels.get("identifier", ""), line
+
+
+def rspamd_lines(since, until):
+    for _, _, line in loki_lines('{host="ruby", job="rspamd"}', since, until):
+        yield line
+    for _, _, line in loki_lines('{host="ruby", identifier="rspamd"}', since, until):
+        yield line
+
+
+def reject_reason(text):
+    m = re.search(r"blocked using (\S+?)[;,]?(?:\s|$)", text)
+    if m:
+        return f"DNSBL {m.group(1)}"
+    text = re.sub(r"^<[^>]*>: ", "", text).split(";")[0]
+    return text.split(":")[0].strip()[:60] or "other"
+
+
+def mail_stats(lines, rspamd):
+    origin, account, sender, final = {}, {}, {}, {}
+    deferred = set()
+    rejects, reject_rcpt_dom, milter = collections.Counter(), collections.Counter(), collections.Counter()
+    connections = seen = 0
+    for _, ident, msg in lines:
+        if not ident.startswith("postfix"):
+            continue
+        seen += 1
+        parts = ident.split("/")
+        agent, instance = parts[-1], (parts[1] if len(parts) > 2 else "")
+        r = REJECT.search(msg)
+        if r:
+            is_milter, code, dsn, text, frm, to = r.groups()
+            klass = code or dsn
+            if is_milter:
+                milter["rejected" if klass == "5" else "deferred (4xx)"] += 1
+            else:
+                rejects[reject_reason(text)] += 1
+            if to:
+                reject_rcpt_dom[domain(to)] += 1
+            continue
+        if agent == "smtpd" and instance in PUBLIC and msg.startswith("connect from"):
+            connections += 1
+            continue
+        m = QID.match(msg)
+        if not m:
+            continue
+        qid, rest = m.groups()
+        if agent == "smtpd":
+            c = CLIENT.match(rest)
+            if c:
+                client, user = c.groups()
+                if user or instance in SUBMISSION:
+                    origin[qid] = "submitted"
+                    account[qid] = user or "?"
+                elif re.search(r"\[(127\.0\.0\.1|::1)\]$", client):
+                    origin[qid] = "local"
+                else:
+                    origin[qid] = "inbound"
+        elif agent == "pickup":
+            origin[qid] = "local"
+        elif agent == "qmgr":
+            f = QFROM.match(rest)
+            if f:
+                sender[qid] = f.group(1)
+        elif agent in MAILBOX_AGENTS | {"smtp", "error", "discard"}:
+            d = DELIVERY.search(rest)
+            if d:
+                rcpt, relay, status = d.groups()
+                if status == "deferred":
+                    deferred.add((qid, rcpt))
+                final[(qid, rcpt)] = (agent, status)
+
+    received = collections.Counter()
+    sent = collections.defaultdict(collections.Counter)
+    forwarded = collections.defaultdict(collections.Counter)
+    system = collections.defaultdict(collections.Counter)
+    by_account, senders_in, status_total = collections.Counter(), collections.Counter(), collections.Counter()
+    for (qid, rcpt), (agent, status) in final.items():
+        o = origin.get(qid, "local")
+        status_total[status] += 1
+        if agent in MAILBOX_AGENTS and status == "sent":
+            received[domain(rcpt)] += 1
+            if o == "inbound":
+                senders_in[org_domain(domain(sender.get(qid, "")))] += 1
+            continue
+        bucket = {"submitted": sent, "inbound": forwarded}.get(o, system)
+        dest = domain(rcpt) if o != "local" else org_domain(domain(rcpt))
+        bucket[dest][status] += 1
+        if o == "submitted":
+            by_account[account.get(qid, "?")] += 1
+    delayed = sum(1 for k in deferred if final.get(k, (None, ""))[1] == "sent")
+
+    actions = collections.defaultdict(collections.Counter)
+    scores = []
+    for line in rspamd:
+        m = RSPAMD.search(line)
+        if m:
+            qid, action, score = m.groups()
+            o = origin.get(qid, "unknown")
+            actions[o][action] += 1
+            if o == "inbound":
+                scores.append(float(score))
+    return dict(seen=seen, origin=origin, received=received, sent=sent, forwarded=forwarded,
+                system=system, by_account=by_account, senders_in=senders_in, rejects=rejects,
+                milter=milter, reject_rcpt_dom=reject_rcpt_dom, actions=actions, scores=scores,
+                connections=connections, delayed=delayed, status_total=status_total)
+
+
+def per_domain(counters, limit=25):
+    rows = []
+    for dom, c in sorted(counters.items(), key=lambda kv: (-sum(kv[1].values()), kv[0])):
+        rows.append([dom, n(sum(c.values())), n(c["sent"]), n(c["deferred"]),
+                     n(c["bounced"] + c["expired"])])
+    out = rows[:limit]
+    if len(rows) > limit:
+        rest = rows[limit:]
+        out.append([f"({len(rest)} more)", n(sum(int(r[1].replace(",", "")) for r in rest)), "", "", ""])
+    return out
+
+
+def mail_totals(s):
+    origins = collections.Counter(s["origin"].values())
+    inbound = s["actions"].get("inbound", collections.Counter())
+    return {
+        "connections": s["connections"],
+        "accepted": origins["inbound"],
+        "delivered": sum(s["received"].values()),
+        "forwarded": sum(sum(c.values()) for c in s["forwarded"].values()),
+        "submitted": origins["submitted"],
+        "sent": sum(sum(c.values()) for c in s["sent"].values()),
+        "rejected": sum(s["rejects"].values()) + s["milter"]["rejected"],
+        "junk": inbound["add header"] + inbound["rewrite subject"],
+        "bounced": s["status_total"]["bounced"] + s["status_total"]["expired"],
+    }
+
+
+def mail_section(s, before):
+    out = ["MAIL ON RUBY", ""]
+    if s["seen"] == 0:
+        issue("no Postfix log lines in Loki for the week – is ruby shipping its journal?")
+        out.append("  No Postfix log lines for the week, so there is nothing to count.")
+        return out
+    t, b = mail_totals(s), mail_totals(before) if before and before["seen"] else {}
+    labels = [
+        ("connections", "SMTP connections on :25"),
+        ("accepted", "Messages accepted from the internet"),
+        ("delivered", "  delivered to mailboxes (recipients)"),
+        ("forwarded", "  forwarded on (recipients)"),
+        ("submitted", "Messages submitted by accounts"),
+        ("sent", "  sent out (recipients)"),
+        ("rejected", "Rejected (Postfix and rspamd)"),
+        ("junk", "Delivered to Junk"),
+        ("bounced", "Bounced or expired (recipients)"),
+    ]
+    out += table([[label, n(t[k]), change(t[k], b.get(k))] for k, label in labels],
+                 ["Week", "Count", "vs last week"])
+    note("Mail on ruby: " + "; ".join(f"{label.strip()} {t[k]} ({change(t[k], b.get(k)) or 'n/a'})"
+                                      for k, label in labels))
+    out += ["", "Delivered to mailboxes, by recipient domain"]
+    out += table([[d, n(c)] for d, c in s["received"].most_common()], ["Domain", "Recipients"])
+    out += ["", "Sent by accounts, by destination domain"]
+    out += table(per_domain(s["sent"]), ["Domain", "Total", "Sent", "Deferred", "Failed"])
+    out += ["", "Sent, by account"]
+    out += table([[a, n(c)] for a, c in s["by_account"].most_common()], ["Account", "Recipients"])
+    out += ["", "Forwarded, by destination domain"]
+    out += table(per_domain(s["forwarded"]), ["Domain", "Total", "Sent", "Deferred", "Failed"])
+    out += ["", "Received from the internet, by sender's organisation (top 15)"]
+    out += table([[d, n(c)] for d, c in s["senders_in"].most_common(15)], ["Domain", "Recipients"])
+    out += ["", "Filtering"]
+    rows = [[f"Postfix: {r}", n(c)] for r, c in s["rejects"].most_common(12)]
+    for o in ("inbound", "submitted", "local", "unknown"):
+        for a, c in sorted(s["actions"].get(o, {}).items(), key=lambda kv: -kv[1]):
+            rows.append([f"rspamd, {o}: {a}", n(c)])
+    out += table(rows, ["Verdict", "Count"])
+    if not s["actions"]:
+        issue("no rspamd verdicts in Loki for the week")
+    failed = sum(c["bounced"] + c["expired"] for c in s["sent"].values())
+    if t["sent"] >= 20 and failed / t["sent"] > 0.05:
+        issue(f"{failed} of {t['sent']} recipients of mail sent by accounts bounced or expired")
+    return out
+
+
+# ---------------------------------------------------------------- web on ruby
+
+COMBINED = re.compile(r'^(\S+) \S+ \S+ \[[^\]]+\] "(?:\S+ (\S+)[^"]*|[^"]*)" (\d{3}) (\d+|-) "[^"]*" "([^"]*)"')
+INTERNAL = re.compile(r"^(127\.|::1$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|fd)")
+
+
+def web_stats(since, until):
+    hosts = collections.defaultdict(lambda: {"req": 0, "bytes": 0, "ips": set(), "4xx": 0,
+                                             "5xx": 0, "probe": 0, "internal": 0})
+    status, clients, agents = collections.Counter(), collections.Counter(), collections.Counter()
+    for _, labels, line in loki_lines('{host="ruby", job="nginx"}', since, until):
+        m = COMBINED.match(line)
+        if not m:
+            continue
+        ip, url, code, size, ua = m.groups()
+        h = hosts[labels.get("site", "(default server)")]
+        b = int(size) if size != "-" else 0
+        h["req"] += 1
+        h["bytes"] += b
+        h["ips"].add(ip)
+        status[code[0] + "xx"] += 1
+        if code[0] in "45":
+            h[code[0] + "xx"] += 1
+        if "Blackbox Exporter" in ua:
+            h["probe"] += 1
+        elif INTERNAL.match(ip):
+            h["internal"] += 1
+        else:
+            clients[ip] += 1
+            agents[ua[:70] or "-"] += 1
+    return dict(hosts={k: v for k, v in hosts.items() if v["req"]}, status=status,
+                clients=clients, agents=agents)
+
+
+def web_section(w, before):
+    out = ["WEB ON RUBY (nginx)", ""]
+    if not w["hosts"]:
+        issue("no nginx requests in Loki for the week – is ruby shipping its access logs?")
+        out.append("  No requests logged for the week.")
+        return out
+    hosts = w["hosts"]
+    req = sum(h["req"] for h in hosts.values())
+    byt = sum(h["bytes"] for h in hosts.values())
+    req_before = sum(h["req"] for h in before["hosts"].values()) if before else 0
+    out += table([
+        ["Requests", n(req), change(req, req_before)],
+        ["Bandwidth served (response bodies)", human(byt), ""],
+        ["Responses 2xx / 3xx / 4xx / 5xx",
+         " / ".join(n(w["status"][c]) for c in ("2xx", "3xx", "4xx", "5xx")), ""],
+    ], ["Week", "Value", "vs last week"])
+    rows = []
+    for name, h in sorted(hosts.items(), key=lambda kv: -kv[1]["req"]):
+        rows.append([name, n(h["req"]), human(h["bytes"]), n(len(h["ips"])), n(h["4xx"]), n(h["5xx"])])
+        if h["req"] - h["probe"] >= 100 and h["5xx"] / h["req"] > 0.05:
+            issue(f"web: {name} answered {100 * h['5xx'] / h['req']:.0f}% of requests with 5xx")
+        note(f"  site {name}: {h['req']} requests, {human(h['bytes'])}, "
+             f"{h['4xx']} 4xx, {h['5xx']} 5xx")
+    note(f"Web on ruby: {req} requests ({change(req, req_before) or 'n/a'} on last week), {human(byt)} served.")
+    out += ["", "By site, busiest first"]
+    out += table(rows, ["Site", "Requests", "Bandwidth", "Clients", "4xx", "5xx"])
+    out += ["", "Busiest internet clients (top 10)"]
+    out += table([[ip, n(c)] for ip, c in w["clients"].most_common(10)], ["Address", "Requests"])
+    out += ["", "Commonest user agents from the internet (top 10)"]
+    out += table([[ua, n(c)] for ua, c in w["agents"].most_common(10)], ["User agent", "Requests"])
+    return out
+
+
+# ---------------------------------------------------------------- Claude
+
+def interpret(period):
+    """Claude's reading of the summary. Returns (verdict, text) or raises."""
+    brief = open(CONF["PROMPT"]).read()
+    facts = "\n".join([f"Week: {period}", "", "Issues found by the checks:"]
+                      + ([f"- {i}" for i in issues] or ["- none"]) + ["", "Figures:"] + summary)
+    task = f"{brief}\n\n<report-data>\n{facts}\n</report-data>\n"
+    with tempfile.TemporaryDirectory() as cwd:   # nothing to read, no project settings
+        r = subprocess.run(
+            ["claude", "-p", "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+             "--max-turns", "2", "--max-budget-usd", "0.50", "--output-format", "text"],
+            input=task, capture_output=True, text=True, timeout=600, cwd=cwd)
+    if r.returncode != 0:
+        raise RuntimeError(f"claude exited {r.returncode}: {r.stderr.strip()[-300:]}")
+    text = r.stdout.strip()
+    first, _, rest = text.partition("\n")
+    m = re.match(r"VERDICT:\s*(smooth sailing|needs attention)\s*$", first.strip(), re.I)
+    if not m:
+        raise RuntimeError(f"no verdict line in Claude's answer: {first[:100]!r}")
+    return m.group(1).lower(), rest.strip()
+
+
+def verdict_line(claude_verdict):
+    """The subject's verdict. The checks decide; Claude can only add concern."""
+    if issues:
+        return f"needs attention ({len(issues)})"
+    if claude_verdict == "needs attention":
+        return "needs attention (Claude)"
+    return "smooth sailing"
+
+
+# ---------------------------------------------------------------- main
+
+def week(args, tz):
+    if args.week_ending:
+        end = dt.datetime.combine(dt.date.fromisoformat(args.week_ending), dt.time(), tz)
+    else:
+        today = dt.datetime.now(tz).date()
+        end = dt.datetime.combine(today - dt.timedelta(days=today.weekday()), dt.time(), tz)
+    return end - dt.timedelta(days=7), end
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--stdout", action="store_true", help="print instead of mailing")
+    ap.add_argument("--no-claude", action="store_true", help="skip the interpretation")
+    ap.add_argument("--week-ending", help="Monday the week ends on, YYYY-MM-DD (default: the last one)")
+    args = ap.parse_args()
+    load_conf()
+
+    tz = ZoneInfo(CONF["REPORT_TZ"])
+    start, end = week(args, tz)
+    since, until = start.timestamp(), end.timestamp()
+    prev = (since - 7 * 86400, since)
+    period = f"{start:%a %-d %b} – {(end - dt.timedelta(days=1)):%a %-d %b %Y}"
+    prom = Prom(CONF["PROM_URL"], until)
+
+    def mail():
+        return mail_section(mail_stats(postfix_lines(since, until), rspamd_lines(since, until)),
+                            mail_stats(postfix_lines(*prev), rspamd_lines(*prev)))
+
+    def web():
+        return web_section(web_stats(since, until), web_stats(*prev))
+
+    body = []
+    for name, fn in (
+        ("incidents", lambda: incident_section(since, until)),
+        ("actions", lambda: actions_section(since, until)),
+        ("backups", lambda: backup_section(prom)),
+        ("hosts", lambda: lab_section(prom, until - since)),
+        ("mail", mail),
+        ("web", web),
+    ):
+        try:
+            body += fn() + ["", ""]
+        except Exception as e:  # one broken section must not stop the report
+            issue(f"the {name} section could not be built: {type(e).__name__}: {e}")
+            body += [f"{name.upper()}: not available – {e}", "", ""]
+
+    claude_verdict, reading = None, ""
+    if not args.no_claude:
+        try:
+            claude_verdict, reading = interpret(period)
+        except Exception as e:
+            reading = f"(No interpretation this week: {type(e).__name__}: {str(e)[:200]})"
+    verdict = verdict_line(claude_verdict)
+
+    head = [f"Estate report, {period}", "", f"Verdict: {verdict}", ""]
+    if reading:
+        head += [reading, ""]
+    head += ["ISSUES FOUND BY THE CHECKS"] + ([f"  ✗ {i}" for i in issues] or ["  none"])
+    text = "\n".join(head + ["", "", "THE FIGURES", "", ""] + body).rstrip() + "\n"
+    subject = f"Estate weekly: {verdict} – {period}"
+    if args.stdout:
+        print(subject, "", text, sep="\n")
+        return
+    for key in ("REPORT_TO", "SMTP_USER", "SMTP_PASSWORD"):
+        if not CONF[key]:
+            sys.exit(f"{key} is not set ({ENV_FILE})")
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"Estate report <{CONF['REPORT_FROM'] or CONF['SMTP_USER']}>"
+    msg["To"] = CONF["REPORT_TO"]
+    msg.set_content(text, charset="utf-8")
+    with smtplib.SMTP(CONF["SMTP_HOST"], int(CONF["SMTP_PORT"]), timeout=60) as s:
+        s.starttls(context=ssl.create_default_context())
+        s.login(CONF["SMTP_USER"], CONF["SMTP_PASSWORD"])
+        s.send_message(msg)
+
+
+if __name__ == "__main__":
+    main()

@@ -40,6 +40,7 @@ sys.exit(bad)'
 
 runbook_tests() { python3 -m unittest discover -s runbooks/tests -q; }
 offsite_tests() { python3 -m unittest discover -s offsite/tests -q; }
+report_tests() { python3 -m unittest discover -s estate-report/tests -q; }
 
 step "no secrets in the history" scan_secrets
 step "OpenTofu is formatted" tofu_fmt
@@ -50,6 +51,7 @@ step "infra and talos scripts are clean" shell_infra
 step "Python parses" python_syntax
 step "the runbook engine's tests pass" runbook_tests
 step "the off-site script's tests pass" offsite_tests
+step "the weekly report's tests pass" report_tests
 
 echo
 if ((failed)); then echo "$failed check(s) failed"; exit 1; fi

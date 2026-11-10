@@ -1,0 +1,7 @@
+---
+estate_report_source: "{{ role_path }}/../../../../estate-report/lexie"
+estate_report_private: >-
+  {{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE')
+     | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}
+estate_report_secrets: "{{ lookup('ansible.builtin.file', estate_report_private ~ '/estate-report/secrets.env') }}"
+estate_report_grafana: "{{ lookup('ansible.builtin.file', estate_report_private ~ '/grafana-viewer-token') }}"
