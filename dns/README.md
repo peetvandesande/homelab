@@ -98,8 +98,9 @@ Prime Video rather than just telemetry.
 and then runs `rec_control reload-lua-config` — `rpzFile()` reads from disk
 once at load and does not poll.
 
-The updater refuses to install a feed that fails to download, has no SOA, or
-falls under the line-count tripwire in the config. A stale feed beats an empty
+The updater refuses to install a feed that fails to download, has no SOA, holds
+a different number of entries from its own header (so it is truncated), or
+falls under the low floor in the config. A stale feed beats an empty
 one silently unblocking everything. A feed that has *never* downloaded has
 nothing to fall back on and `rpzFile()` on a missing file is a fatal startup
 error, so `dns.yml` asserts every declared feed is present before it restarts
