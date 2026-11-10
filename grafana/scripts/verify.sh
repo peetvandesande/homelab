@@ -108,6 +108,9 @@ RULE_UIDS=(
   # backup.yaml
   backup-restore-test-stale backup-stale sally-certificate-expiring
   sally-pool-unhealthy sally-tasks-failed
+  # offsite.yaml
+  offsite-backup-large-change offsite-backup-stale offsite-lock-expiring
+  offsite-maintain-stale offsite-storage-high offsite-test-stale
   # apt.yaml
   apt-not-patching apt-reboot-required apt-security-pending
   apt-services-need-restart

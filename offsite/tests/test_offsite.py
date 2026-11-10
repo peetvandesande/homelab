@@ -50,7 +50,8 @@ class RenewLocks(unittest.TestCase):
             ("data/b", "1", True, 200, 85),    # current, plenty left: leave
             ("data/c", "1", False, 300, 10),   # deleted by restic: let it expire
         ])
-        stored, objects, soonest = offsite.renew_locks(bucket, "b")
+        stored, objects, soonest, failed = offsite.renew_locks(bucket, "b")
+        self.assertEqual(failed, 0)
         self.assertEqual(bucket.puts, ["data/a"])
         self.assertEqual((stored, objects), (600, 3))
         self.assertGreater(bucket.until[("data/a", "1")], NOW + dt.timedelta(days=89))
@@ -61,6 +62,20 @@ class RenewLocks(unittest.TestCase):
         offsite.renew_locks(bucket, "b")
         floor = NOW + dt.timedelta(days=offsite.RENEW_DAYS)
         self.assertTrue(all(until >= floor for until in bucket.until.values()))
+
+
+class Failures(unittest.TestCase):
+    def test_one_failure_does_not_stop_the_rest(self):
+        bucket = FakeBucket([("bad", "1", True, 1, 10), ("good", "1", True, 1, 10)])
+        real = bucket.get_object_retention
+
+        def flaky(Bucket, Key, VersionId):
+            if Key == "bad":
+                raise TimeoutError("GatewayTimeout")
+            return real(Bucket=Bucket, Key=Key, VersionId=VersionId)
+        bucket.get_object_retention = flaky
+        *_, failed = offsite.renew_locks(bucket, "b")
+        self.assertEqual((failed, bucket.puts), (1, ["good"]))
 
 
 class Timestamps(unittest.TestCase):

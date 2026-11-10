@@ -131,7 +131,10 @@ def s3_client(env):
         "s3", endpoint_url=f"{scheme}://{endpoint}", region_name=region,
         aws_access_key_id=env["AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=env["AWS_SECRET_ACCESS_KEY"],
+        # Hetzner answers the odd request with a timeout, so retry patiently.
         config=Config(s3={"addressing_style": "path"},
+                      retries={"mode": "standard", "max_attempts": 10},
+                      connect_timeout=10, read_timeout=60,
                       request_checksum_calculation="when_required",
                       response_checksum_validation="when_required"))
     return client, bucket.strip("/")
@@ -146,9 +149,10 @@ def versions(client, bucket):
 
 
 def renew_locks(client, bucket):
+    """Returns stored bytes, versions, the soonest lock expiry and how many failed."""
     now = dt.datetime.now(dt.timezone.utc)
     floor, target = now + dt.timedelta(days=RENEW_DAYS), now + dt.timedelta(days=LOCK_DAYS)
-    stored = objects = renewed = 0
+    stored = objects = renewed = failed = 0
     soonest = target
     for kind, item in versions(client, bucket):
         if kind != "version":
@@ -157,18 +161,24 @@ def renew_locks(client, bucket):
         stored += item["Size"]
         if not item["IsLatest"]:
             continue
-        until = client.get_object_retention(
-            Bucket=bucket, Key=item["Key"], VersionId=item["VersionId"]
-        )["Retention"]["RetainUntilDate"]
-        if until < floor:
-            client.put_object_retention(
-                Bucket=bucket, Key=item["Key"], VersionId=item["VersionId"],
-                Retention={"Mode": "COMPLIANCE", "RetainUntilDate": target})
-            renewed += 1
-            until = target
+        # One object refusing must not leave the rest unrenewed.
+        try:
+            until = client.get_object_retention(
+                Bucket=bucket, Key=item["Key"], VersionId=item["VersionId"]
+            )["Retention"]["RetainUntilDate"]
+            if until < floor:
+                client.put_object_retention(
+                    Bucket=bucket, Key=item["Key"], VersionId=item["VersionId"],
+                    Retention={"Mode": "COMPLIANCE", "RetainUntilDate": target})
+                renewed += 1
+                until = target
+        except Exception as error:  # botocore raises several unrelated types
+            log(f"   could not renew {item['Key']}: {error}")
+            failed += 1
+            continue
         soonest = min(soonest, until)
-    log(f"   {objects} versions, {stored} bytes; renewed {renewed} locks")
-    return stored, objects, soonest
+    log(f"   {objects} versions, {stored} bytes; renewed {renewed} locks, {failed} failed")
+    return stored, objects, soonest, failed
 
 
 def cmd_maintain(env, _args):
@@ -178,13 +188,25 @@ def cmd_maintain(env, _args):
     restic(env, "prune", "--max-unused", "unlimited", "--max-repack-size", "0")
     log("== renew locks")
     client, bucket = s3_client(env)
-    stored, objects, soonest = renew_locks(client, bucket)
-    publish("offsite_maintain", {
-        "offsite_maintain_last_success_timestamp_seconds": int(time.time()),
+    stored, objects, soonest, failed = renew_locks(client, bucket)
+    metrics = {
         "offsite_bucket_stored_bytes": stored,
         "offsite_bucket_objects": objects,
         "offsite_lock_soonest_expiry_timestamp_seconds": int(soonest.timestamp()),
-    })
+        "offsite_lock_renew_failures": failed,
+    }
+    previous = TEXTFILE / "offsite_maintain.prom"
+    key = "offsite_maintain_last_success_timestamp_seconds"
+    if failed:
+        # Keep the last success as it was, so the staleness alert still counts.
+        for line in previous.read_text().splitlines() if previous.exists() else []:
+            if line.startswith(key + " "):
+                metrics[key] = line.split()[1]
+    else:
+        metrics[key] = int(time.time())
+    publish("offsite_maintain", metrics)
+    if failed:
+        die(f"{failed} locks could not be renewed; the next run tries again")
 
 
 def sha256(path):
@@ -255,15 +277,18 @@ def cmd_undelete(env, args):
     client, bucket = s3_client(env)
     markers, rewritten = [], set()
     for kind, item in versions(client, bucket):
-        if item["LastModified"] < since:
+        # restic deletes its own locks after every run; bringing one back blocks the repository.
+        if item["LastModified"] < since or item["Key"].startswith("locks/"):
             continue
         if kind == "marker":
             markers.append(item)
         elif item["IsLatest"]:
             rewritten.add(item["Key"])
     log(f"{len(markers)} delete markers since {since.isoformat()}")
-    for key in sorted(rewritten):
-        log(f"  written since then, check by hand: {key}")
+    kinds = {}
+    for key in rewritten:
+        kinds[key.split("/")[0]] = kinds.get(key.split("/")[0], 0) + 1
+    log("written since then: " + (", ".join(f"{n} in {k}" for k, n in sorted(kinds.items())) or "nothing"))
     if not args.apply:
         log("dry run; pass --apply to remove the markers")
         return

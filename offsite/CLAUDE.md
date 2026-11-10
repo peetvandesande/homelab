@@ -57,6 +57,12 @@ weekly run stays undeletable for at least 73 days. What restic itself deletes
 is no longer current, so it is not renewed and expires on its own. The renewal
 uses the same key as restic: the key could extend a lock but never shorten one.
 
+Hetzner answers the odd request with a timeout or drops a download midway, as on
+the first run on 10 November 2026: restic retries on its own, and the renewal
+retries each object and then carries on, publishing `offsite_lock_renew_failures`
+and failing the run, so the next one tries again. A renewal of about 2,700 objects
+takes some 20 minutes; that is Hetzner's latency, not a fault.
+
 What this does not cover: someone with the Hetzner *account* login can close the
 account. Its password and 2FA are in the owner's Bitwarden vault only, never in
 the lab.
@@ -102,9 +108,10 @@ offsite undelete --since 2026-11-10T00:00 --apply
 restic check
 ```
 
-Pick a time before the damage started. Objects written since then are listed,
+Pick a time before the damage started. Objects written since then are counted,
 not changed: they can be a new snapshot of encrypted files, so restore from a
-snapshot older than `T` and leave those alone.
+snapshot older than `T` and leave those alone. restic's own lock files are
+skipped, since it deletes them after every run.
 
 ## Pricing
 

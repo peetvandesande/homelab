@@ -1,0 +1,310 @@
+# The off-site copy to Hetzner (homelab/offsite). Staleness treats NoData as
+# alerting, so this file follows each job's first run. Managed from homelab/grafana.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: offsite
+    folder: Homelab
+    interval: 5m
+    rules:
+      - uid: offsite-backup-stale
+        title: "Off-site backup is stale"
+        condition: B
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} has not copied off-site in over 48h"
+          description: >-
+            offsite-backup runs nightly on lexie, moby and forgejo (offsite/CLAUDE.md). journalctl -u offsite-backup on the host. NoData means the host has never published a result.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - offsite_backup_last_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [172800]
+      - uid: offsite-backup-large-change
+        title: "Off-site backup saw a large change"
+        condition: B
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} added over 10% of its data in one night"
+          description: >-
+            Mass encryption looks like this: almost everything new, nothing deduplicated. Check the host's files before anything else; if they are damaged, stop offsite-backup.timer everywhere and follow offsite/CLAUDE.md, "After a deletion". A large legitimate import also fires it once. The first run of a host is excluded.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'offsite_backup_data_added_bytes > 1e9 and offsite_backup_seed == 0 and offsite_backup_data_added_bytes / offsite_backup_processed_bytes'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0.1]
+      - uid: offsite-maintain-stale
+        title: "Off-site locks are not being renewed"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "offsite-maintain has not succeeded in over 9 days"
+          description: >-
+            It runs on lexie on Sundays and renews the Object Lock on every current file; without it the oldest files become deletable. journalctl -u offsite-maintain on lexie.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - offsite_maintain_last_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [777600]
+      - uid: offsite-lock-expiring
+        title: "An off-site lock is close to expiry"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A current file in the off-site bucket is locked for under 60 more days"
+          description: >-
+            offsite-maintain renews every current file to 90 days whenever under 80 remain, so this means renewal is failing or being refused. journalctl -u offsite-maintain on lexie.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'offsite_lock_soonest_expiry_timestamp_seconds - time()'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [5184000]
+      - uid: offsite-test-stale
+        title: "Off-site restore test is overdue"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The off-site copy has not been proven restorable in over 40 days"
+          description: >-
+            offsite-test runs on lexie on the first Sunday of the month. journalctl -u offsite-test on lexie.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - offsite_test_last_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [3456000]
+      - uid: offsite-storage-high
+        title: "Off-site storage is near the included amount"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The off-site bucket holds over 80% of the 1 TB included in the base price"
+          description: >-
+            Beyond 1 TB Hetzner bills extra storage (offsite/CLAUDE.md, "Pricing"). Locked versions count until their lock expires. Measured weekly by offsite-maintain.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'offsite_bucket_stored_bytes'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [800000000000]

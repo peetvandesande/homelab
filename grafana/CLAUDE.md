@@ -127,8 +127,12 @@ called patched — so this group must not be provisioned until every host in
 
 `backup.yaml` covers the backups to sally (`sally/CLAUDE.md`): its two staleness
 rules treat NoData as alerting, so it must follow the first backup job.
+`offsite.yaml` covers the off-site copy (`offsite/CLAUDE.md`) the same way: a
+stale backup, overdue lock renewal or restore test, a lock running short,
+storage near the included 1 TB, and a night that changed over a tenth of a
+host's data, which is what mass encryption looks like.
 
-Fifty-six rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
+Sixty-two rules in all, and **a new one goes in `verify.sh`'s `RULE_UIDS`** — the
 same requirement as `DASHBOARD_UIDS`, and for the same reason: a rule absent
 from the list is not asserted, so a provisioning error would drop it silently.
 `verify.sh` cross-checks the list against the uids in the provisioned files, so
