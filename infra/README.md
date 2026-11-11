@@ -152,8 +152,8 @@ after the table was numbered.
 
 ## Cost
 
-The transition from AI-custom-managed to standard-autonomous-managed – tasks 1 to 19
-and 22 built, from 9 to 11 November 2026 – cost **$73.96** in one Claude Code session,
+The transition from AI-custom-managed to standard-autonomous-managed – the work of
+9 to 11 November 2026 – cost **$73.96** in one Claude Code session,
 as `/cost` reported it at the end:
 
 | | |
@@ -166,8 +166,7 @@ as `/cost` reported it at the end:
 | claude-haiku-5-5 | 189.0k input, 17.1k output, 9 web searches – $0.12 |
 | Prompt cache | 713 requests, 98% of input tokens from cache |
 
-It excludes the Claude runs the lab makes itself – the responder, the weekly report –
-which are billed to their own account.
+It excludes the Claude runs the lab makes itself: the responder and the weekly report.
 
 ## Using it
 
