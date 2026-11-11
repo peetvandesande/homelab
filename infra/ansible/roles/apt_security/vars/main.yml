@@ -29,7 +29,7 @@ apt_security_reboot_hosts:
     at: "05:10"
     latest: "05:50"
     backup: ovh
-    ovh_service: "{{ apt_security_jennie_vps }}"
+    ovh_service: vps-25b6f22d.vps.ovh.net
     units: named ssh alloy prometheus-node-exporter prometheus-blackbox-exporter
     interfaces: wg2 wg3
     # jennie waits until ruby answers mail and HTTPS, asking its own blackbox
@@ -37,7 +37,6 @@ apt_security_reboot_hosts:
     peer_probes: >-
       http://192.168.254.2:9115/probe?module=smtp_mail&target=145.239.73.18:25
       http://192.168.254.2:9115/probe?module=https_ruby&target=https://145.239.73.18/
-apt_security_jennie_vps: ""   # set once known: vps-….vps.ovh.net
 apt_security_reboot: "{{ apt_security_reboot_hosts[inventory_hostname] }}"
 apt_security_private: >-
   {{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE')
