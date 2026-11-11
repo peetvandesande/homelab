@@ -11,10 +11,18 @@
     name: alloy
     selection: hold
 
-- name: Let Alloy read the journal
+- name: See whether this host runs rspamd
+  ansible.builtin.getent:
+    database: group
+    key: _rspamd
+    fail_key: false
+
+# The journal needs the first two, nginx's logs adm. rspamd keeps its log in a
+# directory only its own group may enter, so Alloy joins that group where it exists.
+- name: Let Alloy read the journal and the log files
   ansible.builtin.user:
     name: alloy
-    groups: [systemd-journal, adm]
+    groups: "{{ ['systemd-journal', 'adm'] + (['_rspamd'] if ansible_facts.getent_group.get('_rspamd') else []) }}"
     append: true
   notify: Restart Alloy
 
