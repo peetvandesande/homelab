@@ -85,6 +85,17 @@ scrape_configs:
       - targets: ['forgejo.home:9100']
         labels: {role: forgejo }
 
+  # ruby and jennie, the OVH servers. Plain HTTP: neither holds a lab
+  # certificate, and node-exporter listens only on dummy0, reachable only
+  # through the WireGuard tunnels; each server's firewall admits this host
+  # alone. Not in FLEET – they are not enrolled.
+  - job_name: outside-node
+    static_configs:
+      - targets: ['ruby.home:9100']
+        labels: {role: ruby }
+      - targets: ['jennie.home:9100']
+        labels: {role: jennie }
+
   # Alloy, the log shipper, on every enrolled host (homelab/alloy). Same fourteen
   # targets as `node` - keep the two lists identical; a host in one and not
   # the other is either unmonitored or unlogged.

@@ -53,7 +53,9 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    enrolled fails its scrape the moment node-exporter goes TLS.
 
 5. **Every scrape job is TLS except `jellyfin`, `navidrome`, `traefik`, `blackbox`,
-   `outside-*` and the broken `pve`.** `blackbox` is this host's own exporter
+   `outside-*` and the broken `pve`.** `outside-node` scrapes ruby's and
+   jennie's node-exporters by their `.home` names, which resolve to the
+   tunnel addresses. `blackbox` is this host's own exporter
    on 127.0.0.1:9115 (invariant 7). The `outside-*` blackbox exporters on ruby and jennie
    listen only on their dummy0 address, reachable only through WireGuard, and
    neither server holds a lab certificate - `outside/CLAUDE.md`. Jellyfin and Navidrome each serve `/metrics` on the same listener as
