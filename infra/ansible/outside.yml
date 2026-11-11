@@ -9,12 +9,11 @@
 #   ssh -M -o ControlPath='~/.ssh/cm-%r@%h:%p' peet@192.168.254.2
 #   ssh -M -o ControlPath='~/.ssh/cm-%r@%h:%p' peet@192.168.254.254
 #
-# Then, from infra/ansible in another terminal, point Ansible at those sessions.
-# The address above has to be the inventory's ansible_host, or the path differs.
-#
-#   export ANSIBLE_SSH_ARGS='-o BatchMode=yes -o StrictHostKeyChecking=yes
-#     -o UserKnownHostsFile=known_hosts -o ControlMaster=auto
-#     -o ControlPath=~/.ssh/cm-%r@%h:%p'
+# inventory/outside.yml points Ansible at those sessions, so nothing needs
+# exporting; run it from infra/ansible in another terminal. The address above
+# has to be the inventory's ansible_host, or the socket's name differs. A Host
+# block in ~/.ssh/config with the same ControlMaster and ControlPath makes a
+# plain `ssh jennie` do the same.
 #
 # Run one host at a time, as Ansible asks for one sudo password per run. Use
 # your own, and always pass --ask-become-pass: sudo tried without a password
