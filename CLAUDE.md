@@ -482,9 +482,6 @@ moves. They have been wrong before — the `node` job was scraping .50/.51 as
 "jellyfin"/"navidrome" long after both moved to .60/.61. If you renumber
 anything, grep that file.
 
-Known-broken and pre-existing: the `pve` job is down because the
-prometheus-pve-exporter on 127.0.0.1:9221 is not running.
-
 ## TLS
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS

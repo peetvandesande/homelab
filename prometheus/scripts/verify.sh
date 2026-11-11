@@ -25,8 +25,6 @@ while read -r job inst health err; do
   if [[ $health == up ]]; then pass "$job $inst up"
   elif [[ $job == sally ]]; then
     warn "$job $inst is down" "expected for most of the day: sally powers off when its backups finish"
-  elif [[ $job == pve ]]; then
-    warn "$job $inst is down" "pre-existing: prometheus-pve-exporter is not running on 127.0.0.1:9221"
   else bad "$job $inst up" "$health $err"; fi
 done < /tmp/hl-targets.txt
 
@@ -36,11 +34,11 @@ for j in node prometheus loki; do
 done
 # Anchored to indented config lines: an unanchored grep also matches the
 # explanatory comment at the top of the file and reports five.
-# Every job except `pve`, `jellyfin`, `navidrome` and `traefik` should be
-# https. pve targets a local exporter that was never migrated (and is not
-# running); jellyfin and navidrome are plain HTTP on purpose, /metrics sharing
+# Every job except `jellyfin`, `navidrome`, `traefik` and `outside-*` should be
+# https. jellyfin and navidrome are plain HTTP on purpose, /metrics sharing
 # a listener with the deliberately unencrypted UI; traefik is a stack migrated
-# from the old moby that carries its own certificates. The blackbox jobs carry
+# from the old moby that carries its own certificates; ruby and jennie are
+# reached over the tunnels. The blackbox jobs carry
 # no scheme. So 12 is the correct answer.
 n=$(ssh -o BatchMode=yes root@$HOST "grep -cE '^[[:space:]]+scheme: https' /etc/prometheus/prometheus.yml" 2>/dev/null)
 if [[ "$n" == 12 ]]; then pass "12 jobs configured with scheme: https (sally, prometheus, node, alloy, dns, loki, docker, grafana, forgejo, n8n, n8n-sogode, nvidia-gpu)"

@@ -94,7 +94,7 @@ merged by it (`responder/CLAUDE.md` invariant 9).
    the unit fails and `systemd unit failed` reports it.
 5. **Thresholds match the alert rules where one exists** – certificates at 7
    days (lab) and 14 (public), availability below 99% of the week. Hosts off
-   by choice (`IGNORE_HOSTS`, hermes) and jobs known down (`IGNORE_JOBS`, pve)
+   by choice (`IGNORE_HOSTS`, hermes) and jobs known down (`IGNORE_JOBS`, none today)
    are shown but never an issue, and are excluded from job and probe averages.
 6. **It runs inside the lab.** A home outage delays it until the connection is
    back; the Healthchecks.io heartbeat, not this mail, reports outages.

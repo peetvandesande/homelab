@@ -57,7 +57,7 @@ CONF = {
     "GRAFANA_TOKEN": "",
     "PROMPT": "/etc/estate-report/prompt.md",
     # Scrape jobs known to be down, reported but not counted as issues.
-    "IGNORE_JOBS": "pve",
+    "IGNORE_JOBS": "",
     # Hosts off by choice most of the time: shown, never an issue. hermes runs
     # only while a lab needs it.
     "IGNORE_HOSTS": "hermes",

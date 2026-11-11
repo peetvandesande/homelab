@@ -117,7 +117,7 @@ numbered.
 | 1 | Repo layout, pinned tools, read-only Ansible reach | Done |
 | 2 | Secrets handling a person can take over | Done |
 | 3 | Forgejo primary, deploy runner, CI that lints and plans only | Done |
-| 4 | PBS on sally, guest backups, a tested restore | |
+| 4 | PBS on sally, guest backups, a tested restore | Done 11 Nov 2026: sally wakes at night, backs up, mails the result and powers off – `sally/CLAUDE.md` |
 | 5 | Import all guests into OpenTofu, with a no-change plan | Done |
 | 6 | Fleet roles: hygiene, apt, node-exporter, Alloy | Done |
 | 7 | CA and enrolment | Done |

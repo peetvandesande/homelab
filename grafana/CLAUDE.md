@@ -180,10 +180,11 @@ substring match passed `disk-low` on `ha-vm-disk-low` alone.
    structural, mask it in `fleet/masked-units` rather than adding a `name!=`
    to this query — an exclusion here hides the next real failure too.
 
-10. **The `pve` job is excluded from the target-down rules.** Its exporter on
-   127.0.0.1:9221 has never run, and one permanently firing alert teaches you to
-   ignore all of them. Fix the exporter or delete the job; do not "fix" it by
-   widening the rule.
+10. **A target known to be down is fixed or deleted, never excluded.** One
+   permanently firing alert teaches you to ignore all of them. The `pve` job sat
+   excluded for weeks, down because it scraped `127.0.0.1:9221` on prometheus
+   while the exporter ran on lenora; it was retired on 11 November 2026, as
+   every guest has its own node-exporter.
 
 11. **Three rules query Loki rather than a metric, because the router cannot
     publish one.** It has no node-exporter and so no textfile collector, so a

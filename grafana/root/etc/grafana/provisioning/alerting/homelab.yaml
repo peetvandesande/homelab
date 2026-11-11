@@ -14,10 +14,6 @@
 # healthy system still produces a series and "no data" means something is
 # genuinely missing rather than fine.
 #
-# The `pve` job is deliberately excluded from the target-down rules: the
-# prometheus-pve-exporter on 127.0.0.1:9221 is not running, and a permanently
-# firing alert teaches you to ignore the lot.
-#
 # Delivery is provisioned separately, in notifications.yaml: every rule here
 # goes to Home Assistant and on to the phone, routed by its severity label.
 apiVersion: 1
@@ -699,7 +695,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} on {{ $labels.role }} is down"
           description: >-
-            The service's own metrics endpoint, not the host. The pve job is excluded on purpose - its exporter has never run.
+            The service's own metrics endpoint, not the host.
         noDataState: NoData
         execErrState: Alerting
         isPaused: false

@@ -659,7 +659,7 @@
           }
         ]
       },
-      "description": "Every job, not just node. The pve job is known-broken: the prometheus-pve-exporter on 127.0.0.1:9221 is not running, and the alerts deliberately exclude it so it does not sit permanently firing."
+      "description": "Every job, not just node."
     },
     {
       "type": "timeseries",

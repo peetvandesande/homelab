@@ -27,7 +27,7 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
 
 3. **Lab-host targets are `.home` names; probe subjects stay IP literals.**
    The scrape jobs — `node`, `alloy`, `dns`, `jellyfin`, `navidrome`, `loki`,
-   `grafana`, `docker`, `traefik`, `pve` — were renamed from IPs in the IPv6
+   `grafana`, `docker`, `traefik` — were renamed from IPs in the IPv6
    rollout, and verify against the DNS SAN every certificate already carried.
    The self-scrape stays `localhost:9090`, which is in this host's SANs too.
 
@@ -52,8 +52,8 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    enrolled but not listed here is unmonitored; a host listed here but not
    enrolled fails its scrape the moment node-exporter goes TLS.
 
-5. **Every scrape job is TLS except `jellyfin`, `navidrome`, `traefik`, `blackbox`,
-   `outside-*` and the broken `pve`.** `outside-node` scrapes ruby's and
+5. **Every scrape job is TLS except `jellyfin`, `navidrome`, `traefik`, `blackbox`
+   and `outside-*`.** `outside-node` scrapes ruby's and
    jennie's node-exporters by their `.home` names, which resolve to the
    tunnel addresses. `blackbox` is this host's own exporter
    on 127.0.0.1:9115 (invariant 7). The `outside-*` blackbox exporters on ruby and jennie
@@ -89,9 +89,3 @@ Deploy **after** `node-exporter/`, and **before** `grafana/`.
    `root/etc/sysctl.d/60-ping-group-range.conf` enables unprivileged echo
    sockets instead, for gids 0-65535: in a user namespace the range may only
    hold mapped gids, so systemd's usual `0 2147483647` is refused.
-
-## Known broken, pre-existing
-
-The `pve` job is down because `prometheus-pve-exporter` is not running on
-`127.0.0.1:9221`. Nothing to do with TLS; it was down before this change.
-`verify.sh` reports it as WARN.
