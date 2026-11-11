@@ -6,3 +6,6 @@ systemd unit failed
 systemd unit stuck starting
 Root filesystem nearly full
 Memory nearly exhausted
+# Not a Grafana rule: what the weekly estate report found needing attention
+# (estate-report/), one alert per issue, its `key` label naming it.
+Weekly report

@@ -133,12 +133,16 @@ def push(title, text, status="firing"):
 def worker():
     while True:
         alert = work.get()
-        name = alert.get("labels", {}).get("alertname", "unknown")
+        labels = alert.get("labels", {})
+        name = labels.get("alertname", "unknown")
+        if labels.get("key"):   # the weekly report's items share one alert name
+            name = f"{name}: {labels['key']}"[:90]
         try:
             report = investigate(alert)
             verdict, text = split_verdict(report)
             os.makedirs(REPORTS, exist_ok=True)
-            base = f"{time.strftime('%Y%m%dT%H%M%S')}-{name.replace(' ', '_')}-{verdict}.md"
+            safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", name)[:80]   # label text is untrusted
+            base = f"{time.strftime('%Y%m%dT%H%M%S')}-{safe}-{verdict}.md"
             with open(f"{REPORTS}/{base}", "w") as f:
                 f.write(report + "\n")
             log(f"investigated {name!r} ({verdict}) -> {REPORTS}/{base}")

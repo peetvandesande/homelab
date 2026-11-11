@@ -20,12 +20,14 @@
     - { path: etc/systemd/system/estate-weekly.service, mode: "0644" }
     - { path: etc/systemd/system/estate-weekly.timer, mode: "0644" }
 
-# The mail account, the recipient and Grafana's read-only token.
+# The mail account, the recipient, Grafana's read-only token and the runbook
+# engine's. The responder's token it reads from the responder's own settings.
 - name: Install its secrets
   ansible.builtin.copy:
     content: |
       {{ estate_report_secrets }}
       {{ estate_report_grafana }}
+      {{ estate_report_runbook }}
     dest: /etc/estate-report/report.env
     owner: root
     group: responder

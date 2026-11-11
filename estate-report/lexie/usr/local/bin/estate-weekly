@@ -13,11 +13,17 @@ issue. Claude then reads a summary of them, never addresses, client IPs or
 message details, and writes the interpretation at the top. It has no tools. If
 it cannot be reached the report still goes, with the issues and a note.
 
+"Needs attention" is followed up before the mail goes (follow_up): an issue that
+matches a runbook rule goes to the runbook engine, and up to INVESTIGATE_MAX go
+to the responder, which investigates read-only and reports as it does for
+alerts. The mail gives each issue its status and does not wait for the results.
+
   estate-weekly                 mail the report for the week that just ended
-  estate-weekly --stdout        print it instead
+  estate-weekly --stdout        print it instead, and follow nothing up
   estate-weekly --no-claude     skip the interpretation
   estate-weekly --week-ending 2026-11-16
 """
+import hashlib
 import argparse
 import collections
 import datetime as dt
@@ -31,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import urllib.parse
 import urllib.request
 from email.message import EmailMessage
@@ -54,15 +61,41 @@ CONF = {
     # Hosts off by choice most of the time: shown, never an issue. hermes runs
     # only while a lab needs it.
     "IGNORE_HOSTS": "hermes",
+    # The follow-up. Both receivers bind lexie's LAN address only, and lexie's
+    # own name resolves to loopback on lexie, so they are reached by address;
+    # their certificates carry it as an IP SAN.
+    "RESPONDER_URL": "https://192.168.8.24:9095/alert",
+    "RESPONDER_TOKEN": "",
+    "RUNBOOK_URL": "https://192.168.8.24:9096/alert",
+    "RUNBOOK_TOKEN": "",
+    "RUNBOOK_RULES": "/etc/runbook/rules.toml",
+    "STATE": "/var/lib/responder/estate-report/follow-up.json",
 }
-ENV_FILE = os.environ.get("ESTATE_REPORT_ENV", "/etc/estate-report/report.env")
+# report.env, then the responder's own settings for its token: the report runs
+# as the responder's account, which can read them.
+ENV_FILES = [os.environ.get("ESTATE_REPORT_ENV", "/etc/estate-report/report.env"),
+             "/etc/responder/responder.env"]
 
-issues = []
+INVESTIGATE_MAX = 3      # investigations per report, one per section, in report order
+REPEAT_SECONDS = 6 * 86400   # an issue sent this recently is not sent again
+INVESTIGATION = "Weekly report"   # the alert name the responder knows them by
+
+issues = []    # {"text", "key", "section", "alert", "labels", "status"}
+section = ""   # the section being built, which groups issues for investigation
 summary = []   # what Claude reads: totals and states only, no personal detail
 
 
-def issue(text):
-    issues.append(text)
+def issue_key(text):
+    """Stable from week to week: numbers and dates vary, the problem does not."""
+    key = re.sub(r"(?<![a-z])\d+(?:[.:-]\d+)*(?![a-z])", "N", text.lower())
+    return re.sub(r"\s+", " ", key).strip()[:100]
+
+
+def issue(text, alert=None, labels=None):
+    """A problem the checks found. `alert` and `labels` name the Grafana rule it
+    corresponds to, where one exists, so a runbook for that rule can match."""
+    issues.append({"text": text, "key": issue_key(text), "section": section, "alert": alert,
+                   "labels": labels or {}, "status": "open"})
 
 
 def note(text):
@@ -70,11 +103,16 @@ def note(text):
 
 
 def load_conf():
-    if os.path.exists(ENV_FILE):
-        for line in open(ENV_FILE):
+    for path in ENV_FILES:
+        try:
+            lines = open(path).readlines()
+        except OSError:
+            continue
+        for line in lines:
             if line.strip() and not line.startswith("#") and "=" in line:
                 key, _, value = line.partition("=")
-                CONF[key.strip()] = value.strip().strip("'\"")
+                if key.strip() in CONF:
+                    CONF[key.strip()] = value.strip().strip("'\"")
     CONF.update({k: os.environ[k] for k in CONF if os.environ.get(k)})
 
 
@@ -363,7 +401,8 @@ def lab_section(prom, window):
         if avail[h] < 0.99 and h not in quiet:
             issue(f"{h}: scraped only {100 * avail[h]:.1f}% of the week ({down:.0f} min down)")
         if disk.get(h, 0) > 85:
-            issue(f"{h}: root filesystem {disk[h]:.0f}% full")
+            issue(f"{h}: root filesystem {disk[h]:.0f}% full", alert="Root filesystem nearly full",
+                  labels={"instance": f"{h}.home:9100"})
         if h in quiet:
             note(f"  host {h}: off by choice, up {100 * avail[h]:.0f}% of the week")
             continue
@@ -415,20 +454,21 @@ def lab_section(prom, window):
     note("Certificates, days left: " + "; ".join(f"{r[0]} {r[1]}" for r in rows))
 
     now = []
-    for expr, what in (
-        (f'node_systemd_unit_state{{{HOST_JOBS},state="failed"}} == 1', "unit failed"),
+    for expr, what, rule in (
+        (f'node_systemd_unit_state{{{HOST_JOBS},state="failed"}} == 1', "unit failed",
+         "systemd unit failed"),
         (f'min_over_time(node_systemd_unit_state{{{HOST_JOBS},state="activating"}}[15m]) == 1',
-         "unit stuck starting for 15 min or more"),
-        (f'apt_reboot_required{{{HOST_JOBS}}} == 1', "reboot required"),
-        (f'apt_upgrades_pending{{{HOST_JOBS},origin="security"}} > 0', "security upgrades pending"),
-        (f'apt_services_need_restart{{{HOST_JOBS}}} > 0', "services need restart after patching"),
-        ('node_zfs_zpool_state{instance=~"lenora.*",state!="online"} == 1', "ZFS pool not online"),
+         "unit stuck starting for 15 min or more", "systemd unit stuck starting"),
+        (f'apt_reboot_required{{{HOST_JOBS}}} == 1', "reboot required", None),
+        (f'apt_upgrades_pending{{{HOST_JOBS},origin="security"}} > 0', "security upgrades pending", None),
+        (f'apt_services_need_restart{{{HOST_JOBS}}} > 0', "services need restart after patching", None),
+        ('node_zfs_zpool_state{instance=~"lenora.*",state!="online"} == 1', "ZFS pool not online", None),
     ):
         for m, v in prom.q(expr, now=True):
             detail = m.get("name") or m.get("zpool") or ""
             line = f"{short(m.get('instance', '?'))}: {what}" + (f" ({detail}" + (f", {v:.0f})" if v > 1 else ")") if detail else "")
             now.append(line)
-            issue(line)
+            issue(line, alert=rule, labels={k: m[k] for k in ("instance", "name") if k in m})
     pools = sorted({m["zpool"] for m, _ in prom.q('node_zfs_zpool_state{instance=~"lenora.*",state="online"} == 1', now=True)})
     out += ["", "State at report time"]
     out += ["  " + l for l in now] or ["  No failed units, pending reboots, held patches or degraded pools."]
@@ -727,7 +767,7 @@ def interpret(period):
     """Claude's reading of the summary. Returns (verdict, text) or raises."""
     brief = open(CONF["PROMPT"]).read()
     facts = "\n".join([f"Week: {period}", "", "Issues found by the checks:"]
-                      + ([f"- {i}" for i in issues] or ["- none"]) + ["", "Figures:"] + summary)
+                      + ([f"- {i['text']}" for i in issues] or ["- none"]) + ["", "Figures:"] + summary)
     task = f"{brief}\n\n<report-data>\n{facts}\n</report-data>\n"
     with tempfile.TemporaryDirectory() as cwd:   # nothing to read, no project settings
         r = subprocess.run(
@@ -744,13 +784,134 @@ def interpret(period):
     return m.group(1).lower(), rest.strip()
 
 
-def verdict_line(claude_verdict):
+def verdict_line(claude_verdict, items=None):
     """The subject's verdict. The checks decide; Claude can only add concern."""
+    items = issues if items is None else items
+    busy = sum("under investigation" in i["status"] for i in items)
+    extra = f", {busy} under investigation" if busy else ""
     if issues:
-        return f"needs attention ({len(issues)})"
+        return f"needs attention ({len(issues)}{extra})"
     if claude_verdict == "needs attention":
-        return "needs attention (Claude)"
+        return f"needs attention (Claude{extra})"
     return "smooth sailing"
+
+
+# ---------------------------------------------------------------- follow-up
+
+def issue_lines(items):
+    """Each issue, with its status under the last of a run that shares it."""
+    out = []
+    for n, i in enumerate(items):
+        out.append(f"  ✗ {i['text']}")
+        following = items[n + 1] if n + 1 < len(items) else None
+        if not following or (following["status"], following.get("section")) != (i["status"], i.get("section")):
+            out.append(f"      → {i['status']}")
+    return out
+
+
+def fingerprint(key):
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def runbook_rules(path):
+    """{alert title: rule name} for the runbook engine's rules, or {} without them."""
+    try:
+        with open(path, "rb") as f:
+            return {r["alert"]: r["name"] for r in tomllib.load(f).get("rule", [])}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+def post_alert(url, token, alert):
+    """One firing alert, in the Grafana webhook shape both receivers take.
+    Returns how many they queued."""
+    body = json.dumps({"alerts": [dict(alert, status="firing")]}).encode()
+    reply = get_json(url, data=body, timeout=30, headers={
+        "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    return int(reply.get("queued", 0))
+
+
+def load_state(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(path, state):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        json.dump(state, f)
+    os.replace(path + ".tmp", path)
+
+
+def follow_up(items, now, send=True):
+    """Give every item a status, and act on it unless send is False.
+
+    A runbook match goes to the runbook engine, which in shadow mode only
+    records what it would run, so the item is investigated as well. Then the
+    items are grouped by section, so that symptoms of one cause (a stack down:
+    its scrape jobs, its probes) are investigated together, and up to
+    INVESTIGATE_MAX groups go to the responder, one investigation each. An item
+    sent within REPEAT_SECONDS is not sent again, so a resend after a failed
+    mail does not start a second investigation."""
+    rules = runbook_rules(CONF["RUNBOOK_RULES"])
+    state = load_state(CONF["STATE"])
+    state = {k: v for k, v in state.items() if now - v < 30 * 86400}
+    notes, groups = {}, {}
+    for i in items:
+        notes[id(i)] = []
+        rule = rules.get(i.get("alert") or "")
+        if rule:
+            labels = dict(i["labels"], alertname=i["alert"])
+            try:
+                if send:
+                    post_alert(CONF["RUNBOOK_URL"], CONF["RUNBOOK_TOKEN"],
+                               {"labels": labels, "fingerprint": fingerprint(i["key"])})
+                notes[id(i)].append(f"runbook {rule}")
+            except Exception as e:
+                notes[id(i)].append(f"runbook {rule} not reached ({type(e).__name__})")
+        last = state.get(i["key"])
+        if last and now - last < REPEAT_SECONDS:
+            when = dt.datetime.fromtimestamp(last, ZoneInfo(CONF["REPORT_TZ"])).strftime("%a %-d %b %H:%M")
+            i["status"] = (f"under investigation since {when}" if now - last < 12 * 3600
+                           else f"investigated {when}")
+        else:
+            groups.setdefault(i.get("section") or "other", []).append(i)
+    for n_group, (name, group) in enumerate(groups.items()):
+        key = f"{name}: {group[0]['key']}" + (f" and {len(group) - 1} more" if len(group) > 1 else "")
+        together = f" (with {len(group) - 1} more from {name})" if len(group) > 1 else ""
+        if n_group >= INVESTIGATE_MAX:
+            status = f"open – over this report's {INVESTIGATE_MAX} investigations"
+        elif not send:
+            status = "open – would be investigated" + together
+        else:
+            alert = {
+                "labels": {"alertname": INVESTIGATION, "key": key},
+                "annotations": {
+                    "summary": "\n".join(f"- {i['text']}" for i in group),
+                    "description": "Raised by the weekly estate report, not by a Grafana rule: "
+                                   "the problems may be days old, or already gone, and may "
+                                   "share one cause.",
+                },
+                "fingerprint": fingerprint("|".join(i["key"] for i in group)),
+            }
+            try:
+                if post_alert(CONF["RESPONDER_URL"], CONF["RESPONDER_TOKEN"], alert):
+                    status = "under investigation" + together
+                    state.update({i["key"]: now for i in group})
+                else:
+                    status = "open – the responder did not take it"
+            except Exception as e:
+                status = f"open – the responder was not reached ({type(e).__name__})"
+        for i in group:
+            i["status"] = status
+    for i in items:
+        i["status"] = "; ".join(notes[id(i)] + [i["status"]])
+    if send:
+        save_state(CONF["STATE"], state)
+    return items
 
 
 # ---------------------------------------------------------------- main
@@ -765,6 +926,7 @@ def week(args, tz):
 
 
 def main():
+    global section
     ap = argparse.ArgumentParser()
     ap.add_argument("--stdout", action="store_true", help="print instead of mailing")
     ap.add_argument("--no-claude", action="store_true", help="skip the interpretation")
@@ -795,6 +957,7 @@ def main():
         ("mail", mail),
         ("web", web),
     ):
+        section = name
         try:
             body += fn() + ["", ""]
         except Exception as e:  # one broken section must not stop the report
@@ -807,12 +970,26 @@ def main():
             claude_verdict, reading = interpret(period)
         except Exception as e:
             reading = f"(No interpretation this week: {type(e).__name__}: {str(e)[:200]})"
-    verdict = verdict_line(claude_verdict)
+    # What needs attention is followed up: the checks' issues, then Claude's
+    # concern when it saw something the checks did not.
+    items = list(issues)
+    if claude_verdict == "needs attention" and not issues:
+        items.append({"text": f"Claude's reading of the week: {reading[:700]}",
+                      "key": f"claude reading {start:%Y-%m-%d}", "section": "claude", "alert": None,
+                      "labels": {}, "status": "open"})
+    follow_up(items, time.time(), send=not args.stdout)
+    verdict = verdict_line(claude_verdict, items)
 
     head = [f"Estate report, {period}", "", f"Verdict: {verdict}", ""]
     if reading:
         head += [reading, ""]
-    head += ["ISSUES FOUND BY THE CHECKS"] + ([f"  ✗ {i}" for i in issues] or ["  none"])
+    head += ["ISSUES FOUND BY THE CHECKS"]
+    head += issue_lines(issues) or ["  none"]
+    if len(items) > len(issues):
+        head += ["", "CLAUDE'S CONCERN", f"  {items[-1]['status']}"]
+    if items:
+        head += ["", "Investigations end on the phone as `Responder: Weekly report`, "
+                 "and are kept on lexie (responder/scripts/reports.sh)."]
     text = "\n".join(head + ["", "", "THE FIGURES", "", ""] + body).rstrip() + "\n"
     subject = f"Estate weekly: {verdict} – {period}"
     if args.stdout:

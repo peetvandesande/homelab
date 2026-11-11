@@ -37,6 +37,9 @@ reads the token from there.
    alert; the filter is here so widening is one file and one deploy. Leave the
    router, DNS stack, CA and WAN alerts off until you have read a few reports –
    those are the places where a wrong suggestion costs access to fix.
+   `Weekly report` is not a Grafana rule: the weekly estate report sends one
+   per issue it needs attention for, named by a `key` label, which the push
+   title and report file carry (`estate-report/CLAUDE.md`).
 4. **One investigation at a time, one per alert per hour.** A single worker, a
    queue of four (overflow is dropped and logged), and a cooldown keyed on the
    alert fingerprint, so a flapping rule cannot run it in a loop. Each run is

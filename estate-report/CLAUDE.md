@@ -47,6 +47,35 @@ Mail, web, disk and off-site storage are compared with the week before.
    N issues, `needs attention (Claude)` when only Claude saw something, else
    `smooth sailing`.
 
+## What "needs attention" sets off
+
+Before the mail goes, `follow_up` acts on every issue, then on Claude's concern
+if it saw something the checks did not:
+
+1. **A runbook first.** An issue that corresponds to an alert with a rule in
+   `/etc/runbook/rules.toml` (a failed or stuck unit, a full disk) is sent to the
+   runbook engine as that alert. In shadow mode it only records what it would
+   run, so the issue is investigated as well.
+2. **Then the responder, one investigation per section**, at most three per
+   report, in report order, Claude's concern last. A section's issues go
+   together because they often share a cause: one stack down is a scrape job,
+   a probe and a webhook. Each goes as an alert named `Weekly report`, its
+   `key` the section and first issue's key (the text with free-standing
+   numbers taken out, so it is the same next week). It investigates read-only
+   and ends, as for any alert, on the phone as
+   `Responder: Weekly report: <key>` and in `/var/lib/responder/reports/`.
+3. **The mail does not wait.** Each issue shows its status: `runbook <rule>`,
+   `under investigation`, `investigated <date>`, or `open` with the reason (over
+   the cap, the responder unreachable or declining). The subject counts them:
+   `needs attention (3, 2 under investigation)`.
+4. **An issue sent in the past six days is not sent again**
+   (`/var/lib/responder/estate-report/follow-up.json`), so a resend after a
+   failed mail starts no second investigation. One still there a week later is.
+
+`--stdout` follows nothing up and shows what would be. A proposed fix is the
+first line of the responder's report; it opening a pull request for one is the
+next step, never merging it until task 22's required review exists.
+
 ## Invariants
 
 1. **Claude has no tools** (`--tools ""`, an empty working directory, no MCP).

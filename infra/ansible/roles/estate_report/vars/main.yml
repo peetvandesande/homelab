@@ -5,3 +5,7 @@ estate_report_private: >-
      | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}
 estate_report_secrets: "{{ lookup('ansible.builtin.file', estate_report_private ~ '/estate-report/secrets.env') }}"
 estate_report_grafana: "{{ lookup('ansible.builtin.file', estate_report_private ~ '/grafana-viewer-token') }}"
+# The runbook engine's token, so the report can hand it what matches a rule.
+estate_report_runbook: >-
+  RUNBOOK_TOKEN={{ lookup('ansible.builtin.file', estate_report_private ~ '/responder/secrets.env')
+     | regex_search("(?m)^RUNBOOK_TOKEN='?(.*?)'?$", '\1') | first }}
