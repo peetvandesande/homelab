@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""Reboot for a security update, unattended, only when it is safe to.
+
+Managed from homelab/apt. Standard library only. Runs as root on lenora, ruby
+and jennie, from /etc/homelab/security-reboot.env.
+
+  homelab-security-reboot check    the nightly timer: reboot if every condition holds
+  homelab-security-reboot verify   at boot: did everything come back?
+
+`check` reboots only when all of these hold, and records why in the action log
+before it acts (if it cannot, it does not reboot):
+
+1. a reboot is required, and every package asking for it was installed by
+   unattended-upgrades, which only takes Debian's security archive;
+2. it is before LATEST, Paris time;
+3. a backup has succeeded: on lenora every guest's from that night, on ruby and
+   jennie an OVH automated backup under 26 hours old;
+4. on jennie, ruby answers mail and HTTPS, so the two are never down together.
+
+MODE=shadow records what it would do and reboots nothing. `verify` waits for
+boot to finish, checks the units, interfaces and guests that must be up, and
+fails – so `systemd unit failed` alerts – if any is not.
+"""
+import datetime
+import glob
+import gzip
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+import zoneinfo
+
+CONF = os.environ
+MODE = CONF.get("MODE", "shadow")
+STATE_DIR = "/var/lib/homelab-security-reboot"
+PENDING = f"{STATE_DIR}/pending.json"
+REQUIRED = "/run/reboot-required"
+DPKG_LOGS = "/var/log/unattended-upgrades/unattended-upgrades-dpkg.log*"
+BACKUP_PROM = "/var/lib/node_exporter/textfile/backup.prom"
+ACTION_LOG = "/usr/local/bin/action-log"
+ACTION = "reboot:security"
+PARIS = zoneinfo.ZoneInfo("Europe/Paris")
+OVH = "https://eu.api.ovh.com/1.0"
+INSTALLED = re.compile(r"^(?:Unpacking|Setting up) ([^\s:]+)(?::\S+)? \(")
+
+
+class Refused(Exception):
+    pass
+
+
+def log(*a):
+    print(*a, file=sys.stderr, flush=True)
+
+
+def action(*args):
+    env = dict(os.environ, ACTION_ACTOR="homelab-security-reboot",
+               ACTION_TRIGGER="timer: security update needs a reboot")
+    r = subprocess.run([ACTION_LOG, *args], capture_output=True, text=True, env=env)
+    if r.returncode:
+        raise RuntimeError(f"action log: {r.stderr.strip()}")
+    return r.stdout.strip()
+
+
+# 1. A security update asks for it
+
+def unattended_packages():
+    """Every package unattended-upgrades has installed, from its own dpkg log."""
+    found = set()
+    for path in glob.glob(DPKG_LOGS):
+        opener = gzip.open if path.endswith(".gz") else open
+        with opener(path, "rt", errors="replace") as f:
+            for line in f:
+                m = INSTALLED.match(line)
+                if m:
+                    found.add(m.group(1))
+    return found
+
+
+def reboot_reason():
+    """The packages asking for a reboot, or None if none is needed."""
+    if not os.path.exists(REQUIRED):
+        return None
+    try:
+        with open(REQUIRED + ".pkgs") as f:
+            pkgs = sorted({l.strip() for l in f if l.strip()})
+    except OSError:
+        pkgs = []
+    if not pkgs:
+        raise Refused("a reboot is required, but nothing says which package asked")
+    other = [p for p in pkgs if p not in unattended_packages()]
+    if other:
+        raise Refused(f"not from a security update: {' '.join(other)}")
+    return pkgs
+
+
+# 2. Before LATEST
+
+def check_window(now):
+    latest = datetime.time.fromisoformat(CONF["LATEST"])
+    local = datetime.datetime.fromtimestamp(now, PARIS)
+    if not datetime.time(0, 0) <= local.time() <= latest:
+        raise Refused(f"{local:%H:%M} Paris time is outside 00:00-{latest:%H:%M}")
+
+
+# 3. A backup has succeeded
+
+def check_pve_backup(now, prom=BACKUP_PROM, max_age=6 * 3600):
+    """Every guest backed up within max_age, and no backup still running."""
+    if subprocess.run(["pgrep", "-x", "vzdump"], capture_output=True).returncode == 0:
+        raise Refused("a backup is still running")
+    stale = []
+    with open(prom) as f:
+        for line in f:
+            if line.startswith("homelab_backup_last_success_timestamp_seconds{"):
+                guest = re.search(r'guest="([^"]*)"', line).group(1)
+                if now - float(line.split()[-1]) > max_age:
+                    stale.append(guest)
+    if stale:
+        raise Refused(f"no backup tonight for {' '.join(sorted(stale))}")
+
+
+def ovh_get(path):
+    """A signed GET against the OVH API, with the read-only key."""
+    url = f"{OVH}{path}"
+    with urllib.request.urlopen(f"{OVH}/auth/time", timeout=20) as r:
+        ts = r.read().decode().strip()
+    secret, consumer = CONF["OVH_APPLICATION_SECRET"], CONF["OVH_CONSUMER_KEY"]
+    sig = "$1$" + hashlib.sha1(f"{secret}+{consumer}+GET+{url}++{ts}".encode()).hexdigest()
+    req = urllib.request.Request(url, headers={
+        "X-Ovh-Application": CONF["OVH_APPLICATION_KEY"], "X-Ovh-Consumer": consumer,
+        "X-Ovh-Timestamp": ts, "X-Ovh-Signature": sig})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r)
+
+
+def check_ovh_backup(now, max_age=26 * 3600):
+    try:
+        points = ovh_get(f"/vps/{CONF['OVH_SERVICE']}/automatedBackup/restorePoints?state=available")
+    except Exception as e:
+        raise Refused(f"could not ask OVH for its backups: {e}")
+    if not points:
+        raise Refused("OVH holds no automated backup")
+    newest = max(datetime.datetime.fromisoformat(p).timestamp() for p in points)
+    if now - newest > max_age:
+        raise Refused(f"OVH's newest backup is {(now - newest) / 3600:.0f} hours old")
+
+
+# 4. The other server is up
+
+def check_peer():
+    for url in CONF.get("PEER_PROBES", "").split():
+        try:
+            with urllib.request.urlopen(url, timeout=30) as r:
+                ok = re.search(r"^probe_success 1$", r.read().decode(), re.M)
+        except Exception:
+            ok = None
+        if not ok:
+            raise Refused(f"the other server is not answering: {url}")
+
+
+def check(now=None):
+    now = now or time.time()
+    try:
+        pkgs = reboot_reason()
+        if pkgs is None:
+            return 0
+    except Refused as e:
+        pkgs, refusal = [], e
+    else:
+        refusal = None
+    targets = os.uname().nodename
+    id_ = action("start", "--action", ACTION, "--targets", targets)
+    try:
+        if refusal:
+            raise refusal
+        check_window(now)
+        if CONF.get("BACKUP") == "pve":
+            check_pve_backup(now)
+        elif CONF.get("BACKUP") == "ovh":
+            check_ovh_backup(now)
+        else:
+            raise Refused("no backup check is configured")
+        check_peer()
+    except Refused as e:
+        action("end", id_, "--action", ACTION, "refused", "--detail", str(e)[:400])
+        log(f"not rebooting: {e}")
+        return 0
+    why = f"for {' '.join(pkgs)}"
+    if MODE != "live":
+        action("end", id_, "--action", ACTION, "shadow", "--detail", f"would reboot {why}")
+        log(f"shadow: would reboot {why}")
+        return 0
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(PENDING, "w") as f:
+        json.dump({"id": id_, "packages": pkgs, "time": now}, f)
+    log(f"rebooting {why}")
+    subprocess.run(["systemctl", "reboot"], check=True)
+    return 0
+
+
+# After the reboot
+
+def guests_down():
+    """lenora's guests that should have started at boot and are not running."""
+    down = []
+    for tool in ("pct", "qm"):
+        r = subprocess.run([tool, "list"], capture_output=True, text=True)
+        for line in r.stdout.splitlines()[1:]:
+            fields = line.split()
+            vmid = fields[0]
+            status = fields[1] if tool == "pct" else fields[2]
+            cfg = subprocess.run([tool, "config", vmid], capture_output=True, text=True).stdout
+            if re.search(r"^onboot: 1$", cfg, re.M) and status != "running":
+                down.append(vmid)
+    return down
+
+
+def verify():
+    try:
+        with open(PENDING) as f:
+            pending = json.load(f)
+    except (OSError, ValueError):
+        return 0
+    state = subprocess.run(["timeout", "600", "systemctl", "is-system-running", "--wait"],
+                           capture_output=True, text=True).stdout.strip()
+    problems = []
+    if state != "running":
+        out = subprocess.run(["systemctl", "--failed", "--no-legend", "--plain"],
+                             capture_output=True, text=True).stdout
+        failed = [l.split()[0] for l in out.splitlines() if l.strip()]
+        problems.append(f"system {state or 'not up'}" + (f", failed: {' '.join(failed[:8])}" if failed else ""))
+    for unit in CONF.get("UNITS", "").split():
+        if subprocess.run(["systemctl", "is-active", "--quiet", unit]).returncode:
+            problems.append(f"{unit} not active")
+    for iface in CONF.get("INTERFACES", "").split():
+        if not re.search(r"\bUP\b", subprocess.run(["ip", "-br", "link", "show", iface],
+                                                   capture_output=True, text=True).stdout):
+            problems.append(f"{iface} not up")
+    if CONF.get("BACKUP") == "pve":
+        down = guests_down()
+        if down:
+            problems.append(f"guests not running: {' '.join(down)}")
+    if os.path.exists(REQUIRED):
+        problems.append("a reboot is still required")
+    os.unlink(PENDING)
+    detail = "; ".join(problems) or f"back up after the reboot for {' '.join(pending['packages'])}"
+    action("end", pending["id"], "--action", ACTION, "failed" if problems else "succeeded",
+           "--detail", detail[:400])
+    log(detail)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "check":
+        sys.exit(check())
+    if cmd == "verify":
+        sys.exit(verify())
+    sys.exit(__doc__)

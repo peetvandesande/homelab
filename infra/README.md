@@ -135,7 +135,7 @@ numbered.
 | 19 | Off-site copy of critical backups | Done: restic to Hetzner, first run 10 November 2026, `offsite/CLAUDE.md` |
 | 20 | Hands-off soak period: 30 days; each unplanned intervention adds 7; material changes approved by the owner do not count against it | Planned, starts after 16, 17, 18 and 22 |
 | 21 | Human takeover drill | |
-| 22 | Unattended security updates and reboots for lenora, ruby and jennie | |
+| 22 | Unattended security updates and reboots for lenora, ruby and jennie | Built 11 Nov 2026, in shadow: updates were already unattended; `homelab-security-reboot` reboots under the conditions above – `apt/CLAUDE.md`, "Security reboots". Next: the OVH key, a week of shadow nights, then each host to live by PR |
 
 ## Using it
 

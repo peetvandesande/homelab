@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly check for a reboot a security update needs
+
+[Timer]
+# The time is per host, in a drop-in: lenora after sally's backup, then ruby,
+# then jennie, so no two are down together.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

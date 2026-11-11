@@ -1,2 +1,47 @@
 ---
 apt_security_source: "{{ role_path }}/../../../../apt/root"
+# Unattended reboots for security updates (homelab/apt, "Security reboots"), on
+# these three only: a container has no kernel of its own. `at` is Paris time and
+# staggered so no two are down together; `latest` is the last minute a reboot may
+# start. mode stays shadow – record what it would do, reboot nothing – until a
+# person switches a host to live.
+apt_security_reboot_hosts:
+  lenora:
+    mode: shadow
+    at: "04:00"       # sally's backup runs 03:30-03:45; the off-site one starts 04:30 in winter
+    latest: "04:20"
+    backup: pve
+    units: >-
+      pve-cluster pvedaemon pveproxy pvestatd pve-guests zfs-zed nfs-server
+      prometheus-node-exporter alloy
+  ruby:
+    mode: shadow
+    at: "04:30"
+    latest: "05:00"
+    backup: ovh
+    ovh_service: vps-5ca50660.vps.ovh.net
+    units: >-
+      nginx postfix dovecot rspamd named mariadb redis-server docker fail2ban ssh
+      alloy prometheus-node-exporter prometheus-blackbox-exporter
+    interfaces: wg0 wg1 wg2
+  jennie:
+    mode: shadow
+    at: "05:10"
+    latest: "05:50"
+    backup: ovh
+    ovh_service: "{{ apt_security_jennie_vps }}"
+    units: named ssh alloy prometheus-node-exporter prometheus-blackbox-exporter
+    interfaces: wg2 wg3
+    # jennie waits until ruby answers mail and HTTPS, asking its own blackbox
+    # exporter, which probes ruby's public addresses anyway.
+    peer_probes: >-
+      http://192.168.254.2:9115/probe?module=smtp_mail&target=145.239.73.18:25
+      http://192.168.254.2:9115/probe?module=https_ruby&target=https://145.239.73.18/
+apt_security_jennie_vps: ""   # set once known: vps-….vps.ovh.net
+apt_security_reboot: "{{ apt_security_reboot_hosts[inventory_hostname] }}"
+apt_security_private: >-
+  {{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE')
+     | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}
+# Read only for ruby and jennie: a read-only OVH API key that can list automated
+# backups. Missing, the check refuses every night and says why in the action log.
+apt_security_ovh: "{{ lookup('ansible.builtin.file', apt_security_private ~ '/ovh/secrets.env', errors='warn') | default('', true) }}"

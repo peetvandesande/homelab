@@ -1,0 +1,68 @@
+---
+# Security reboots: lenora, ruby and jennie only (apt_security_reboot_hosts).
+- name: Install the reboot check, its timers and the action log
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: "{{ apt_security_source }}/usr/local/sbin/homelab-security-reboot", dest: /usr/local/sbin/homelab-security-reboot, mode: "0755" }
+    - { src: "{{ apt_security_source }}/etc/systemd/system/homelab-security-reboot.service", dest: /etc/systemd/system/homelab-security-reboot.service, mode: "0644" }
+    - { src: "{{ apt_security_source }}/etc/systemd/system/homelab-security-reboot.timer", dest: /etc/systemd/system/homelab-security-reboot.timer, mode: "0644" }
+    - { src: "{{ apt_security_source }}/etc/systemd/system/homelab-security-reboot-verify.service", dest: /etc/systemd/system/homelab-security-reboot-verify.service, mode: "0644" }
+    - { src: "{{ apt_security_source }}/etc/systemd/system/homelab-security-reboot-verify.timer", dest: /etc/systemd/system/homelab-security-reboot-verify.timer, mode: "0644" }
+    - { src: "{{ role_path }}/../../../scripts/action-log", dest: /usr/local/bin/action-log, mode: "0755" }
+
+- name: Create the timer's drop-in and the settings directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/systemd/system/homelab-security-reboot.timer.d
+    - /etc/homelab
+
+- name: Set this host's time
+  ansible.builtin.copy:
+    content: |
+      [Timer]
+      OnCalendar=*-*-* {{ apt_security_reboot.at }}:00 Europe/Paris
+    dest: /etc/systemd/system/homelab-security-reboot.timer.d/time.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# Root only: on ruby and jennie it holds the OVH key.
+- name: Install its settings
+  ansible.builtin.copy:
+    content: |
+      MODE={{ apt_security_reboot.mode }}
+      LATEST={{ apt_security_reboot.latest }}
+      BACKUP={{ apt_security_reboot.backup }}
+      UNITS={{ apt_security_reboot.units }}
+      INTERFACES={{ apt_security_reboot.interfaces | default('') }}
+      PEER_PROBES={{ apt_security_reboot.peer_probes | default('') }}
+      ACTION_COMMIT={{ lookup('ansible.builtin.pipe', 'git -C ' ~ role_path ~ ' rev-parse HEAD') }}
+      {% if apt_security_reboot.backup == 'ovh' %}
+      OVH_SERVICE={{ apt_security_reboot.ovh_service }}
+      {{ apt_security_ovh }}
+      {% endif %}
+    dest: /etc/homelab/security-reboot.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Keep the reboot check and the after-boot check on
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - homelab-security-reboot.timer
+    - homelab-security-reboot-verify.timer
