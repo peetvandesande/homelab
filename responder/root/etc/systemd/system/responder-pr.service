@@ -1,0 +1,20 @@
+[Unit]
+Description=Open pull requests for the responder's proposed fixes (never merges)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Its own account: the Forgejo token in this file is unreadable to responder,
+# and so to the investigation that wrote the fix.
+User=responder-pr
+Group=responder-pr
+EnvironmentFile=/etc/responder-pr/responder-pr.env
+Environment=HOME=/var/lib/responder-pr
+ExecStart=/usr/local/bin/responder-pr
+TimeoutStartSec=15min
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/responder-pr /var/spool/responder-pr

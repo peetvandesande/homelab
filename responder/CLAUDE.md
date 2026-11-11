@@ -71,4 +71,24 @@ reads the token from there.
    automation – so the message ends with the report's file name; read it with
    `scripts/reports.sh latest`.
 
+9. **A proposed fix becomes a pull request, never a merge.** An
+   `action-needed` report may end in a diff. The responder leaves it in
+   `/var/spool/responder-pr/`, and `responder-pr` – its own account, started by
+   a path unit – applies it to a fresh branch of main, pushes that to
+   **responder-bot**'s fork and opens a pull request from there, then pushes
+   the link to the phone. Claude never holds the Forgejo token: it is in
+   `/etc/responder-pr/`, unreadable to `responder`. At most three a week, ten
+   files, 64 KiB; workflows, `infra/scripts/`, `.git*` files, secrets, keys,
+   symlinks and submodules are refused. That list is a backstop, not the gate –
+   CI's tests import the code they test, so nearly any file runs on talos once
+   checked.
+
+   **The gate is the fork.** `checks.yml` runs on push, and the runner takes
+   peet's repositories only, so a branch on the fork runs nowhere. Read the
+   diff first; to check it, push it to origin
+   (`git fetch <fork> <branch> && git push origin FETCH_HEAD:refs/heads/<branch>`),
+   which is what runs it on talos. Until task 22's required review exists,
+   merging stays by hand. Claude reads the repo from a shallow copy of the
+   public GitHub mirror in `/var/lib/responder/repo`, refreshed before each run.
+
 Reports are kept in `/var/lib/responder/reports/` on lexie, one file per run.

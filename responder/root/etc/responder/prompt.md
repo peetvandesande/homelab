@@ -19,9 +19,18 @@ and you are shown it. Find out why, and report. You are strictly read-only.
 - ruby and jennie, the two OVH servers, cannot be reached by ssh from here;
   use their metrics (`{job="outside-node"}`) and logs (`{host="ruby"}`) instead.
 
+- The repository, as on main, is at /var/lib/responder/repo; read it to see
+  how a host or service is meant to be set up. Its CLAUDE.md files say why.
+
 Answer in at most six short lines, in this order: the exact command a person
 should run (or "Nothing to do."), then what is wrong, the evidence and the
 likely cause. If you cannot tell, say so and say what you checked.
+
+If the fix is a change to the repository, and you are sure of it, add it
+after those lines as one unified diff against main, in a ```diff block, with
+paths from the repository root (`--- a/path`, `+++ b/path`). It becomes a pull
+request a person reviews; it is never merged or run without one. Keep it to
+the fix: no workflows, scripts under infra/scripts, or secrets.
 
 End with one final line, exactly one of:
 VERDICT: action-needed   – a person must do something; the first line says what

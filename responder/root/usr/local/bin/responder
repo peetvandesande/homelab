@@ -11,6 +11,11 @@ existing Grafana webhook, so it reaches the phone without any change on the HA
 side. The report ends with a VERDICT line that picks the push: action-needed is
 a warning titled with a wrench, unsure a plain warning, no-action a silent
 "resolved" one. A failed investigation is itself pushed as a warning.
+
+Claude reads the repository from a copy of the public GitHub mirror (MIRROR),
+refreshed before each run. An action-needed report that ends in a diff is left
+in PROPOSALS for responder-pr, which runs as another account and opens a pull
+request for it; the token for that is out of this account's reach.
 """
 import hmac
 import json
@@ -38,6 +43,10 @@ STATE = f"{HOME}/seen.json"
 CERT = os.environ.get("RESPONDER_CERT", "/etc/homelab-tls/host.crt")
 KEY = os.environ.get("RESPONDER_KEY", "/etc/homelab-tls/host.key")
 MAX_BODY = 256 * 1024
+MIRROR = "https://github.com/peetvandesande/homelab.git"
+CHECKOUT = f"{HOME}/repo"
+PROPOSALS = "/var/spool/responder-pr"
+DIFF = re.compile(r"^```diff[ \t]*\n.*?^```[ \t]*$", re.S | re.M)
 
 VERDICT = re.compile(r"^\s*VERDICT:\s*(action-needed|no-action|unsure)\s*$", re.I | re.M)
 
@@ -79,6 +88,32 @@ def claim(fingerprint):
         return True
 
 
+def refresh_checkout():
+    """main as published, for Claude to read. Public, so no credentials; a
+    failure only means it reads yesterday's copy."""
+    if os.path.isdir(f"{CHECKOUT}/.git"):
+        cmds = [["git", "-C", CHECKOUT, "fetch", "-q", "--depth", "1", "origin", "main"],
+                ["git", "-C", CHECKOUT, "reset", "-q", "--hard", "FETCH_HEAD"]]
+    else:
+        cmds = [["git", "clone", "-q", "--depth", "1", MIRROR, CHECKOUT]]
+    for cmd in cmds:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if r.returncode:
+            log(f"could not refresh {CHECKOUT}: {r.stderr.strip()[-200:]}")
+            return
+
+
+def propose(name, base, report):
+    """Hand an action-needed report with a diff to responder-pr."""
+    if not DIFF.search(report):
+        return False
+    path = f"{PROPOSALS}/{base}.json"
+    with open(path + ".tmp", "w") as f:
+        json.dump({"name": name, "file": base, "report": report}, f)
+    os.replace(path + ".tmp", path)
+    return True
+
+
 def investigate(alert):
     with open(PROMPT) as f:
         system = f.read()
@@ -93,12 +128,15 @@ def investigate(alert):
         "--permission-mode", "dontAsk",
         "--allowedTools", "Bash(ssh *)", "Bash(curl *)", "Bash(dig *)", "Read",
         "--disallowedTools", "Write", "Edit", "NotebookEdit",
+        "Read(//etc/responder/**)", "Read(//etc/estate-report/**)",
         "--max-turns", "25",
         "--max-budget-usd", "1",
         "--no-session-persistence",
     ]
+    # Its own token and the webhook stay out of Claude's environment.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("RESPONDER_")}
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT,
-                       cwd=f"{HOME}/work", stdin=subprocess.DEVNULL)
+                       cwd=f"{HOME}/work", stdin=subprocess.DEVNULL, env=env)
     if r.returncode != 0:
         raise RuntimeError(f"claude exited {r.returncode}: {r.stderr.strip()[-500:]}")
     return r.stdout.strip()
@@ -138,6 +176,7 @@ def worker():
         if labels.get("key"):   # the weekly report's items share one alert name
             name = f"{name}: {labels['key']}"[:90]
         try:
+            refresh_checkout()
             report = investigate(alert)
             verdict, text = split_verdict(report)
             os.makedirs(REPORTS, exist_ok=True)
@@ -146,6 +185,13 @@ def worker():
             with open(f"{REPORTS}/{base}", "w") as f:
                 f.write(report + "\n")
             log(f"investigated {name!r} ({verdict}) -> {REPORTS}/{base}")
+            text = DIFF.sub("", text).strip()
+            if verdict == "action-needed":
+                try:
+                    if propose(name, base, report):
+                        text += "\nA fix is proposed; its pull request follows."
+                except OSError as e:   # the finding still goes out
+                    log(f"could not hand {base} to responder-pr: {e}")
             text = (text or "No finding.") + f"\n[{base}]"
             if verdict == "action-needed":
                 push(f"🔧 Responder: {name}", text)

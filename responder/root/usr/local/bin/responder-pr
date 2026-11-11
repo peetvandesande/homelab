@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Open a pull request for a fix the responder proposed. Never merges.
+
+Managed from homelab/responder. Standard library and git only.
+
+Runs as `responder-pr`, not `responder`, so the Forgejo token is out of reach of
+the investigation that wrote the fix. The responder drops one JSON file per
+proposal into INBOX; a path unit starts this. For each one it applies the diff to
+a fresh branch of peet/homelab's main, refuses what it must not touch, pushes the
+branch to responder-bot's fork and opens a pull request from there.
+
+The fork is the point: Forgejo's runner only takes peet's repositories, so
+nothing here runs in CI until a person has read it and pushed it to origin.
+"""
+import base64
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+FORGEJO = "https://git.peetvandesande.com"
+UPSTREAM = "peet/homelab"
+BOT = "responder-bot"
+TOKEN = os.environ["FORGEJO_TOKEN"]
+HA_URL = os.environ["RESPONDER_HA_URL"]
+INBOX = "/var/spool/responder-pr"
+HOME = "/var/lib/responder-pr"
+REPO = f"{HOME}/repo"
+STATE = f"{HOME}/opened.json"
+
+MAX_DIFF = 64 * 1024
+MAX_FILES = 10
+PER_WEEK = 3
+WEEK = 7 * 86400
+
+# Defence in depth only: CI's tests import the code they test and ansible-lint
+# loads the repo's plugins, so nearly any file can run code once CI checks it.
+# What stops that is that CI never sees a branch until a person pushes it.
+DENY = [re.compile(p) for p in (
+    r"^\.forgejo/", r"^\.github/", r"^infra/scripts/", r"^\.gitleaks\.toml$",
+    r"(^|/)\.git[^/]*$", r"(^|/)secrets[^/]*$", r"\.(key|pem|enc|p12)$",
+)]
+DIFF = re.compile(r"^```diff[ \t]*\n(.*?)^```[ \t]*$", re.S | re.M)
+
+
+class Refused(Exception):
+    pass
+
+
+def log(*a):
+    print(*a, file=sys.stderr, flush=True)
+
+
+def git_env():
+    basic = base64.b64encode(f"{BOT}:{TOKEN}".encode()).decode()
+    env = {k: v for k, v in os.environ.items() if k != "FORGEJO_TOKEN"}
+    env.update(GIT_TERMINAL_PROMPT="0", GIT_CONFIG_COUNT="2",
+               GIT_CONFIG_KEY_0="http.extraHeader", GIT_CONFIG_VALUE_0=f"Authorization: Basic {basic}",
+               GIT_CONFIG_KEY_1="core.hooksPath", GIT_CONFIG_VALUE_1="/dev/null")
+    return env
+
+
+def git(*args, check=True):
+    r = subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True,
+                       env=git_env(), timeout=300)
+    if check and r.returncode:
+        raise Refused(f"git {args[0]} failed: {r.stderr.strip()[-300:]}")
+    return r
+
+
+def api(method, path, body=None):
+    req = urllib.request.Request(f"{FORGEJO}/api/v1{path}", method=method,
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": f"token {TOKEN}",
+                                          "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read() or b"null")
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+def push(title, text):
+    """Through Home Assistant's Grafana automation, like the responder's own."""
+    body = json.dumps({"commonLabels": {"alertname": title}, "alerts": [{
+        "status": "firing", "labels": {"alertname": title, "severity": "warning"},
+        "annotations": {"summary": text[:900]}}]})
+    subprocess.run(["curl", "-fsS", "--max-time", "15", "-X", "POST",
+                    "-H", "Content-Type: application/json", "-d", body, HA_URL],
+                   check=True, capture_output=True)
+
+
+def opened_recently(now):
+    try:
+        with open(STATE) as f:
+            return [o for o in json.load(f) if now - o["time"] < WEEK]
+    except (OSError, ValueError):
+        return []
+
+
+def record(now, url):
+    kept = opened_recently(now) + [{"time": now, "url": url}]
+    with open(STATE + ".tmp", "w") as f:
+        json.dump(kept, f)
+    os.replace(STATE + ".tmp", STATE)
+
+
+def checked_paths(raw):
+    """Refuse what the change must not touch. `raw` is `git diff --raw -z --no-renames`."""
+    fields = raw.split("\0")
+    paths = []
+    for meta, path in zip(fields[0::2], fields[1::2]):
+        if not meta:
+            continue
+        new_mode = meta.split()[1]
+        if new_mode in ("120000", "160000"):
+            raise Refused(f"{path}: symlinks and submodules are not allowed")
+        if any(d.search(path) for d in DENY):
+            raise Refused(f"{path}: not a path the responder may change")
+        paths.append(path)
+    if not paths:
+        raise Refused("the diff changes nothing")
+    if len(paths) > MAX_FILES:
+        raise Refused(f"the diff touches {len(paths)} files, more than {MAX_FILES}")
+    return paths
+
+
+def ensure_fork():
+    code, _ = api("GET", f"/repos/{BOT}/homelab")
+    if code == 200:
+        return
+    code, _ = api("POST", f"/repos/{UPSTREAM}/forks", {})
+    if code not in (201, 202):
+        raise Refused(f"could not fork {UPSTREAM} ({code})")
+    time.sleep(5)
+
+
+def ensure_clone():
+    if not os.path.isdir(f"{REPO}/.git"):
+        r = subprocess.run(["git", "clone", "-q", f"{FORGEJO}/{UPSTREAM}.git", REPO],
+                           capture_output=True, text=True, env=git_env(), timeout=600)
+        if r.returncode:
+            raise Refused(f"git clone failed: {r.stderr.strip()[-300:]}")
+    git("remote", "set-url", "origin", f"{FORGEJO}/{UPSTREAM}.git")
+    if git("remote", "get-url", "fork", check=False).returncode:
+        git("remote", "add", "fork", f"{FORGEJO}/{BOT}/homelab.git")
+
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "fix"
+
+
+def handle(p, now):
+    name = str(p.get("name", "unknown"))[:90]
+    report = str(p.get("report", ""))
+    found = DIFF.findall(report)
+    if not found:
+        raise Refused("the report carries no diff")
+    diff = found[-1]
+    if len(diff) > MAX_DIFF:
+        raise Refused(f"the diff is {len(diff)} bytes, more than {MAX_DIFF}")
+    if len(opened_recently(now)) >= PER_WEEK:
+        raise Refused(f"{PER_WEEK} pull requests opened in the past week already")
+
+    ensure_fork()
+    ensure_clone()
+    branch = f"responder/{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}-{slug(name)}"
+    git("fetch", "-q", "origin", "main")
+    git("checkout", "-q", "-f", "-B", branch, "origin/main")
+    git("clean", "-q", "-fdx")
+    patch = f"{HOME}/proposal.diff"
+    with open(patch, "w") as f:
+        f.write(diff if diff.endswith("\n") else diff + "\n")
+    r = git("apply", "--index", "--whitespace=nowarn", patch, check=False)
+    if r.returncode:
+        raise Refused(f"the diff does not apply to main: {r.stderr.strip()[-300:]}")
+    paths = checked_paths(git("diff", "--cached", "--raw", "-z", "--no-renames").stdout)
+
+    title = f"responder: {name}"[:100]
+    git("-c", f"user.name={BOT}", "-c", f"user.email={BOT}@noreply.git.peetvandesande.com",
+        "commit", "-q", "-m", title, "-m", f"Proposed by the responder in {p.get('file', '?')}.")
+    git("push", "-q", "fork", f"{branch}:refs/heads/{branch}")
+
+    body = (f"Proposed by the alert responder for **{name}**. It has not been "
+            "checked by CI and will not be until a person pushes the branch to "
+            "origin – read the diff first (`responder/CLAUDE.md`, \"Proposed fixes\").\n\n"
+            f"Changes: {', '.join(f'`{x}`' for x in paths)}\n\n"
+            f"Report `{p.get('file', '?')}`:\n\n{report[:20000]}")
+    code, pr = api("POST", f"/repos/{UPSTREAM}/pulls",
+                   {"head": f"{BOT}:{branch}", "base": "main", "title": title, "body": body})
+    if code != 201 or not pr:
+        raise Refused(f"Forgejo refused the pull request ({code}); the branch is {branch} on the fork")
+    record(now, pr["html_url"])
+    return name, pr["html_url"]
+
+
+def main():
+    for d in ("done", "refused"):
+        os.makedirs(f"{HOME}/{d}", exist_ok=True)
+    for path in sorted(glob.glob(f"{INBOX}/*.json")):
+        base = os.path.basename(path)
+        outcome = "refused"
+        try:
+            with open(path) as f:
+                p = json.load(f)
+            name, url = handle(p, time.time())
+            log(f"opened {url} for {name!r}")
+            push(f"🔧 Responder PR: {name}", f"Review before anything runs it: {url}")
+            outcome = "done"
+        except Exception as e:  # one bad proposal must not hold up the rest
+            why = str(e)[:300] if isinstance(e, Refused) else f"{type(e).__name__}: {str(e)[:300]}"
+            log(f"{base}: {why}")
+            try:
+                push("Responder could not open a PR", f"{why}\n[{base}]")
+            except Exception as e2:
+                log(f"and the notice failed too: {e2}")
+        finally:
+            # A move, not a rename: the inbox and HOME are separate mounts in the sandbox.
+            shutil.move(path, f"{HOME}/{outcome}/{base}")
+
+
+if __name__ == "__main__":
+    main()

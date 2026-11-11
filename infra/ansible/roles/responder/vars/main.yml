@@ -4,3 +4,6 @@ responder_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | defaul
 responder_secrets: "{{ lookup('ansible.builtin.file', responder_private ~ '/responder/secrets.env') }}"
 responder_token: "{{ responder_secrets | regex_search('(?m)^RESPONDER_TOKEN=(.*)$', '\\1') | first }}"
 responder_ha_webhook_id: "{{ responder_secrets | regex_search('(?m)^HA_WEBHOOK_ID=(.*)$', '\\1') | first }}"
+# responder-bot's, for opening pull requests from its fork.
+responder_forgejo_token: >-
+  {{ responder_secrets | regex_search("(?m)^FORGEJO_TOKEN='?(.*?)'?$", '\1') | first }}

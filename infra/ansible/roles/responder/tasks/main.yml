@@ -75,6 +75,59 @@
   no_log: true
   notify: Restart the responder
 
+# responder-pr opens pull requests for proposed fixes. Its own account, so its
+# Forgejo token is out of reach of the investigation that wrote the fix.
+- name: Create the pull request account
+  ansible.builtin.user:
+    name: responder-pr
+    system: true
+    create_home: false
+    home: /var/lib/responder-pr
+    shell: /usr/sbin/nologin
+    comment: opens the responder's pull requests
+
+- name: Create its home and the inbox the responder writes to
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: responder-pr
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/lib/responder-pr, group: responder-pr, mode: "0700" }
+    - { path: /var/spool/responder-pr, group: responder, mode: "0730" }
+    - { path: /etc/responder-pr, group: root, mode: "0755" }
+
+- name: Install the pull request opener
+  ansible.builtin.copy:
+    src: "{{ responder_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/bin/responder-pr, mode: "0755" }
+    - { path: etc/systemd/system/responder-pr.service, mode: "0644" }
+    - { path: etc/systemd/system/responder-pr.path, mode: "0644" }
+
+- name: Install its token
+  ansible.builtin.copy:
+    content: |
+      FORGEJO_TOKEN={{ responder_forgejo_token }}
+      RESPONDER_HA_URL=https://192.168.8.90/api/webhook/{{ responder_ha_webhook_id }}
+    dest: /etc/responder-pr/responder-pr.env
+    owner: root
+    group: responder-pr
+    mode: "0640"
+  no_log: true
+
+- name: Watch the inbox
+  ansible.builtin.systemd_service:
+    name: responder-pr.path
+    enabled: true
+    state: started
+    daemon_reload: true
+
 - name: Keep the responder enabled and running
   ansible.builtin.systemd_service:
     name: responder

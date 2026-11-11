@@ -1,0 +1,8 @@
+[Unit]
+Description=Open a pull request when the responder proposes a fix
+
+[Path]
+DirectoryNotEmpty=/var/spool/responder-pr
+
+[Install]
+WantedBy=multi-user.target

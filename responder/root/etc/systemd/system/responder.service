@@ -21,7 +21,8 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/var/lib/responder
+# The inbox is where an action-needed report with a diff goes to responder-pr.
+ReadWritePaths=/var/lib/responder /var/spool/responder-pr
 
 [Install]
 WantedBy=multi-user.target

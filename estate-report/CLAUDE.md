@@ -72,9 +72,9 @@ if it saw something the checks did not:
    (`/var/lib/responder/estate-report/follow-up.json`), so a resend after a
    failed mail starts no second investigation. One still there a week later is.
 
-`--stdout` follows nothing up and shows what would be. A proposed fix is the
-first line of the responder's report; it opening a pull request for one is the
-next step, never merging it until task 22's required review exists.
+`--stdout` follows nothing up and shows what would be. A fix the responder
+proposes as a diff becomes a pull request from responder-bot's fork, never
+merged by it (`responder/CLAUDE.md` invariant 9).
 
 ## Invariants
 
