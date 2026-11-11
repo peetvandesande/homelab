@@ -1,0 +1,10 @@
+[Unit]
+Description=Reboot for a security update, if a backup has succeeded and it is safe to
+Documentation=file:///usr/local/sbin/homelab-security-reboot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/homelab/security-reboot.env
+ExecStart=/usr/local/sbin/homelab-security-reboot check

@@ -51,3 +51,7 @@
     - apt-daily.timer
     - apt-daily-upgrade.timer
     - homelab-apt-textfile.timer
+
+- name: Security reboots, on the hosts that have them
+  ansible.builtin.import_tasks: reboot.yml
+  when: inventory_hostname in apt_security_reboot_hosts

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check everything came back after a security reboot
+Documentation=file:///usr/local/sbin/homelab-security-reboot
+# Only after a reboot this host chose; a manual one has no pending file.
+ConditionPathExists=/var/lib/homelab-security-reboot/pending.json
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/homelab/security-reboot.env
+ExecStart=/usr/local/sbin/homelab-security-reboot verify
+TimeoutStartSec=15min

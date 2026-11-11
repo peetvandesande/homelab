@@ -1,0 +1,10 @@
+[Unit]
+Description=Check a security reboot came back, once boot has settled
+
+[Timer]
+# A timer, not part of boot: the check waits for boot to finish, which a unit
+# inside the boot transaction would be waiting on itself.
+OnBootSec=3min
+
+[Install]
+WantedBy=timers.target

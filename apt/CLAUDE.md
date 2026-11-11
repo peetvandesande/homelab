@@ -95,8 +95,9 @@ for every one of them. Finish the fleet first, then deploy `grafana/`.
    and caught by checking `apt-cache policy` on a real host rather than by
    anything failing.
 
-4. **Nothing is restarted or rebooted unattended, and that gap is monitored
-   rather than closed.** `Automatic-Reboot` is false, `needrestart` is
+4. **Nothing is restarted unattended, and nothing rebooted except as
+   "Security reboots" below allows; the rest of the gap is monitored rather
+   than closed.** `Automatic-Reboot` is false, `needrestart` is
    installed in list-only mode (`$nrconf{restart} = 'l'`), and both facts are
    published as metrics: `apt_reboot_required` and
    `apt_services_need_restart`. A replaced `libssl` leaves every running
@@ -114,6 +115,40 @@ for every one of them. Finish the fleet first, then deploy `grafana/`.
    already treats a few seconds of LAN DNS as acceptable, and
    `dns-component-down` in `grafana/` reports it if that judgement was wrong.
    Revisit the judgement before adding the drop-ins.
+
+## Security reboots
+
+lenora, ruby and jennie reboot unattended for a security update, under the
+conditions decided on 10 November 2026 (`infra/README.md`, "Reboots").
+`homelab-security-reboot check` runs nightly, Paris time – lenora 04:00 (after
+sally's 03:30 backup, before the 04:30 off-site run in winter), ruby 04:30,
+jennie 05:10 – and reboots only if:
+
+1. **A security update asked for it.** Every package in
+   `/run/reboot-required.pkgs` must be in unattended-upgrades' own dpkg log,
+   which only holds the Debian-Security origin. A new kernel is *installed*,
+   not upgraded, which is why the dpkg log and not the "will be upgraded" line.
+   A reboot left pending by a person's `apt upgrade` is theirs.
+2. **It is before `latest`** (04:20, 05:00, 05:50).
+3. **A backup has succeeded:** on lenora every guest's within six hours and no
+   `vzdump` running; on ruby and jennie an OVH automated backup under 26 hours
+   old, read with a read-only API key (`ovh/` in Bitwarden). Without the key
+   the check refuses and says so.
+4. **On jennie, ruby answers** SMTP and HTTPS, asked of jennie's own blackbox
+   exporter, so the two are never down together.
+
+It writes `action-log start` before acting – if it cannot, nothing reboots –
+and a refusal is recorded too, with the reason: `{identifier="homelab-action"}
+|= "reboot:security"`. Three minutes after boot a timer runs `verify`: boot
+finished, the host's essential units active and interfaces up, lenora's
+start-at-boot guests running, no reboot still required. It writes the
+`finished` line, and fails on any problem, so `systemd unit failed` alerts and
+the responder looks.
+
+Each host has a `mode` in the role's vars: **`shadow` records "would reboot"
+and reboots nothing.** All three start there; switching one to `live` is a
+pull request for the owner. Settings, OVH key included, are in
+`/etc/homelab/security-reboot.env`, root only. `tests/` covers each condition.
 
 ## Metrics
 

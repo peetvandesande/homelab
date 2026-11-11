@@ -451,7 +451,9 @@ and made the `systemd-unit-failed` alert useless — see `fleet/CLAUDE.md`.
 **Automatic security patching lives in `apt/`** — unattended-upgrades on all
 fourteen enrolled hosts, restricted to the Debian security origin, which is what
 keeps Proxmox, Docker and mailcow upgrades a manual act. Nothing is restarted
-or rebooted unattended; that gap is published as a metric instead. There is
+unattended, and only lenora, ruby and jennie reboot – for a security update,
+after a backup, before 06:00 (`apt/CLAUDE.md`, "Security reboots"); the rest
+of that gap is published as a metric instead. There is
 deliberately **no apt cache or proxy**: the bandwidth it would save is a
 rounding error on a fibre line, and the traffic that is actually large is
 Docker image pulls, which an apt proxy does not touch. `apt/CLAUDE.md`.

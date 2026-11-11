@@ -31,5 +31,6 @@
   any_errors_fatal: true
   roles:
     - outside_host
-    # Debian security updates, unattended, as on the fleet; never a reboot.
+    # Debian security updates, unattended, as on the fleet, and a reboot for one
+    # only under homelab/apt's "Security reboots".
     - apt_security
