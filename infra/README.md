@@ -150,6 +150,25 @@ after the table was numbered.
 | 21 | Human takeover drill | |
 | 22 | Unattended security updates and reboots for lenora, ruby and jennie | Built 11 Nov 2026, in shadow: updates were already unattended; `homelab-security-reboot` reboots under the conditions above – `apt/CLAUDE.md`, "Security reboots". Shadow on all three since 11 Nov; the OVH key works from ruby and jennie. Next: a week of shadow nights, then each host to live by PR |
 
+## Cost
+
+The transition from AI-custom-managed to standard-autonomous-managed – tasks 1 to 19
+and 22 built, from 9 to 11 November 2026 – cost **$73.96** in one Claude Code session,
+as `/cost` reported it at the end:
+
+| | |
+|---|---|
+| Total cost | $73.96 |
+| API time | 3 h 2 min 37 s |
+| Wall-clock time | 2 d 22 h 14 min |
+| Code changes | 5,350 lines added, 114 removed |
+| claude-opus-5-5 | 32.0k input, 1.1M output, 158.8M cache read, 2.6M cache write – $73.84 |
+| claude-haiku-5-5 | 189.0k input, 17.1k output, 9 web searches – $0.12 |
+| Prompt cache | 713 requests, 98% of input tokens from cache |
+
+It excludes the Claude runs the lab makes itself – the responder, the weekly report –
+which are billed to their own account.
+
 ## Using it
 
 ```sh
