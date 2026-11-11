@@ -43,16 +43,17 @@
     group: root
     mode: "0644"
 
-# Root only: on ruby and jennie it holds the OVH key.
+# Root only: on ruby and jennie it holds the OVH key. Lists are quoted, so the
+# file is safe to source in a shell as well as read by systemd.
 - name: Install its settings
   ansible.builtin.copy:
     content: |
       MODE={{ apt_security_reboot.mode }}
       LATEST={{ apt_security_reboot.latest }}
       BACKUP={{ apt_security_reboot.backup }}
-      UNITS={{ apt_security_reboot.units }}
-      INTERFACES={{ apt_security_reboot.interfaces | default('') }}
-      PEER_PROBES={{ apt_security_reboot.peer_probes | default('') }}
+      UNITS="{{ apt_security_reboot.units }}"
+      INTERFACES="{{ apt_security_reboot.interfaces | default('') }}"
+      PEER_PROBES="{{ apt_security_reboot.peer_probes | default('') }}"
       ACTION_COMMIT={{ lookup('ansible.builtin.pipe', 'git -C ' ~ role_path ~ ' rev-parse HEAD') }}
       {% if apt_security_reboot.backup == 'ovh' %}
       OVH_SERVICE={{ apt_security_reboot.ovh_service }}
