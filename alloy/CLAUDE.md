@@ -83,7 +83,10 @@ They are not part of the fleet, and differ from it in three ways:
 
 ruby's nginx access logs and rspamd's log are files, so Alloy follows those
 too: `{host="ruby", job="nginx", site="git.peetvandesande.com"}`, with `site`
-from the file name, and `{host="ruby", job="rspamd"}`. Only from the live file
+from the file name, and `{host="ruby", job="rspamd"}`. nginx's logs need `adm`;
+rspamd's directory admits only its own group, so `alloy` joins `_rspamd` on
+the server that has it – without it the source is healthy and follows nothing,
+as `loki_source_file_files_active_total` 0 shows. Only from the live file
 onwards, so the first run sends no backlog for Loki to reject.
 
 The package pin is duplicated in `install-outside.sh`; bump both together.
