@@ -118,12 +118,12 @@ after the table was numbered.
 
 **Where it stands, 12 November 2026** – pick up here:
 
-- **16 November:** review task 15's shadow decisions, then start task 16.
-- **Around 18 November:** retire the old ruby report (a `propose` PR, then the owner
-  runs `outside.yml` for ruby).
 - **13 November:** read the first live night, `{identifier="homelab-action"} |=
   "reboot:security"`: ruby and jennie should each reach `succeeded` after their
   reboot; a `failed` names what did not come back.
+- **16 November:** review task 15's shadow decisions, then start task 16.
+- **Around 18 November:** retire the old ruby report (a `propose` PR, then the owner
+  runs `outside.yml` for ruby).
 - **Off-site:** check `lock-test/2026-11-10.txt` still cannot be deleted while
   locked, and expires when it should.
 
