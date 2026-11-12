@@ -7,7 +7,7 @@ over that server's own tunnel, and the rules in
 
 | Vantage | Probes | Scraped over |
 |---|---|---|
-| jennie | ruby: SMTP :25 with STARTTLS, HTTPS sogode.com, ruby.peetvandesande.com, peetvandesande.com (404) – each over IPv4 and IPv6 | wg3, `192.168.254.2:9115` |
+| jennie | ruby: SMTP :25 with STARTTLS, HTTPS sogode.com, ruby.peetvandesande.com, peetvandesande.com (404), and the lab sites ruby proxies (Forgejo, n8n, GLPI) – each over IPv4 and IPv6 | wg3, `192.168.254.2:9115` |
 | ruby | jennie: ping, IPv4 and IPv6 | wg1, `192.168.254.254:9115` |
 
 Each also runs `prometheus-node-exporter` on `:9100` of the same address, so
