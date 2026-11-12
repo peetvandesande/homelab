@@ -253,6 +253,50 @@ ssh root@lenora.home pct exec <ctid> -- cat /etc/ssh/ssh_host_ed25519_key.pub
 ssh root@lenora.home qm guest exec <vmid> -- cat /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
+## Repo layout, and why
+
+The repo is split two ways on purpose. Each service has its own top-level
+directory – what is on the host (`<service>/root/`, mirroring its filesystem), its
+`CLAUDE.md` and its checks. `infra/` holds only what ties them together: the
+roles, the playbooks, the inventory, OpenTofu, the apply and CI scripts, and the
+secrets manifest. A role sources its files from the service's directory, so a
+service's configuration has one home, and the way it reaches a host has another.
+
+Moving the Ansible and OpenTofu into the services' directories was weighed and
+rejected on 12 November 2026:
+
+- **Playbooks follow the trust boundary, not the service.** Which playbook a
+  role is in says who may apply it – the runner, or a person for pistis,
+  lenora, talos, lexie, ruby and jennie – and in what order: Forgejo last,
+  because it carries the CI checking the change; Prometheus before Loki before
+  Grafana. `scripts/apply.sh` is the one place that says what the runner may
+  touch. Spread across the services, that would need a registry built back up
+  to drive it.
+- **Services and hosts are not one-to-one.** lexie carries the responder, the
+  runner, the runbook engine, the weekly report and the code scanning poller;
+  moby carries every Docker stack. An OpenTofu guest is a Proxmox object, not a
+  service, and several services have no Ansible or OpenTofu at all (the router's).
+- **One OpenTofu state is the simplest thing that works.** One provider, one
+  plan, one lock, one no-change baseline. A state per service means a loop of
+  plans and a `removed` plus `import` for every guest, because `moved` cannot
+  cross states.
+- **A `common/` would become `infra/` again.** The fleet roles run on every host,
+  and the inventory, `ansible.cfg`, `known_hosts`, `versions.env`, the scripts
+  and the manifest belong to no single service.
+- **Ansible collections are for sharing versioned content between repos.** With
+  one repo and one consumer they add a `galaxy.yml`, an `ansible_collections/`
+  tree, fully-qualified names and an install step, and nothing to version.
+  `roles_path` can list more than one directory if a role should ever live
+  beside its service.
+- **`dns/ansible/`** – zone data with its own `ansible.cfg` and inventory, kept
+  from before this programme – shows what per-service Ansible costs: a second
+  config and inventory to keep in step.
+
+Revisit if the estate gains tenants with separate owners or trust levels. Then
+the tenant, not the service, becomes the boundary: its own playbooks, inventory,
+OpenTofu state, runner reach and secrets project – which is a split by tenant,
+not by service.
+
 ## Where the code lives
 
 Forgejo's private `peet/homelab` is the primary. Every push runs
