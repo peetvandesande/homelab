@@ -166,3 +166,19 @@ In order:
 6. `offsite.yml --limit glpi`, by a person.
 7. The public side: the DNS records above, then `outside.yml` for jennie and
    ruby, by a person.
+
+## Cost
+
+Planning and deploying GLPI – PRs #48 to #56, guest to public side, on
+12 November 2026 – cost **$22.13** in one Claude Code session, as `/cost`
+reported it at the end:
+
+| | |
+|---|---|
+| Total cost | $22.13 |
+| API time | 41 min 33 s |
+| Wall-clock time | 6 h 27 min 10 s |
+| Code changes | 800 lines added, 4 removed |
+| claude-opus-5-5 | 5.4k input, 194.2k output, 72.0M cache read, 477.5k cache write – $22.13 |
+| claude-haiku-5-5 | 17.0k input, 5.3k output – $0.0044 |
+| Prompt cache | 290 requests, 99% of input tokens from cache |

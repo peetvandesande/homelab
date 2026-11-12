@@ -175,6 +175,9 @@ as `/cost` reported it at the end:
 
 It excludes the Claude runs the lab makes itself: the responder and the weekly report.
 
+A service deployed on top of it records its own cost in its `CLAUDE.md`: GLPI,
+$22.13 (`glpi/CLAUDE.md`, "Cost").
+
 ## Using it
 
 ```sh
