@@ -141,10 +141,11 @@
 - name: Load the timezone tables
   ansible.builtin.shell:
     cmd: |
-      set -e
+      set -eo pipefail
       [ "$(mariadb -N -e 'select count(*) from mysql.time_zone_name')" -gt 0 ] && exit 0
       mariadb-tzinfo-to-sql /usr/share/zoneinfo 2>/dev/null | mariadb mysql
       echo loaded
+    executable: /bin/bash
   register: glpi_tz
   changed_when: "'loaded' in glpi_tz.stdout"
 
