@@ -62,13 +62,18 @@ Never as root: files it creates become unwritable to php-fpm.
    `normal` and `post-only`, whose passwords everyone knows. The owner's account
    is `peet`, Super-Admin, created with `ADMIN_PASSWORD` and the owner's to change
    from then on – the role never resets it, so Bitwarden can fall behind it.
+   GLPI also gives every new account Self-Service; the role makes Super-Admin
+   the default for `peet` and `homelab-automation`, or a login starts in the
+   simple interface and the API lacks its rights.
 
-3. **The REST API answers on loopback only, for the role.** It is enabled, with
+3. **The REST API answers this host only, for the role.** It is enabled, with
    password login, because mail collectors have no console command: the role
    writes the collector through it, as `homelab-automation`, a Super-Admin whose
-   password the role generates and resets on every run. Two locks keep it local:
-   nginx refuses `/apirest.php` on :443 however it is spelt, and GLPI's only API
-   client is "full access from localhost". Do not add an API client or open the
+   password the role generates and resets on every run, at
+   `https://127.0.0.1/apirest.php`. Two locks keep it local: nginx admits
+   `/apirest.php` however it is spelt from 127.0.0.1 and ::1 only, and GLPI's
+   only API client is "full access from localhost". It has to be HTTPS: GLPI's
+   session cookies are secure-only, and over plain HTTP the API answers 400. Do not add an API client or open the
    path without replacing that account.
 
 4. **The role's settings are applied by hash, not compared.** `config:set`
