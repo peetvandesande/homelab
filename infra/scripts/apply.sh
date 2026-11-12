@@ -36,7 +36,8 @@ roles() { printf '^infra/ansible/roles/(%s)/' "$1"; }
 
 need=()
 matches "^ca/scripts/enrol\.sh$|$(roles 'enrol')|^infra/ansible/enrol\.yml" && need+=(enrol)
-matches "^(alloy/root|apt/|fleet/|node-exporter/)|$(roles 'node_exporter|hygiene|apt_security|alloy')|^infra/ansible/fleet\.yml" && need+=(fleet)
+# A FLEET change can be a new host, which needs the baseline as well as a certificate.
+matches "^ca/scripts/enrol\.sh$|^(alloy/root|apt/|fleet/|node-exporter/)|$(roles 'node_exporter|hygiene|apt_security|alloy')|^infra/ansible/fleet\.yml" && need+=(fleet)
 matches "^(prometheus|loki|grafana)/root/|$(roles 'prometheus|loki|grafana')|^infra/ansible/monitoring\.yml" && need+=(monitoring)
 matches "^dns/(pythia|delphi|themis|ansible)/|$(roles 'dns_stack')|^infra/ansible/dns\.yml" && need+=(dns)
 matches "^(jellyfin|navidrome|moby|glpi|forgejo)/root/|$(roles 'jellyfin|navidrome|moby|glpi|forgejo')|^infra/ansible/apps\.yml" && need+=(apps)
