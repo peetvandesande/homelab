@@ -57,8 +57,10 @@ glpi_file_dirs:
 
 glpi_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
 glpi_secrets: "{{ lookup('ansible.builtin.file', glpi_private ~ '/glpi/secrets.env') }}"
-glpi_admin_password: "{{ glpi_secrets | regex_search('(?m)^ADMIN_PASSWORD=(.*)$', '\\1') | first }}"
-glpi_mail_password: "{{ glpi_secrets | regex_search('(?m)^MAIL_PASSWORD=(.*)$', '\\1') | first }}"
+# A value vault.py writes single-quoted (one with spaces or shell characters)
+# is read without its quotes, as the shell would.
+glpi_admin_password: "{{ glpi_secrets | regex_search('(?m)^ADMIN_PASSWORD=(.*)$', '\\1') | first | regex_replace(\"^'([^']*)'$\", '\\1') }}"
+glpi_mail_password: "{{ glpi_secrets | regex_search('(?m)^MAIL_PASSWORD=(.*)$', '\\1') | first | regex_replace(\"^'([^']*)'$\", '\\1') }}"
 
 # Set with `config:set`, which encrypts smtp_passwd itself. Applied again only
 # when this set (or the password) changes: see "Apply the settings".
