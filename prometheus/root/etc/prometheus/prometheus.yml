@@ -368,8 +368,8 @@ scrape_configs:
         labels: {vantage: jennie, subject: ruby, check: ca-g3-aia, __param_module: http_ca }
       - targets: ['http://145.239.73.18/g2/root.crl', 'http://[2001:41d0:305:2100::1:3a0e]/g2/root.crl']
         labels: {vantage: jennie, subject: ruby, check: ca-g2-crl, __param_module: http_ca }
-      # Forgejo and n8n, proxied by ruby to the lab over wg1 (forgejo/ruby,
-      # moby/ruby). Each passes only if the request got all the way home and
+      # Forgejo, n8n and GLPI, proxied by ruby to the lab over wg1
+      # (forgejo/ruby, moby/ruby, glpi/ruby). Each passes only if the request got all the way home and
       # back, so like /g3/ they fail when home or wg1 does. n8n's editor is
       # also asserted closed: a 200 on / from here would mean it is public.
       - targets: ['https://145.239.73.18/api/healthz', 'https://[2001:41d0:305:2100::1:3a0e]/api/healthz']
@@ -382,6 +382,11 @@ scrape_configs:
         labels: {vantage: jennie, subject: ruby, check: n8n-sogode-webhook, __param_module: https_n8n_sogode_webhook }
       - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
         labels: {vantage: jennie, subject: ruby, check: n8n-sogode-editor-closed, __param_module: https_n8n_sogode_editor_closed }
+      # GLPI: status.php is open to jennie alone, the UI to nobody outside.
+      - targets: ['https://145.239.73.18/status.php', 'https://[2001:41d0:305:2100::1:3a0e]/status.php']
+        labels: {vantage: jennie, subject: ruby, check: itsm.sogode.com, __param_module: https_glpi_status }
+      - targets: ['https://145.239.73.18/', 'https://[2001:41d0:305:2100::1:3a0e]/']
+        labels: {vantage: jennie, subject: ruby, check: itsm-ui-closed, __param_module: https_glpi_ui_closed }
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

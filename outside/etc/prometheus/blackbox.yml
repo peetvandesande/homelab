@@ -169,3 +169,34 @@ modules:
       fail_if_not_ssl: true
       no_follow_redirects: true
       valid_status_codes: [403]
+
+  # GLPI through ruby. Only jennie and home ranges may read status.php, and
+  # GLPI answers it only after checking its database, so a 200 with no
+  # PROBLEM means ruby, wg1, glpi and MariaDB.
+  https_glpi_status:
+    prober: http
+    timeout: 10s
+    http:
+      headers:
+        Host: itsm.sogode.com
+      tls_config:
+        server_name: itsm.sogode.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [200]
+      fail_if_body_matches_regexp: ['"PROBLEM"']
+
+  # The UI must refuse the internet. 403 is ruby's allow list doing its job;
+  # anything else - above all a 200 - fails.
+  https_glpi_ui_closed:
+    prober: http
+    timeout: 10s
+    http:
+      method: HEAD
+      headers:
+        Host: itsm.sogode.com
+      tls_config:
+        server_name: itsm.sogode.com
+      fail_if_not_ssl: true
+      no_follow_redirects: true
+      valid_status_codes: [403]
