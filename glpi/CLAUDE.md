@@ -114,8 +114,13 @@ In order:
    with the restrictions `deploy-access.yml` gives it, so apply-on-merge reaches
    it from its first boot.
 3. Its host key pinned in `infra/ansible/known_hosts`; the mailbox on ruby; the
-   secrets filled and imported, and `deploy-access.yml` run so talos has them.
+   secrets filled and imported, and `deploy-access.yml` run so talos has them –
+   from the branch that adds them, since `main` does not list them yet.
 4. The service: `FLEET`, DNS, the role, monitoring – one merge, applied by the
    runner in the order enrol, fleet, monitoring, dns, apps.
-5. `ca.yml`, so its names become protected, and `offsite.yml --limit glpi`, both
-   by a person.
+5. **`ca.yml` by a person, then a re-run of that merge's job.** talos may mint
+   a new host only its `.home` name and lab addresses; `itsm.sogode.com` is
+   allowed once `ca.yml` has put glpi and its `FLEET` names on pistis's lists.
+   The first apply was refused for exactly that on 12 November 2026. Running
+   `ca.yml` from the branch before merging avoids the re-run.
+6. `offsite.yml --limit glpi`, by a person.

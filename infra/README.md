@@ -198,7 +198,10 @@ ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check 
 
 `fleet.yml` is the baseline on every host, and a run on a healthy fleet changes
 nothing. For a new host: add it to `FLEET`, then run `enrol.yml` and `fleet.yml`
-limited to it, then `ca.yml` so its name becomes protected. hermes is off unless a lab is running, so
+limited to it, then `ca.yml` so its name becomes protected. A new host whose
+`FLEET` line carries an extra name that is not a lab address – a public name
+like `itsm.sogode.com` – needs `ca.yml` *first*: talos's restricted minter
+refuses such a name until pistis lists it. hermes is off unless a lab is running, so
 leave it out of the run while it is off. sally is not in `FLEET`, by design.
 
 | Path | Holds |
