@@ -3,7 +3,6 @@ outside_host_repo: "{{ role_path }}/../../../.."
 # Same pin as the fleet's alloy role: bump the two together.
 outside_host_alloy_version: 1.19.2
 outside_host_vhosts:
-  - { src: forgejo/ruby/etc/nginx/sites-available/git.peetvandesande.com, name: git.peetvandesande.com }
   - { src: forgejo/ruby/etc/nginx/sites-available/git.sogode.com, name: git.sogode.com }
   - { src: moby/ruby/etc/nginx/sites-available/n8n.peetvandesande.com, name: n8n.peetvandesande.com }
   - { src: moby/ruby/etc/nginx/sites-available/n8n.sogode.com, name: n8n.sogode.com }
@@ -11,6 +10,11 @@ outside_host_vhosts:
 # Zone files under wireguard/jennie/services/etc/bind/wireguard that this role
 # owns on both hosts: the public names VPN clients get the lab's answer for.
 outside_host_tunnel_zones:
-  - git.peetvandesande.com
   - n8n.peetvandesande.com
   - sogode.com
+# Sites and tunnel zones that were published once and are gone: removed, with a
+# site's certificate, wherever they are still found.
+outside_host_retired_vhosts:
+  - git.peetvandesande.com
+outside_host_retired_tunnel_zones:
+  - git.peetvandesande.com

@@ -22,3 +22,10 @@
     validate: "named-checkzone -q {{ item }} %s"
   loop: "{{ outside_host_tunnel_zones }}"
   notify: Reload BIND
+
+# After named.conf.local has stopped naming them.
+- name: Remove retired tunnel zones
+  ansible.builtin.file:
+    path: "/etc/bind/wireguard/{{ item }}"
+    state: absent
+  loop: "{{ outside_host_retired_tunnel_zones }}"
