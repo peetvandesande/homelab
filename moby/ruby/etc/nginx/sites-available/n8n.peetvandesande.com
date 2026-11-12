@@ -1,5 +1,5 @@
 # n8n.peetvandesande.com on ruby - the public face of the n8n stack on moby.
-# Managed in homelab/moby/ruby; installed by moby/scripts/install-ruby.sh.
+# Managed in homelab/moby/ruby; installed by infra/ansible/outside.yml.
 #
 # Publicly the name is a CNAME to this host; inside the lab and the VPN it
 # resolves to moby, whose nginx fronts the stack.

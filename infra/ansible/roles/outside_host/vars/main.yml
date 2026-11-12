@@ -7,3 +7,9 @@ outside_host_vhosts:
   - { src: moby/ruby/etc/nginx/sites-available/n8n.peetvandesande.com, name: n8n.peetvandesande.com }
   - { src: moby/ruby/etc/nginx/sites-available/n8n.sogode.com, name: n8n.sogode.com }
   - { src: moby/ruby/etc/nginx/sites-available/ntfy.sogode.com, name: ntfy.sogode.com }
+# Zone files under wireguard/jennie/services/etc/bind/wireguard that this role
+# owns on both hosts: the public names VPN clients get the lab's answer for.
+outside_host_tunnel_zones:
+  - git.peetvandesande.com
+  - n8n.peetvandesande.com
+  - sogode.com

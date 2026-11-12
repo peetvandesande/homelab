@@ -1,6 +1,6 @@
 # ntfy.sogode.com on ruby - the public face of ntfy in moby's jobsearch-shared
 # stack. Managed in homelab/moby/ruby; installed by
-# moby/scripts/install-ruby-ntfy.sh.
+# infra/ansible/outside.yml.
 #
 # Publicly a CNAME to this host. All of it is public: the phone app needs the
 # API, and ntfy itself denies every topic to anyone without a login.
@@ -47,7 +47,7 @@ server {
     proxy_ssl_server_name         on;
     proxy_ssl_name                ntfy.sogode.com;
 
-    # Not public, like every vhost install-ruby-vhost.sh puts here. ntfy's web
+    # Not public, like every public site on ruby. ntfy's web
     # app answers 200 for any path, so close it explicitly.
     location = /metrics {
         return 404;

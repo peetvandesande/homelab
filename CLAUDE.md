@@ -370,15 +370,15 @@ lab-CA certificate. Inside the lab the same name is split-horizon to the
 origin itself (`dns/CLAUDE.md` invariant 5), whose lab certificate carries it
 as a SAN – so the LAN never round-trips via OVH, and a device that does not
 trust the lab CA warns on the LAN only. VPN clients get the same inside
-answer from the tunnel's DNS (ruby's and jennie's BIND,
-`wireguard/install-public-overrides.sh`), so they too reach the origin
+answer from the tunnel's DNS (ruby's and jennie's BIND, installed by
+`infra/ansible/outside.yml`), so they too reach the origin
 directly and n8n's editor is open to them. The services have to know themselves
 by one URL (Forgejo's `ROOT_URL`, n8n's `WEBHOOK_URL`), which is why it is
 this rather than separate `.home` and public names.
 
 The ruby half lives with each service (`forgejo/ruby/`, `moby/ruby/`) and is
-installed from ruby's clone with that service's `scripts/install-ruby.sh`; the
-shared work is `shared/install-ruby-vhost.sh`. Because ruby's public :22 is
+installed by `infra/ansible/outside.yml`, listed in `outside_host_vhosts`, which
+also issues each site's certificate. Because ruby's public :22 is
 Forgejo's (`forgejo/CLAUDE.md` invariant 8), **ruby itself takes SSH over the
 VPN only**. Neither service has a backup yet.
 

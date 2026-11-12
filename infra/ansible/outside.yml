@@ -1,7 +1,9 @@
 ---
 # ruby and jennie. Always run by a person, over the VPN, and never from CI: these
-# hosts face the internet and carry mail. Only what the repo owns is here. WireGuard,
-# nftables and a brand-new public vhost stay with their own install scripts.
+# hosts face the internet and carry mail. Only what the repo owns is here: public
+# sites and their certificates included, the tunnel's DNS overrides too. WireGuard
+# stays with its own setup, and moving ruby's sshd off the public :22 with
+# forgejo/scripts/install-ruby-ssh.sh, which guards against a lockout.
 #
 # Login takes more than a key, and Ansible cannot answer the prompt, so log in
 # yourself first and stay logged in. Once per host, jennie then ruby:
