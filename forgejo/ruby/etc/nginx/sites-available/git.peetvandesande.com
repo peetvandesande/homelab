@@ -1,5 +1,5 @@
 # git.peetvandesande.com on ruby - the public face of Forgejo. Managed in
-# homelab/forgejo/ruby; installed by forgejo/scripts/install-ruby.sh.
+# homelab/forgejo/ruby; installed by infra/ansible/outside.yml.
 #
 # Publicly the name is a CNAME to this host; inside the lab and the VPN it
 # resolves to forgejo itself, so this vhost serves only the internet.

@@ -17,8 +17,8 @@ set -euo pipefail
 SELF=$(realpath "$0")
 REPO=$(cd "$(dirname "$SELF")/../.." && pwd)
 SVC=$REPO/wireguard/ruby/services/etc
-STREAM_SRC=$REPO/forgejo/ruby/etc/nginx/stream.d/git.peetvandesande.com-ssh.conf
-STREAM=/etc/nginx/stream.d/git.peetvandesande.com-ssh.conf
+STREAM_SRC=$REPO/forgejo/ruby/etc/nginx/stream.d/forgejo-ssh.conf
+STREAM=/etc/nginx/stream.d/forgejo-ssh.conf
 SSHD=/etc/ssh/sshd_config.d/10-vpn-only.conf
 UNIT_SVC=/etc/systemd/system/ssh.service.d/vpn-only.conf
 UNIT_SOCK=/etc/systemd/system/ssh.socket.d/vpn-only.conf

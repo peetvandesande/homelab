@@ -34,3 +34,13 @@
 - name: Load the firewall
   ansible.builtin.command: nft -f /etc/nftables.conf
   changed_when: true
+
+# Checks the whole configuration with its zones before BIND sees any of it.
+- name: Reload BIND
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      named-checkconf -z >/dev/null
+      rndc reconfig
+      rndc reload
+  changed_when: true

@@ -16,9 +16,8 @@ split-horizon to this host, off it it is ruby, which proxies here over wg1
 scripts/bootstrap.sh     create CT 303 on lenora and install (see its header)
 infra/ansible/apps.yml        push root/, generate secrets once, restart
 scripts/verify.sh        LAN, both families, SSH, ruby, monitoring
-scripts/install-ruby.sh  on ruby: sudo ~/homelab/forgejo/scripts/install-ruby.sh
 scripts/install-ruby-ssh.sh  on ruby, over the VPN: ruby's public :22 to forgejo
-ruby/                    the public vhost and stream proxy they install
+ruby/                    the public vhost and stream proxy, installed by infra/ansible/outside.yml
 ```
 
 Order for a rebuild: router reservation for the MAC in `bootstrap.sh`, then

@@ -42,24 +42,81 @@
     state: started
     daemon_reload: true
 
-# A vhost that is not already enabled is a new public service: that goes through
-# its own install script, which also issues the certificate.
-- name: Find the public sites that are already enabled
-  ansible.builtin.stat:
-    path: "/etc/nginx/sites-enabled/{{ item.name }}"
-  loop: "{{ outside_host_vhosts }}"
-  loop_control:
-    label: "{{ item.name }}"
-  register: outside_host_enabled
-
-- name: Update those sites from the repo
+# The public sites: each reverse-proxies a lab service over wg1, with a Let's
+# Encrypt certificate, and verifies the origin against the lab root. Listing a
+# site in outside_host_vhosts publishes it; its public name must already point
+# here, or the certificate cannot be issued.
+- name: Install the lab root the sites verify their origins against
   ansible.builtin.copy:
-    src: "{{ outside_host_repo }}/{{ item.item.src }}"
-    dest: "/etc/nginx/sites-available/{{ item.item.name }}"
+    src: "{{ outside_host_repo }}/ca/rootca/certs/root.crt"
+    dest: /etc/nginx/homelab-root-g2.crt
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ outside_host_enabled.results | selectattr('stat.exists') }}"
+
+# The editors and admin pages read it; it belongs to ruby's own setup.
+- name: Check the admin allow list is there
+  ansible.builtin.stat:
+    path: /etc/nginx/snippets/home-lan-allow.conf
+  register: outside_host_allow
+  failed_when: not outside_host_allow.stat.exists or outside_host_allow.stat.size == 0
+
+# certonly with the nginx authenticator answers http-01 through the running nginx
+# and edits no config, so each site stays exactly what is in git. The deploy hook
+# is kept in the renewal config.
+- name: Issue the sites' certificates
+  ansible.builtin.command:
+    cmd: >-
+      certbot certonly --nginx -n --keep-until-expiring -d {{ item.name }}
+      --deploy-hook "systemctl reload nginx"
+    creates: "/etc/letsencrypt/live/{{ item.name }}/fullchain.pem"
+  loop: "{{ outside_host_vhosts }}"
   loop_control:
-    label: "{{ item.item.name }}"
+    label: "{{ item.name }}"
+
+- name: Install the sites
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/{{ item.src }}"
+    dest: "/etc/nginx/sites-available/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ outside_host_vhosts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload nginx
+
+- name: Enable the sites
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item.name }}"
+    dest: "/etc/nginx/sites-enabled/{{ item.name }}"
+    state: link
+    force: "{{ ansible_check_mode }}"
+  loop: "{{ outside_host_vhosts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload nginx
+
+# Forgejo's SSH on the public :22. Only once ruby's own sshd has left the public
+# addresses, which forgejo/scripts/install-ruby-ssh.sh does with a rollback timer:
+# before that, nginx could not bind :22.
+- name: Find out whether the public :22 is Forgejo's
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config.d/10-vpn-only.conf
+  register: outside_host_vpn_only_ssh
+
+- name: Pass the public :22 to Forgejo
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/forgejo/ruby/etc/nginx/stream.d/forgejo-ssh.conf"
+    dest: /etc/nginx/stream.d/forgejo-ssh.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: outside_host_vpn_only_ssh.stat.exists
+  notify: Reload nginx
+
+- name: Remove the stream proxy's old name
+  ansible.builtin.file:
+    path: /etc/nginx/stream.d/git.peetvandesande.com-ssh.conf
+    state: absent
   notify: Reload nginx

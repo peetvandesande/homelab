@@ -1,0 +1,24 @@
+---
+# The lab's own answers for the public names VPN clients should reach directly over
+# the tunnel, served by this host's BIND to VPN clients. Each host has its own
+# named.conf.local; the zone files are shared and kept under jennie's tree.
+- name: Install the zone declarations
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/wireguard/{{ inventory_hostname }}/services/etc/bind/named.conf.local"
+    dest: /etc/bind/named.conf.local
+    owner: root
+    group: bind
+    mode: "0644"
+    validate: named-checkconf %s
+  notify: Reload BIND
+
+- name: Install the tunnel zones
+  ansible.builtin.copy:
+    src: "{{ outside_host_repo }}/wireguard/jennie/services/etc/bind/wireguard/{{ item }}"
+    dest: "/etc/bind/wireguard/{{ item }}"
+    owner: root
+    group: bind
+    mode: "0644"
+    validate: "named-checkzone -q {{ item }} %s"
+  loop: "{{ outside_host_tunnel_zones }}"
+  notify: Reload BIND

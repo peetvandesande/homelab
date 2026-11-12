@@ -15,6 +15,9 @@
 - name: Set up log shipping
   ansible.builtin.import_tasks: alloy.yml
 
+- name: Set up the tunnel's DNS overrides
+  ansible.builtin.import_tasks: bind.yml
+
 - name: Set up what only ruby runs
   ansible.builtin.include_tasks: ruby.yml
   when: inventory_hostname == 'ruby'

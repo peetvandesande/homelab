@@ -140,8 +140,8 @@ check_n8n() {  # <stack> <public name> <loopback port> <ruby installer>
     || pass "nothing in the stack is published beyond loopback"
 }
 chain_ok "moby:443" "$HOST:443"
-check_n8n n8n        n8n.peetvandesande.com 5678 moby/scripts/install-ruby.sh
-check_n8n n8n-sogode n8n.sogode.com         5680 moby/scripts/install-ruby-sogode.sh
+check_n8n n8n        n8n.peetvandesande.com 5678 "its vhost (outside.yml)"
+check_n8n n8n-sogode n8n.sogode.com         5680 "its vhost (outside.yml)"
 
 echo "== job search stacks"
 for pair in jobsearch-sogode:n8n-sogode jobsearch-personal:n8n; do
@@ -161,7 +161,7 @@ code=$(curl -sS --max-time 10 --cacert "$CA_ROOT" -o /dev/null -w '%{http_code}'
 [[ $code == 200 ]] && pass "ntfy answers as ntfy.sogode.com on moby" || bad "ntfy answers as ntfy.sogode.com on moby" "http=$code"
 code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' --resolve "ntfy.sogode.com:443:145.239.73.18" https://ntfy.sogode.com/jobs-sogode/json?poll=1 2>/dev/null) || code=000
 [[ $code == 403 || $code == 401 ]] && pass "ntfy topics are closed to anonymous users via ruby ($code)" \
-  || bad "ntfy topics are closed to anonymous users via ruby" "http=$code - install-ruby-ntfy.sh?"
+  || bad "ntfy topics are closed to anonymous users via ruby" "http=$code - its vhost installed (outside.yml)?"
 for st in jobsearch-shared jobsearch-sogode jobsearch-personal; do
   $SSH "root@$HOST" "docker ps --filter label=com.docker.compose.project=$st --format '{{.Ports}}' | grep -E '0\.0\.0\.0|\[::\]'" >/dev/null 2>&1 \
     && bad "$st publishes nothing beyond loopback" "a port is on the wildcard" \

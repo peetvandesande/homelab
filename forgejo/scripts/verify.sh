@@ -69,7 +69,7 @@ echo "== public side, through ruby"
 # Pinned to ruby's public address: by name this would resolve to forgejo.
 code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$NAME:443:$RUBY4" "https://$NAME/" 2>/dev/null) || code=000
 [[ $code == 200 ]] && pass "https://$NAME/ via ruby (200, public certificate)" \
-  || bad "https://$NAME/ via ruby" "http=$code - is forgejo/scripts/install-ruby.sh installed on ruby?"
+  || bad "https://$NAME/ via ruby" "http=$code - is its vhost installed on ruby (outside.yml)?"
 code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' --resolve "$NAME:443:$RUBY4" "https://$NAME/metrics" 2>/dev/null) || code=000
 [[ $code == 404 ]] && pass "/metrics is not served via ruby (404)" || bad "/metrics is not served via ruby" "http=$code"
 # ruby's public :22 is forgejo's sshd, end to end: same host key as on the LAN.

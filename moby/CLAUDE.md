@@ -102,7 +102,7 @@ terminates TLS with moby's lab certificate, which carries `n8n.home` and
 
 - **One URL.** `WEBHOOK_URL` is the public name; on the LAN it is
   split-horizon to moby, off it ruby proxies to moby's nginx over wg1
-  (`ruby/`, installed on ruby with `scripts/install-ruby.sh`). Through ruby
+  (`ruby/`, installed on ruby by `infra/ansible/outside.yml`). Through ruby
   only webhooks, forms and their assets are public; the editor and APIs are
   limited to `snippets/home-lan-allow.conf`. On the LAN everything is open,
   and VPN clients count as the LAN: the tunnel's DNS gives them moby too.
@@ -154,11 +154,11 @@ one function.
 
 - **The name works from three sides.** Publicly an A/AAAA to ruby (not a
   CNAME – the name also carries its mail domain's MX and SPF), whose vhost
-  `ruby/…/n8n.sogode.com` is installed with `scripts/install-ruby-sogode.sh`;
+  `ruby/…/n8n.sogode.com` is installed by `outside.yml`;
   in the lab a split-horizon zone on Pythia, with a forward and an `addNTA`
   on Delphi because sogode.com is DNSSEC-signed; on the VPN an `n8n` record
   in ruby's and jennie's own sogode.com zone
-  (`wireguard/install-public-overrides.sh`). moby's certificate carries it.
+  (`outside.yml` too). moby's certificate carries it.
 - **Mail is `n8n@n8n.sogode.com`, a mailbox on ruby**, not Office 365, which
   keeps sogode.com itself. `n8n.sogode.com` is its own mail domain: MX to
   ruby, `v=spf1 mx -all`, DKIM selector `mail` signed by ruby, and no DMARC
@@ -184,7 +184,7 @@ stacks and whose profile, CV, prompts and workflow generator live in the
 - **`jobsearch-shared`**: `render` (Pandoc to .docx, Gotenberg to PDF, and a
   YAML-to-JSON endpoint, built here from `render/`), Gotenberg, and ntfy on
   `127.0.0.1:5690` behind `ntfy-sogode.conf` as **ntfy.sogode.com**, public via
-  ruby (`scripts/install-ruby-ntfy.sh`). render and ntfy join both n8n
+  ruby (`outside.yml`). render and ntfy join both n8n
   networks; Gotenberg only this stack's own.
 
 - **`.env` per stack, generated once** by `apps.yml`: the database password
