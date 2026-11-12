@@ -33,7 +33,8 @@ reads the token from there.
    alert is passed as fenced data and the prompt says so. This is why invariant
    1 matters more than the prompt.
 3. **`allowed-alerts` decides what it acts on**, by rule title, and ships
-   narrow: failed and stuck units, disk and memory. Grafana sends it every
+   narrow: failed and stuck units, disk and memory, and GitHub code scanning
+   findings (`github-alerts/`), whose fix is always a pull request. Grafana sends it every
    alert; the filter is here so widening is one file and one deploy. Leave the
    router, DNS stack, CA and WAN alerts off until you have read a few reports –
    those are the places where a wrong suggestion costs access to fix.

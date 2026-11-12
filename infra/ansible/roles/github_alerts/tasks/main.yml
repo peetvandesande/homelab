@@ -1,0 +1,37 @@
+---
+- name: Create the settings directory
+  ansible.builtin.file:
+    path: /etc/github-alerts
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the poller and its timer
+  ansible.builtin.copy:
+    src: "{{ github_alerts_source }}/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: usr/local/bin/github-alerts, mode: "0755" }
+    - { path: etc/systemd/system/github-alerts.service, mode: "0644" }
+    - { path: etc/systemd/system/github-alerts.timer, mode: "0644" }
+
+- name: Install its token
+  ansible.builtin.copy:
+    content: |
+      GITHUB_TOKEN={{ github_alerts_token }}
+    dest: /etc/github-alerts/github-alerts.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Keep the timer on
+  ansible.builtin.systemd_service:
+    name: github-alerts.timer
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,5 +1,5 @@
 ---
-# The two Actions runners and the alert responder. Always run by a person: this
+# The two Actions runners, the alert responder and the GitHub alerts poller. Always run by a person: this
 # restarts the runners, so it must not run from a job on one of them. Forgejo must
 # be up, since each runner registers with it. From infra/ansible:
 #
@@ -13,6 +13,7 @@
     - responder
     - runbook
     - estate_report
+    - github_alerts
     - role: forgejo_runner
       vars:
         forgejo_runner_source: "{{ playbook_dir }}/../../forgejo-runner/root"

@@ -431,6 +431,10 @@ ruby and jennie ship theirs over the tunnels too, as `{host="ruby"}` and
 The router cannot run Alloy, so it sends syslog to Loki's own Alloy over UDP
 instead, as `{host="router"}` – `loki/CLAUDE.md`, `router/README.md` "Logs".
 
+**Code scanning on the GitHub mirror** is read back every 15 minutes by a
+poller on lexie, so each finding becomes a Grafana alert naming the rule, file
+and line – `github-alerts/`.
+
 A **weekly report** goes out from lexie every Monday morning, covering the
 whole estate – incidents, automated actions, backups, every host, mail and web
 on ruby – with Claude's interpretation at the top: smooth sailing, or what needs

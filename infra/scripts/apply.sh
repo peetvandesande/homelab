@@ -43,7 +43,7 @@ matches "^(jellyfin|navidrome|moby|forgejo)/root/|$(roles 'jellyfin|navidrome|mo
 matches "^metis/root/|$(roles 'metis')" && need+=(metis)
 
 person=$(printf '%s\n' "${changed[@]}" | grep -E \
-  "^(ca|responder|runbooks|offsite|forgejo-runner|talos|outside|estate-report|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|responder|runbook|offsite|estate_report|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|offsite|outside|platform|deploy-access)\.yml" \
+  "^(ca|responder|runbooks|offsite|forgejo-runner|talos|outside|estate-report|github-alerts|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|responder|runbook|offsite|estate_report|github_alerts|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|offsite|outside|platform|deploy-access)\.yml" \
   | grep -vx 'ca/scripts/enrol\.sh' || true)
 if [[ -n $person ]]; then
   echo "== needs a person: these do not reach their hosts through CI"

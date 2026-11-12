@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Publish the GitHub mirror's open code scanning alerts as metrics.
+
+Managed from homelab/github-alerts. Standard library only. Runs on lexie every
+15 minutes, with a read-only token from /etc/github-alerts/github-alerts.env.
+
+GitHub scans the public mirror on every push to main and on Tuesdays at 20:17;
+this reads what it found and writes it to node-exporter's textfile collector,
+one series per open alert, so Grafana alerts on each one with its rule and
+place in the code. A failed poll leaves the last good file alone, and the
+"poll is stale" rule says when that has gone on too long.
+"""
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
+
+REPO = os.environ.get("GITHUB_REPO", "peetvandesande/homelab")
+TOKEN = os.environ.get("GITHUB_TOKEN", "")
+API = "https://api.github.com"
+OUT = os.environ.get("GITHUB_ALERTS_PROM", "/var/lib/node_exporter/textfile/github_alerts.prom")
+SEVERITIES = ("critical", "high", "medium", "low", "error", "warning", "note")
+NEXT = re.compile(r'<([^>]+)>;\s*rel="next"')
+
+
+class Transient(Exception):
+    """GitHub or the network had a bad moment; try again at the next run."""
+
+
+def log(*a):
+    print(*a, file=sys.stderr, flush=True)
+
+
+def get(url):
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "homelab-github-alerts"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r), r.headers.get("Link", "")
+    except urllib.error.HTTPError as e:
+        if e.code >= 500 or e.code == 429:
+            raise Transient(f"GitHub answered {e.code}")
+        raise
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise Transient(str(e))
+
+
+def open_alerts(fetch=get):
+    alerts, url = [], f"{API}/repos/{REPO}/code-scanning/alerts?state=open&per_page=100"
+    while url:
+        page, link = fetch(url)
+        alerts += page
+        m = NEXT.search(link)
+        url = m.group(1) if m else None
+    return alerts
+
+
+def label(v):
+    return str(v).replace("\\", r"\\").replace('"', r"\"").replace("\n", " ")[:200]
+
+
+def severity(a):
+    rule = a.get("rule") or {}
+    return rule.get("security_severity_level") or rule.get("severity") or "unknown"
+
+
+def render(alerts, now):
+    lines = [
+        "# HELP github_code_scanning_alert An open code scanning alert on the GitHub mirror.",
+        "# TYPE github_code_scanning_alert gauge"]
+    counts = dict.fromkeys(SEVERITIES, 0)
+    for a in sorted(alerts, key=lambda a: a["number"]):
+        rule = a.get("rule") or {}
+        inst = a.get("most_recent_instance") or {}
+        loc = inst.get("location") or {}
+        sev = severity(a)
+        counts[sev] = counts.get(sev, 0) + 1
+        labels = {
+            "number": a["number"], "rule": rule.get("id", "?"), "severity": sev,
+            "tool": (a.get("tool") or {}).get("name", "?"),
+            "path": loc.get("path", "?"), "line": loc.get("start_line", 0),
+            "summary": rule.get("description") or (inst.get("message") or {}).get("text", ""),
+            "url": a.get("html_url", "")}
+        lines.append("github_code_scanning_alert{"
+                     + ",".join(f'{k}="{label(v)}"' for k, v in labels.items()) + "} 1")
+    lines += [
+        "# HELP github_code_scanning_alerts_open Open code scanning alerts, by severity.",
+        "# TYPE github_code_scanning_alerts_open gauge"]
+    lines += [f'github_code_scanning_alerts_open{{severity="{label(s)}"}} {n}' for s, n in counts.items()]
+    lines += [
+        "# HELP github_code_scanning_poll_success_timestamp_seconds When the alerts were last read.",
+        "# TYPE github_code_scanning_poll_success_timestamp_seconds gauge",
+        f"github_code_scanning_poll_success_timestamp_seconds {int(now)}"]
+    return "\n".join(lines) + "\n"
+
+
+def write(text, path=OUT):
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def main():
+    if not TOKEN:
+        log("no GITHUB_TOKEN")
+        return 1
+    try:
+        alerts = open_alerts()
+    except Transient as e:
+        log(f"not polled this time: {e}")
+        return 0
+    write(render(alerts, time.time()))
+    log(f"{len(alerts)} open alert(s)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,9 @@
+[Unit]
+Description=Read the GitHub mirror's code scanning alerts every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

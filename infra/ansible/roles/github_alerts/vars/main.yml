@@ -1,0 +1,9 @@
+---
+github_alerts_source: "{{ role_path }}/../../../../github-alerts/root"
+github_alerts_private: >-
+  {{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE')
+     | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}
+# A fine-grained token for the mirror alone, with read access to code scanning alerts.
+github_alerts_token: >-
+  {{ lookup('ansible.builtin.file', github_alerts_private ~ '/github-alerts/secrets.env')
+     | regex_search("(?m)^GITHUB_TOKEN='?(.*?)'?$", '\1') | first }}

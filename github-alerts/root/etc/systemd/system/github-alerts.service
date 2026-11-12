@@ -1,0 +1,19 @@
+[Unit]
+Description=Read the GitHub mirror's code scanning alerts (github-alerts/)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/github-alerts/github-alerts.env
+ExecStart=/usr/local/bin/github-alerts
+# Root, as every job writing to the textfile collector does; confined to that directory.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/node_exporter/textfile

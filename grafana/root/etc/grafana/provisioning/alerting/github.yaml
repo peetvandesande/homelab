@@ -1,0 +1,110 @@
+# Code scanning on the public GitHub mirror (homelab/github-alerts), read by a
+# poller on lexie every 15 minutes. Managed from homelab/grafana.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: github
+    folder: Homelab
+    interval: 5m
+    rules:
+      - uid: github-code-scanning-alert
+        title: "GitHub code scanning alert"
+        condition: B
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.rule }} ({{ $labels.severity }}) at {{ $labels.path }}:{{ $labels.line }}"
+          description: >-
+            {{ $labels.summary }}. GitHub's scan of the public mirror found it: {{ $labels.url }}. Fix it in the repo by pull request; the alert clears at the next scan of main. A false positive is dismissed on GitHub, with the reason. github-alerts/CLAUDE.md.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'github_code_scanning_alert'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [0]
+      - uid: github-alerts-poll-stale
+        title: "GitHub code scanning is not being read"
+        condition: B
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "github-alerts on lexie has not read the mirror's alerts in over 2h"
+          description: >-
+            New findings on GitHub would go unnoticed. journalctl -u github-alerts on lexie: a 401 or 403 means the token has expired or lost its access. NoData means it has never run.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'time() - github_code_scanning_poll_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: gt
+                    params: [7200]
