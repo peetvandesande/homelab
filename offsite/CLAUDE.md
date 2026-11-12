@@ -48,7 +48,9 @@ A lifecycle rule, `expire-noncurrent`, removes a version one day after it stops
 being current, once its lock allows, and then the empty delete marker; without
 it, what restic deletes would be billed for ever. The test object's version has
 been non-current since 10 November, so it is also the proof that the rule
-respects the lock: it must still be readable until 8 February 2027.
+respects the lock: it must still be readable until 8 February 2027. On
+12 November 2026 it was: non-current, `COMPLIANCE` until 8 February, and a
+delete of the version with the governance bypass header was refused.
 
 **Why the locks are renewed.** The default lock runs from upload, so a photo
 uploaded once would become deletable 90 days later. `maintain` renews every

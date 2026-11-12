@@ -124,8 +124,9 @@ after the table was numbered.
 - **16 November:** review task 15's shadow decisions, then start task 16.
 - **Around 18 November:** retire the old ruby report (a `propose` PR, then the owner
   runs `outside.yml` for ruby).
-- **Off-site:** check `lock-test/2026-11-10.txt` still cannot be deleted while
-  locked, and expires when it should.
+- **Around 9 February 2027:** check the off-site test version
+  `lock-test/2026-11-10.txt` has gone, now its lock has run out (`offsite/CLAUDE.md`,
+  "The bucket"). On 12 November it was still readable and its deletion refused.
 
 | # | Task | State |
 |---|---|---|
