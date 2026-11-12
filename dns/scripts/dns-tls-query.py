@@ -58,6 +58,7 @@ def main():
     # every lab certificate carries as a SAN.
     server_name = sys.argv[6] if len(sys.argv) > 6 else ip
     ctx = ssl.create_default_context(cafile=ca)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
 
     if mode == "dot":
         with socket.create_connection((ip, int(port)), timeout=8) as raw:

@@ -217,6 +217,7 @@ def main():
     httpd = ThreadingHTTPServer((os.environ["RUNBOOK_BIND"], PORT), Handler)
     # Read once at start; the post-renew hook restarts the service on renewal.
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(CERT, KEY)
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
     httpd.serve_forever()

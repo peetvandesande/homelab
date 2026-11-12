@@ -20,6 +20,8 @@ except KeyError as e:
     sys.exit(f"{e.args[0]} not set")
 
 salt, byte = os.urandom(16), os.urandom(1)
+# MD5 because Orange's DHCP option 90 authentication specifies it; it is not a
+# choice this tool can make. Dismissed on GitHub's code scanning for that reason.
 h = hashlib.md5(byte + pwd + salt).digest()
 blob = (bytes(11) + bytes.fromhex("1a0900000558010341")
         + b"\x01" + bytes([len(login) + 2]) + login
