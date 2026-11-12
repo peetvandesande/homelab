@@ -313,7 +313,9 @@
     glpi_user_state: "{{ dict(glpi_users.stdout_lines | map('split', '\t')) }}"
 
 # The owner's password is set only here, at creation: afterwards it is theirs
-# to change in GLPI. The automation account's is the role's own.
+# to change in GLPI. The automation account's is generated once on the host and
+# never changes; it cannot be reset to itself on later runs either, as GLPI
+# refuses a password it has used recently.
 - name: Create the owner's and the automation accounts
   ansible.builtin.command:
     argv: "{{ glpi_console + ['user:create', item.name, '--password=' ~ item.password] }}"
@@ -333,12 +335,22 @@
   loop: "{{ [glpi_owner, glpi_automation_user] | reject('in', glpi_user_state) | list }}"
   changed_when: true
 
-- name: Keep the automation account's password the role's own
+# GLPI's rules also give every new account Self-Service, and with no default
+# profile a session starts in it: the owner would land in the simple interface
+# and the API session would lack the rights to manage mail collectors.
+- name: Make Super-Admin their default profile
   ansible.builtin.command:
-    argv: "{{ glpi_console + ['user:reset_password', glpi_automation_user, '--password=' ~ glpi_automation_password] }}"
-  when: glpi_automation_user in glpi_user_state
-  changed_when: false
-  no_log: true
+    argv:
+      - mariadb
+      - -N
+      - glpi
+      - -e
+      - >-
+        UPDATE glpi_users SET profiles_id = {{ glpi_super_admin_profile }}
+        WHERE name IN ('{{ glpi_owner }}', '{{ glpi_automation_user }}')
+        AND profiles_id <> {{ glpi_super_admin_profile }}; SELECT ROW_COUNT();
+  register: glpi_default_profile
+  changed_when: glpi_default_profile.stdout | trim != '0'
 
 - name: Disable GLPI's default accounts
   ansible.builtin.command:
@@ -391,13 +403,15 @@
         mode: "0600"
 
 # Mail collectors have no console command, so this goes through GLPI's REST
-# API on the loopback listener, which encrypts the password as the UI would.
+# API, which encrypts the password as the UI would. nginx admits the API from
+# this host alone; the certificate carries 127.0.0.1.
 - name: Apply the mail collector
   when: glpi_collector_due
   block:
     - name: Open an API session
       ansible.builtin.uri:
-        url: http://127.0.0.1:8080/apirest.php/initSession
+        url: https://127.0.0.1/apirest.php/initSession
+        ca_path: /etc/homelab-tls/root_ca.crt
         url_username: "{{ glpi_automation_user }}"
         url_password: "{{ glpi_automation_password }}"
         force_basic_auth: true
@@ -406,7 +420,8 @@
 
     - name: Find the collector
       ansible.builtin.uri:
-        url: http://127.0.0.1:8080/apirest.php/MailCollector?range=0-99
+        url: https://127.0.0.1/apirest.php/MailCollector?range=0-99
+        ca_path: /etc/homelab-tls/root_ca.crt
         headers:
           Session-Token: "{{ glpi_session.json.session_token }}"
         status_code: [200, 206]
@@ -415,7 +430,8 @@
 
     - name: Update it
       ansible.builtin.uri:
-        url: "http://127.0.0.1:8080/apirest.php/MailCollector/{{ glpi_existing[0].id }}"
+        url: "https://127.0.0.1/apirest.php/MailCollector/{{ glpi_existing[0].id }}"
+        ca_path: /etc/homelab-tls/root_ca.crt
         method: PUT
         headers:
           Session-Token: "{{ glpi_session.json.session_token }}"
@@ -429,7 +445,8 @@
 
     - name: Create it
       ansible.builtin.uri:
-        url: http://127.0.0.1:8080/apirest.php/MailCollector
+        url: https://127.0.0.1/apirest.php/MailCollector
+        ca_path: /etc/homelab-tls/root_ca.crt
         method: POST
         headers:
           Session-Token: "{{ glpi_session.json.session_token }}"
@@ -442,7 +459,8 @@
 
     - name: Close the session
       ansible.builtin.uri:
-        url: http://127.0.0.1:8080/apirest.php/killSession
+        url: https://127.0.0.1/apirest.php/killSession
+        ca_path: /etc/homelab-tls/root_ca.crt
         headers:
           Session-Token: "{{ glpi_session.json.session_token }}"
       no_log: true

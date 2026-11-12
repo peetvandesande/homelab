@@ -63,13 +63,18 @@ Never as root: files it creates become unwritable to php-fpm.
    `normal` and `post-only`, whose passwords everyone knows. The owner's account
    is `peet`, Super-Admin, created with `ADMIN_PASSWORD` and the owner's to change
    from then on – the role never resets it, so Bitwarden can fall behind it.
+   GLPI also gives every new account Self-Service; the role makes Super-Admin
+   the default for `peet` and `homelab-automation`, or a login starts in the
+   simple interface and the API lacks its rights.
 
-3. **The REST API answers on loopback only, for the role.** It is enabled, with
+3. **The REST API answers this host only, for the role.** It is enabled, with
    password login, because mail collectors have no console command: the role
    writes the collector through it, as `homelab-automation`, a Super-Admin whose
-   password the role generates and resets on every run. Two locks keep it local:
-   nginx refuses `/apirest.php` on :443 however it is spelt, and GLPI's only API
-   client is "full access from localhost". Do not add an API client or open the
+   password the role generates once into `/etc/glpi-homelab`, at
+   `https://127.0.0.1/apirest.php`. Two locks keep it local: nginx admits
+   `/apirest.php` however it is spelt from 127.0.0.1 and ::1 only, and GLPI's
+   only API client is "full access from localhost". It has to be HTTPS: GLPI's
+   session cookies are secure-only, and over plain HTTP the API answers 400. Do not add an API client or open the
    path without replacing that account.
 
 4. **The role's settings are applied by hash, not compared.** `config:set`
@@ -149,10 +154,15 @@ In order:
    with the restrictions `deploy-access.yml` gives it, so apply-on-merge reaches
    it from its first boot.
 3. Its host key pinned in `infra/ansible/known_hosts`; the mailbox on ruby; the
-   secrets filled and imported, and `deploy-access.yml` run so talos has them.
+   secrets filled and imported, and `deploy-access.yml` run so talos has them –
+   from the branch that adds them, since `main` does not list them yet.
 4. The service: `FLEET`, DNS, the role, monitoring – one merge, applied by the
-   runner in the order enrol, fleet, monitoring, dns, apps.
-5. `ca.yml`, so its names become protected, and `offsite.yml --limit glpi`, both
-   by a person.
-6. The public side: the DNS records above, then `outside.yml` for jennie and
+   runner in the order enrol, fleet, dns, monitoring, apps.
+5. **`ca.yml` by a person, then a re-run of that merge's job.** talos may mint
+   a new host only its `.home` name and lab addresses; `itsm.sogode.com` is
+   allowed once `ca.yml` has put glpi and its `FLEET` names on pistis's lists.
+   The first apply was refused for exactly that on 12 November 2026. Running
+   `ca.yml` from the branch before merging avoids the re-run.
+6. `offsite.yml --limit glpi`, by a person.
+7. The public side: the DNS records above, then `outside.yml` for jennie and
    ruby, by a person.

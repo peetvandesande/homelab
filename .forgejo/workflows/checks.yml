@@ -43,8 +43,15 @@ jobs:
         run: repo/infra/scripts/tofu-apply.sh "${{ forgejo.event.before }}" "${{ forgejo.sha }}"
       # After publishing, so that a guest changed by hand reports drift without
       # holding up the code. Exit code 2 from plan means something differs.
+      # On main that is drift, since the apply above has just run; on a branch
+      # it is the change under review, so the plan is shown and only an error
+      # fails it.
       - name: Report drift from OpenTofu
         run: |
           set -euo pipefail
           repo/infra/scripts/tofu.sh init -input=false -lockfile=readonly >/dev/null
-          repo/infra/scripts/tofu.sh plan -input=false -lock=false -detailed-exitcode -no-color
+          if [ "${{ forgejo.ref }}" = refs/heads/main ]; then
+            repo/infra/scripts/tofu.sh plan -input=false -lock=false -detailed-exitcode -no-color
+          else
+            repo/infra/scripts/tofu.sh plan -input=false -lock=false -no-color
+          fi
