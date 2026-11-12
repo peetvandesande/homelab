@@ -85,8 +85,27 @@
     state: started
     daemon_reload: true
 
-# The key is generated here and never moves. A valid certificate is left alone:
-# renewal looks after it, and re-issuing would restart services for nothing.
+- name: Find this host's ULA
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail; ip -6 addr show scope global -tentative -deprecated
+      | grep -v ' temporary' | grep -oE 'fd33:5692:1834:1000:[0-9a-f:]+' | head -1
+    executable: /bin/bash
+  register: enrol_ula
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Work out the names the certificate should carry
+  ansible.builtin.set_fact:
+    enrol_sans: >-
+      {{ [enrol_fqdn, inventory_hostname, ansible_host, 'localhost', '127.0.0.1']
+         + (extra_sans | default([]))
+         + ([enrol_ula.stdout] if enrol_ula.stdout else []) }}
+
+# The key is generated here and never moves. A valid certificate carrying the
+# right names is left alone: renewal looks after it, and re-issuing would restart
+# services for nothing. One whose names differ from FLEET is re-issued.
 - name: Check for a current certificate
   ansible.builtin.command: openssl x509 -in /etc/homelab-tls/host.crt -noout -checkend 86400
   register: enrol_current
@@ -94,26 +113,20 @@
   failed_when: false
   check_mode: false
 
-- name: Issue a certificate
-  when: enrol_force | bool or enrol_current.rc != 0
-  block:
-    - name: Find this host's ULA
-      ansible.builtin.shell:
-        cmd: >-
-          set -o pipefail; ip -6 addr show scope global -tentative -deprecated
-          | grep -v ' temporary' | grep -oE 'fd33:5692:1834:1000:[0-9a-f:]+' | head -1
-        executable: /bin/bash
-      register: enrol_ula
-      changed_when: false
-      failed_when: false
-      check_mode: false
+# Addresses are compared parsed, as openssl prints IPv6 in its own spelling.
+- name: Check the certificate carries the right names
+  ansible.builtin.command:
+    argv: "{{ ['python3', '-I', '-c', enrol_compare_sans] + enrol_sans }}"
+  register: enrol_names
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: enrol_current.rc == 0
 
+- name: Issue a certificate
+  when: enrol_force | bool or enrol_current.rc != 0 or (enrol_names.rc | default(0)) != 0
+  block:
     - name: Ask pistis for a single-use token
-      vars:
-        enrol_sans: >-
-          {{ [enrol_fqdn, inventory_hostname, ansible_host, 'localhost', '127.0.0.1']
-             + (extra_sans | default([]))
-             + ([enrol_ula.stdout] if enrol_ula.stdout else []) }}
       ansible.builtin.command:
         argv: "{{ enrol_minter + [enrol_fqdn] + enrol_sans }}"
       delegate_to: localhost

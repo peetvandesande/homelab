@@ -231,11 +231,24 @@ alone; `ca.yml` builds pistis, run by a person because it installs the G3 key.
 `enrol.sh` and `ca.yml` stay until task 13.
 
 **talos has an SSH key on pistis forced to `homelab-mint-token --restricted`**, so
-it can mint tokens only for a host that does not exist yet: a `.home` name and lab
-addresses, none on `/etc/step-ca/mint-protected`, which `ca.yml` writes from
-`FLEET`, DNS and the role's own list. It cannot impersonate an existing host or
-obtain a public name; those need a person, as does re-enrolling a host. Add a host
-to `FLEET` and re-run `ca.yml` so it becomes protected. Every request is logged
+it can mint tokens for two things only:
+
+- a host that does not exist yet: a `.home` name and lab addresses, none on
+  `/etc/step-ca/mint-protected`, which `ca.yml` writes from `FLEET`, DNS and the
+  role's own list;
+- a re-issue for a host on `/etc/step-ca/mint-reissue`, with no name or address
+  beyond those listed for it. `ca.yml` writes that list from `FLEET`, the ULAs in
+  DNS and `step_ca_approved_sans`, for the hosts talos's deploy key already
+  reaches as root. pistis, lenora, talos, lexie and hermes are not on it.
+
+So a compromised talos gains no host it could not already take, and no public
+name a person did not approve. `apply.sh` uses this to run `enrol.yml` when a
+merge changes `FLEET`: a host whose certificate names differ is re-issued.
+
+**A new public name on a host is two steps.** Approve it in
+`step_ca_approved_sans` and run `ca.yml`, then add it to `FLEET` in a PR: the
+runner re-issues on merge. Add a host to `FLEET` and re-run `ca.yml` so it
+becomes protected. Every request is logged
 under the `homelab-mint-token` tag, which ships to Loki.
 
 ## Fleet TLS invariants — do not "simplify" these away
