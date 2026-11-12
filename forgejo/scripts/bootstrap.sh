@@ -102,4 +102,4 @@ pct exec "$VMID" -- env VERSION="$VERSION" bash -euo pipefail -c '
   /usr/local/bin/forgejo --version
 '
 
-echo "== $HOST ready - now: ca/scripts/enrol.sh $IP $HOST git.peetvandesande.com; node-exporter, alloy, apt, fleet; infra/ansible/apps.yml"
+echo "== $HOST ready - now, from infra/ansible: enrol.yml, fleet.yml and apps.yml, each --limit $HOST"

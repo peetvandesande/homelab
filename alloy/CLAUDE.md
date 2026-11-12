@@ -82,7 +82,7 @@ They are not part of the fleet, and differ from it in three ways:
   `verify.sh` checks the same.
 
 ruby's nginx access logs and rspamd's log are files, so Alloy follows those
-too: `{host="ruby", job="nginx", site="git.peetvandesande.com"}`, with `site`
+too: `{host="ruby", job="nginx", site="git.sogode.com"}`, with `site`
 from the file name, and `{host="ruby", job="rspamd"}`. nginx's logs need `adm`;
 rspamd's directory admits only its own group, so `alloy` joins `_rspamd` on
 the server that has it – without it the source is healthy and follows nothing,

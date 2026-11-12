@@ -23,6 +23,6 @@ server:
   # the secret, handed over by systemd (LoadCredential in the unit).
   connections:
     forgejo:
-      url: https://git.peetvandesande.com/
+      url: https://git.sogode.com/
       uuid: "@@RUNNER_UUID@@"
       token_url: file:$CREDENTIALS_DIRECTORY/token

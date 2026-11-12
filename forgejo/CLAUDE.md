@@ -4,7 +4,7 @@ CT 303, **192.168.8.62**, `forgejo.home`, pool `Production`. Forgejo v15
 (the LTS line) on HTTPS `:443` off the lab CA, git over SSH on `:22` through
 the host's OpenSSH, PostgreSQL local to the container. Built 28 October 2026.
 
-Known to everyone as **`git.peetvandesande.com`**: on the LAN that name is
+Known to everyone as **`git.sogode.com`**: on the LAN that name is
 split-horizon to this host, off it it is ruby, which proxies here over wg1
 (`../CLAUDE.md`, "Public services").
 
@@ -21,9 +21,8 @@ ruby/                    the public vhost and stream proxy, installed by infra/a
 ```
 
 Order for a rebuild: router reservation for the MAC in `bootstrap.sh`, then
-`bootstrap.sh`, `ca/scripts/enrol.sh 192.168.8.62 forgejo
-git.peetvandesande.com`, node-exporter, alloy, apt and fleet for `.62`, then
-`apps.yml`. A new MAC means a new ULA, so the AAAA in `dns/ansible` and the
+`bootstrap.sh`, then `infra/ansible/enrol.yml --limit forgejo` (its public
+name is in `FLEET`) and `fleet.yml --limit forgejo`, then `apps.yml`. A new MAC means a new ULA, so the AAAA in `dns/ansible` and the
 split-horizon zone change with it.
 
 Upgrading is `VERSION` in `bootstrap.sh` and a re-run, then `apps.yml`. The
@@ -66,7 +65,7 @@ ssh root@forgejo.home runuser -u git -- forgejo admin user create \
    re-exec cannot bind `:22`, which the socket holds) – restart instead; and
    `sshd -t` needs `/run/sshd`, which only exists while sshd runs.
 
-5. **The certificate carries `git.peetvandesande.com`.** Forgejo serves the
+5. **The certificate carries `git.sogode.com`.** Forgejo serves the
    lab certificate itself, and both LAN clients (split-horizon) and ruby
    (`proxy_ssl_name`) ask for that name. Drop the extra SAN from `FLEET` in
    `ca/scripts/enrol.sh` and both break at the next renewal. Forgejo has no
@@ -82,7 +81,7 @@ ssh root@forgejo.home runuser -u git -- forgejo admin user create \
 
 8. **ruby's public :22 is this sshd.** `install-ruby-ssh.sh` moves ruby's
    own sshd onto its VPN addresses and puts an nginx stream proxy on the
-   public ones, so `git.peetvandesande.com:22` is the same sshd and host key
+   public ones, so `git.sogode.com:22` is the same sshd and host key
    from everywhere. Every outside connection therefore arrives from ruby's
    tunnel addresses – the same ranges as invariant 7 – and
    `sshd_config.d/forgejo.conf` lets only `git` log in from them. The cost:
