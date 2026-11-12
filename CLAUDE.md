@@ -360,7 +360,7 @@ works from both sides**:
 
 | Name | Origin | Public via ruby |
 |---|---|---|
-| `git.peetvandesande.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
+| `git.sogode.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
 | `n8n.peetvandesande.com` | n8n on moby | webhooks, forms and their assets; the editor only from `home-lan-allow.conf` ranges |
 | `n8n.sogode.com` | n8n-sogode on moby, for Sogode business use | the same as `n8n.peetvandesande.com`; also a mail domain on ruby (`moby/CLAUDE.md`, "n8n-sogode") |
 

@@ -103,9 +103,9 @@ modules:
     timeout: 10s
     http:
       headers:
-        Host: git.peetvandesande.com
+        Host: git.sogode.com
       tls_config:
-        server_name: git.peetvandesande.com
+        server_name: git.sogode.com
       fail_if_not_ssl: true
       no_follow_redirects: true
       valid_status_codes: [200]
