@@ -9,7 +9,7 @@ $TTL 3600
 $ORIGIN home.
 
 @       IN  SOA pythia.home. hostmaster.home. (
-                2026111201  ; serial
+                2026111202  ; serial
                 3600        ; refresh
                 900         ; retry
                 604800      ; expire
@@ -57,6 +57,8 @@ navidrome   IN  A   192.168.8.61
 navidrome   IN  AAAA fd33:5692:1834:1000:be24:11ff:fed8:d621
 forgejo     IN  A   192.168.8.62     ; git.sogode.com
 forgejo     IN  AAAA fd33:5692:1834:1000:be24:11ff:fe14:eca4 ; git.sogode.com
+glpi        IN  A   192.168.8.63     ; itsm.sogode.com
+glpi        IN  AAAA fd33:5692:1834:1000:be24:11ff:fe47:4c50 ; itsm.sogode.com
 homeassistant IN  A   192.168.8.90     ; HAOS VM 302 - outside the .60-.69 range
 
 ; --- non-production -------------------------------------------------

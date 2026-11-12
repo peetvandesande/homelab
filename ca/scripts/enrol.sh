@@ -40,12 +40,13 @@ FLEET=(
   "192.168.8.56 loki"
   # Words after the shortname are extra SANs. moby's are for the n8n stack its
   # nginx fronts; forgejo's is the public name it serves inside the lab, by
-  # split-horizon (dns/ansible, "overrides").
+  # split-horizon (dns/ansible, "overrides"), and so is glpi's.
   "192.168.8.24 lexie"
   "192.168.8.27 moby n8n.home n8n.peetvandesande.com n8n.sogode.com ntfy.sogode.com"
   "192.168.8.60 jellyfin"
   "192.168.8.61 navidrome"
   "192.168.8.62 forgejo git.sogode.com"
+  "192.168.8.63 glpi itsm.sogode.com"
   "192.168.8.57 hermes"
   "192.168.8.58 metis"
   "192.168.8.59 talos"

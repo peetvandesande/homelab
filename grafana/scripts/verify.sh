@@ -122,8 +122,8 @@ RULE_UIDS=(
   outside-cert-expiring outside-probe-failing outside-vantage-down
   jennie-logs-quiet ruby-logs-quiet
   # probes.yaml
-  dns-resolution-failing internet-unreachable lab-cert-expiring lab-tls-failing
-  tunnel-down
+  dns-resolution-failing internet-unreachable lab-cert-expiring lab-service-unhealthy
+  lab-tls-failing tunnel-down
   # router.yaml
   ipv6-prefix-missing ont-downstream-sync-lost ont-hot ont-not-operational
   ont-rx-power-low ont-unreachable router-metrics-stale wan-receiving-nothing

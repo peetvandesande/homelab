@@ -52,3 +52,24 @@
         offsite_dumps:
           - name: forgejo.sql
             command: runuser -u postgres -- pg_dump forgejo
+
+# The database by mariadb-dump in one transaction, so GLPI stays up; then the
+# documents, plugins and configuration - /etc/glpi holds glpicrypt.key, without
+# which the stored mail and SMTP passwords cannot be decrypted.
+- name: GLPI
+  hosts: glpi
+  gather_facts: false
+  roles:
+    - role: offsite
+      vars:
+        offsite_paths:
+          - /var/lib/glpi
+          - /etc/glpi
+          - /etc/glpi-homelab
+        offsite_excludes:
+          - /var/lib/glpi/files/_cache
+          - /var/lib/glpi/files/_sessions
+          - /var/lib/glpi/files/_tmp
+        offsite_dumps:
+          - name: glpi.sql
+            command: mariadb-dump --single-transaction --routines --triggers glpi

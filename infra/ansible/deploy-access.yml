@@ -30,6 +30,7 @@
         - "{{ deploy_access_dir }}/private/forgejo"
         - "{{ deploy_access_dir }}/private/n8n"
         - "{{ deploy_access_dir }}/private/n8n-sogode"
+        - "{{ deploy_access_dir }}/private/glpi"
         - "{{ deploy_access_dir }}/private/dns"
 
     - name: Generate the deploy key
@@ -58,6 +59,7 @@
         - { src: "{{ deploy_access_private }}/forgejo/secrets.env", dest: forgejo }
         - { src: "{{ deploy_access_private }}/n8n/secrets.env", dest: n8n }
         - { src: "{{ deploy_access_private }}/n8n-sogode/secrets.env", dest: n8n-sogode }
+        - { src: "{{ deploy_access_private }}/glpi/secrets.env", dest: glpi }
         - { src: "{{ playbook_dir }}/../../dns/secrets.env", dest: dns }
       loop_control:
         label: "{{ item.dest }}"

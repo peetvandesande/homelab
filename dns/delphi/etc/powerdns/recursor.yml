@@ -141,6 +141,11 @@ recursor:
       recurse: false
       forwarders:
         - 192.168.8.52
+    # GLPI: public via ruby for home and VPN ranges, local direct.
+    - zone: itsm.sogode.com.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
 
   lua_config_file: /etc/powerdns/recursor.lua
   lua_dns_script: /etc/powerdns/policy.lua

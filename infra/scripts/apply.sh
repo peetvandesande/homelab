@@ -39,7 +39,7 @@ matches "^ca/scripts/enrol\.sh$|$(roles 'enrol')|^infra/ansible/enrol\.yml" && n
 matches "^(alloy/root|apt/|fleet/|node-exporter/)|$(roles 'node_exporter|hygiene|apt_security|alloy')|^infra/ansible/fleet\.yml" && need+=(fleet)
 matches "^(prometheus|loki|grafana)/root/|$(roles 'prometheus|loki|grafana')|^infra/ansible/monitoring\.yml" && need+=(monitoring)
 matches "^dns/(pythia|delphi|themis|ansible)/|$(roles 'dns_stack')|^infra/ansible/dns\.yml" && need+=(dns)
-matches "^(jellyfin|navidrome|moby|forgejo)/root/|$(roles 'jellyfin|navidrome|moby|forgejo')|^infra/ansible/apps\.yml" && need+=(apps)
+matches "^(jellyfin|navidrome|moby|glpi|forgejo)/root/|$(roles 'jellyfin|navidrome|moby|glpi|forgejo')|^infra/ansible/apps\.yml" && need+=(apps)
 matches "^metis/root/|$(roles 'metis')" && need+=(metis)
 
 person=$(printf '%s\n' "${changed[@]}" | grep -E \
@@ -89,7 +89,7 @@ for item in "${need[@]}"; do
     fleet) run fleet "$LIMIT" fleet.yml --limit "$LIMIT" ;;
     monitoring) run monitoring prometheus,loki,grafana monitoring.yml ;;
     dns) run dns pythia,delphi,themis dns.yml ;;
-    apps) run apps jellyfin,navidrome,moby,forgejo apps.yml ;;
+    apps) run apps jellyfin,navidrome,moby,glpi,forgejo apps.yml ;;
     metis) run metis metis platform.yml --limit metis ;;
   esac
 done

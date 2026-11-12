@@ -84,6 +84,8 @@ scrape_configs:
         labels: {role: lexie }
       - targets: ['forgejo.home:9100']
         labels: {role: forgejo }
+      - targets: ['glpi.home:9100']
+        labels: {role: glpi }
 
   # ruby and jennie, the OVH servers. Plain HTTP: neither holds a lab
   # certificate, and node-exporter listens only on dummy0, reachable only
@@ -136,6 +138,8 @@ scrape_configs:
         labels: {role: lexie }
       - targets: ['forgejo.home:12345']
         labels: {role: forgejo }
+      - targets: ['glpi.home:12345']
+        labels: {role: glpi }
 
   # sally, the backup server, is off for most of the day, so it has a job of its
   # own that the target-down rules do not cover. Missed backups alert from lenora.
@@ -287,8 +291,8 @@ scrape_configs:
         labels: {kind: dns, check: dot, __param_module: dns_dot }
       # Lab certificates: every enrolled host's own (via node-exporter, keep in
       # step with the `node` job), plus the ones that are not the host
-      # certificate - the Proxmox GUI, step-ca itself, mailcow, HA, Forgejo
-      # and the n8n nginx on moby.
+      # certificate - the Proxmox GUI, step-ca itself, mailcow, HA, Forgejo,
+      # the n8n nginx on moby and GLPI's nginx.
       - targets:
           - '192.168.8.21:9100'
           - '192.168.8.24:9100'
@@ -306,13 +310,20 @@ scrape_configs:
           - '192.168.8.60:9100'
           - '192.168.8.61:9100'
           - '192.168.8.62:9100'
+          - '192.168.8.63:9100'
           - '192.168.8.21:8006'
           - '192.168.8.55:8443'
           - '192.168.8.57:443'
           - '192.168.8.90:443'
           - '192.168.8.62:443'
           - '192.168.8.27:443'
+          - '192.168.8.63:443'
         labels: {kind: tls, __param_module: tls_lab }
+      # Applications with a health page and no metrics of their own: the page
+      # must answer and report no problem. GLPI's status.php checks its
+      # database, file directories, cron and mail collectors.
+      - targets: ['https://itsm.sogode.com/status.php']
+        labels: {kind: service, service: glpi, __param_module: http_glpi_status }
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

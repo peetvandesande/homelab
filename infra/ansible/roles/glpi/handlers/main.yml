@@ -1,0 +1,15 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# The opcache holds the old code and settings until php-fpm restarts.
+- name: Restart php-fpm
+  ansible.builtin.systemd_service:
+    name: php8.4-fpm
+    state: restarted
+
+- name: Reload nginx
+  ansible.builtin.shell:
+    cmd: nginx -t && systemctl reload nginx
+  changed_when: true

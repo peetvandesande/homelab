@@ -17,7 +17,7 @@ groups:
         annotations:
           summary: "{{ $labels.instance }} has not copied off-site in over 48h"
           description: >-
-            offsite-backup runs nightly on lexie, moby and forgejo (offsite/CLAUDE.md). journalctl -u offsite-backup on the host. NoData means the host has never published a result.
+            offsite-backup runs nightly on lexie, moby, forgejo and glpi (offsite/CLAUDE.md). journalctl -u offsite-backup on the host. NoData means the host has never published a result.
         noDataState: Alerting
         execErrState: Alerting
         isPaused: false

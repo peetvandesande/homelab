@@ -37,6 +37,13 @@ RENEW_DAYS = 80
 CHECK_SUBSET = "5G"
 SAMPLE_FILES = 20
 KEEP = ["--keep-daily", "14", "--keep-weekly", "8", "--keep-monthly", "12"]
+# The hosts whose database dump the restore test reads back, and the line each
+# dump tool writes only once it has finished.
+DUMP_COMPLETE = {
+    "forgejo": "PostgreSQL database dump complete",
+    "moby": "PostgreSQL database dump complete",
+    "glpi": "-- Dump completed",
+}
 
 
 def log(message):
@@ -234,17 +241,22 @@ def latest(env, host, tag):
     return found[-1]
 
 
+def dump_complete(host, dump):
+    """Whether a dump ends with its tool's completion line."""
+    return DUMP_COMPLETE[host] in dump[-4096:]
+
+
 def cmd_test(env, _args):
     log(f"== check, reading {CHECK_SUBSET} of packs")
     restic(env, "check", f"--read-data-subset={CHECK_SUBSET}")
 
     work = Path(tempfile.mkdtemp(prefix="offsite-test-", dir="/var/tmp"))
     try:
-        for host in ("forgejo", "moby"):
+        for host in DUMP_COMPLETE:
             snap = latest(env, host, "dump")
             log(f"== restore {host}'s dump from {snap['time'][:19]}")
             dump = restic(env, "dump", snap["id"], snap["paths"][0], capture=True).stdout
-            if "PostgreSQL database dump complete" not in dump[-4096:]:
+            if not dump_complete(host, dump):
                 die(f"{host}'s dump is incomplete")
 
         host = os.uname().nodename

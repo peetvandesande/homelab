@@ -29,6 +29,14 @@
   roles:
     - moby
 
+- name: GLPI
+  hosts: glpi
+  gather_facts: false
+  force_handlers: true
+  any_errors_fatal: true
+  roles:
+    - glpi
+
 - name: Forgejo
   hosts: forgejo
   gather_facts: false

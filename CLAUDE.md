@@ -201,12 +201,13 @@ Pool names are **case-sensitive and exact** — `Non-Production`, not
 | Pool             | Container IDs | IP range              |
 |------------------|---------------|-----------------------|
 | `Infrastructure` | 100-199       | 192.168.8.50-.59      |
-| `Production`     | 300-399       | 192.168.8.60-.69 †    |
+| `Production`     | 300-399       | 192.168.8.60-.69      |
 | `Non-Production` | 200-299 †     | 192.168.8.70-.79 †    |
 
-† Inferred from the existing pattern, not yet confirmed — Production is using
-.60-.62 in practice, and Non-Production is currently empty with no range ever
-written down. Confirm before relying on these.
+† Inferred from the existing pattern, not yet confirmed — Non-Production is
+currently empty with no range ever written down. Confirm before relying on
+these. Production's range was confirmed on 12 November 2026, when glpi took
+.63 (.60-.63 used).
 
 Three things to be aware of:
 
@@ -382,6 +383,15 @@ also issues each site's certificate. Because ruby's public :22 is
 Forgejo's (`forgejo/CLAUDE.md` invariant 8), **ruby itself takes SSH over the
 VPN only**. Neither service has a backup yet.
 
+## ITSM
+
+`glpi` (CT 304, `glpi.home`) runs **GLPI**, the lab's ITSM suite – assets,
+tickets, changes and problems – as `https://itsm.sogode.com/`, split-horizon to
+glpi inside the lab. It is the first guest created by OpenTofu rather than
+imported. Its mail is `helpdesk@itsm.sogode.com`, a mailbox on ruby: GLPI sends
+through ruby's submission port and opens tickets from what arrives there, both
+over the tunnel. See `glpi/CLAUDE.md`.
+
 ## Mail
 
 `hermes` (VM 109, `hermes.home`) runs **mailcow** for the Proxmox labs, so
@@ -423,8 +433,8 @@ each other's public side with blackbox exporters, scraped over the tunnels –
 `outside/`; a blackbox exporter on prometheus probes the internet, the tunnels, DNS
 end to end and every lab certificate – `prometheus/CLAUDE.md` invariant 7. Loki (`loki.home`) is the log
 store, wired into Grafana as a datasource. Every enrolled host ships its
-systemd journal to it via Grafana Alloy (`alloy/`, one directory for all
-fourteen hosts, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
+systemd journal to it via Grafana Alloy (`alloy/`, one directory for every
+enrolled host, like `node-exporter/`); query by `{host="<name>"}` in Grafana.
 ruby and jennie ship theirs over the tunnels too, as `{host="ruby"}` and
 `{host="jennie"}`, so ruby's mail logs are searchable there – `alloy/CLAUDE.md`,
 "ruby and jennie".
@@ -452,8 +462,8 @@ reads the host list from `ca/scripts/enrol.sh` rather than keeping a fourth
 copy. Today it masks `openipmi.service`, which was the fleet's only failed unit
 and made the `systemd-unit-failed` alert useless — see `fleet/CLAUDE.md`.
 
-**Automatic security patching lives in `apt/`** — unattended-upgrades on all
-fourteen enrolled hosts, restricted to the Debian security origin, which is what
+**Automatic security patching lives in `apt/`** — unattended-upgrades on every
+enrolled host, restricted to the Debian security origin, which is what
 keeps Proxmox, Docker and mailcow upgrades a manual act. Nothing is restarted
 unattended, and only lenora, ruby and jennie reboot – for a security update,
 after a backup, before 06:00 (`apt/CLAUDE.md`, "Security reboots"); the rest
@@ -491,8 +501,8 @@ anything, grep that file.
 ## TLS
 
 Every service that speaks HTTP in this lab, except where noted, now serves TLS
-off the lab's own CA (`ca/`). Fourteen hosts are enrolled — all twelve containers,
-the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
+off the lab's own CA (`ca/`). Every host in `FLEET` in `ca/scripts/enrol.sh` is
+enrolled – the containers, the hermes and metis VMs and lenora. The Home Assistant VM holds a certificate too but is
 **not enrolled**: HAOS cannot run step-cli, so it gets one a different way — see
 `homeassistant/`.
 
@@ -516,10 +526,10 @@ the hermes VM and lenora. The Home Assistant VM holds a certificate too but is
   One place keeps the IP on purpose: `homelab-tls-renew`, because renewing
   every certificate in the lab should not depend on DNS being up.
 - **Per-service TLS config lives in that service's own top-level directory**
-  (`forgejo/`, `grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`, `loki/`,
-  `moby/`, `navidrome/`, `prometheus/`), one per container or VM. `node-exporter/` and
-  `alloy/` are the exceptions: one service on fourteen hosts, so one directory
-  rather than fourteen copies.
+  (`forgejo/`, `glpi/`, `grafana/`, `hermes/`, `homeassistant/`, `jellyfin/`,
+  `loki/`, `moby/`, `navidrome/`, `prometheus/`), one per container or VM.
+  `node-exporter/` and `alloy/` are the exceptions: one service on every host,
+  so one directory rather than a copy per host.
 - **The Home Assistant VM is the one host that cannot renew itself.** HAOS has
   no step-cli and no openssl, and `/ssl` is read-only to the core container, so
   a timer on lenora drives it over the guest agent. The key is still generated

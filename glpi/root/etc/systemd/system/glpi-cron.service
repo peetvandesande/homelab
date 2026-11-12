@@ -1,0 +1,14 @@
+[Unit]
+Description=GLPI automatic actions (mail collection, notifications, cleanup)
+Documentation=file:///opt/glpi/current/front/cron.php
+After=mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=oneshot
+# As the web server's user, or files it creates become unwritable to php-fpm;
+# cron.php refuses root for that reason.
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/php /opt/glpi/current/front/cron.php
+Nice=10

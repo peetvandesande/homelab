@@ -2,8 +2,8 @@
 # `blackbox` job in prometheus.yml. Managed from homelab/grafana.
 #
 # These alert on what a client experiences - can it reach the internet, the
-# tunnels, a resolved name, a trusted certificate - where homelab.yaml alerts
-# on components. A dead dnsdist shows in both, and that is fine.
+# tunnels, a resolved name, a trusted certificate, a healthy service - where
+# homelab.yaml alerts on components. A dead dnsdist shows in both, and that is fine.
 #
 # If the exporter itself is down every probe series disappears, which these
 # rules would read as fine; service-target-down in homelab.yaml covers it.
@@ -196,6 +196,56 @@ groups:
           - refId: B
             relativeTimeRange:
               from: 1800
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                    params: []
+                  evaluator:
+                    type: lt
+                    params: [1]
+      - uid: lab-service-unhealthy
+        title: "Lab service unhealthy"
+        condition: B
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }}'s health page fails or reports a problem"
+          description: >-
+            The blackbox `kind="service"` probe of {{ $labels.instance }}. For GLPI that is status.php, which reports its database, file directories, cron and mail collectors: open it in a browser to see which one, and journalctl -u glpi-cron on glpi for the mail collector. homelab/glpi.
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: "@@PROM_DS_UID@@"
+            model:
+              editorMode: code
+              expr: 'max by (service, instance) (max_over_time(probe_success{job="blackbox",kind="service"}[10m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 900
               to: 0
             datasourceUid: __expr__
             model:

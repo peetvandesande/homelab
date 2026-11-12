@@ -85,6 +85,7 @@ zones:
           - { name: jellyfin,      data: 192.168.8.60, data6: 'fd33:5692:1834:1000:be24:11ff:fee5:b13b' }
           - { name: navidrome,     data: 192.168.8.61, data6: 'fd33:5692:1834:1000:be24:11ff:fed8:d621' }
           - { name: forgejo,       data: 192.168.8.62, data6: 'fd33:5692:1834:1000:be24:11ff:fe14:eca4', comment: 'git.sogode.com' }
+          - { name: glpi,          data: 192.168.8.63, data6: 'fd33:5692:1834:1000:be24:11ff:fe47:4c50', comment: 'itsm.sogode.com' }
           # No data6: HAOS has no global IPv6 at all. Its address is set inside
           # the appliance with `ha network update`, not by Proxmox, and nothing
           # answers on the ULA its MAC would produce
@@ -306,6 +307,26 @@ zones:
     records:
       - { name: "@", type: A,    data: 192.168.8.27,                           comment: 'moby' }
       - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe13:54b8", comment: 'moby''s ULA' }
+
+  - name: itsm.sogode.com
+    kind: override
+    backend: bind
+    comment: |
+      Split-horizon zone for itsm.sogode.com, GLPI's name.
+
+      Publicly an A/AAAA to ruby (not a CNAME: the name also carries the MX and
+      SPF of its mail domain, hosted on ruby), whose nginx admits only home and
+      VPN ranges and proxies them to glpi over wgclient1 - homelab/glpi/ruby.
+      Inside the lab it resolves to glpi itself, whose lab-CA certificate
+      carries this name, so GLPI knows itself by one URL (url_base) from both
+      sides. Only the addresses are overridden: MX and TXT stay public-only,
+      and GLPI reaches its mailbox through mail.peetvandesande.com.
+
+      sogode.com is DNSSEC-signed, so this needs a matching addNTA() on Delphi
+      or every lookup here SERVFAILs.
+    records:
+      - { name: "@", type: A,    data: 192.168.8.63,                           comment: 'glpi' }
+      - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe47:4c50", comment: 'glpi''s ULA' }
 
   # ------------------------------------------------------- lab zones -----
   # The Proxmox labs share 192.168.32.0/21 and only one runs at a time. Their

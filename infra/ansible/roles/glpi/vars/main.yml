@@ -1,0 +1,101 @@
+---
+glpi_source: "{{ role_path }}/../../../../glpi/root"
+# An upgrade is a bump of these two. The role puts GLPI in maintenance mode,
+# switches /opt/glpi/current and runs the database update; the previous release
+# stays on disk for a rollback.
+glpi_version: 11.0.13
+glpi_sha256: bbecfa564867d1d93f08b15cd7aac87e4c7f0d4c4855bc1964f68db76f20f738
+glpi_url: "https://github.com/glpi-project/glpi/releases/download/{{ glpi_version }}/glpi-{{ glpi_version }}.tgz"
+glpi_release: "/opt/glpi/glpi-{{ glpi_version }}"
+glpi_console: [runuser, -u, www-data, --, php, /opt/glpi/current/bin/console, --no-interaction]
+
+glpi_name: itsm.sogode.com
+glpi_mailbox: "helpdesk@{{ glpi_name }}"
+# Inside the lab mail.peetvandesande.com is ruby's wg0, where submission and
+# IMAP are served.
+glpi_mail_server: mail.peetvandesande.com
+glpi_owner: peet
+glpi_automation_user: homelab-automation
+# GLPI's own accounts, with well-known passwords: disabled once the owner's
+# account exists.
+glpi_default_users: [glpi, tech, normal, post-only]
+glpi_super_admin_profile: 4
+
+glpi_packages:
+  - mariadb-server
+  - nginx
+  - openssl
+  - php8.4-bcmath
+  - php8.4-bz2
+  - php8.4-cli
+  - php8.4-curl
+  - php8.4-fpm
+  - php8.4-gd
+  - php8.4-intl
+  - php8.4-ldap
+  - php8.4-mbstring
+  - php8.4-mysql
+  - php8.4-opcache
+  - php8.4-xml
+  - php8.4-zip
+# GLPI expects these under GLPI_VAR_DIR; the release ships them empty.
+glpi_file_dirs:
+  - _cache
+  - _cron
+  - _graphs
+  - _inventories
+  - _locales
+  - _lock
+  - _log
+  - _pictures
+  - _plugins
+  - _rss
+  - _sessions
+  - _themes
+  - _tmp
+  - _uploads
+
+glpi_private: "{{ lookup('ansible.builtin.env', 'HOMELAB_PRIVATE') | default(lookup('ansible.builtin.env', 'HOME') ~ '/projects/homelab-private', true) }}"
+glpi_secrets: "{{ lookup('ansible.builtin.file', glpi_private ~ '/glpi/secrets.env') }}"
+glpi_admin_password: "{{ glpi_secrets | regex_search('(?m)^ADMIN_PASSWORD=(.*)$', '\\1') | first }}"
+glpi_mail_password: "{{ glpi_secrets | regex_search('(?m)^MAIL_PASSWORD=(.*)$', '\\1') | first }}"
+
+# Set with `config:set`, which encrypts smtp_passwd itself. Applied again only
+# when this set (or the password) changes: see "Apply the settings".
+glpi_settings:
+  url_base: "https://{{ glpi_name }}"
+  url_base_api: "https://{{ glpi_name }}/apirest.php"
+  # The REST API, with login by password, for the mail collector task below.
+  # Only the localhost API client exists, and nginx refuses the path on :443.
+  enable_api: "1"
+  enable_api_login_credentials: "1"
+  use_notifications: "1"
+  notifications_mailing: "1"
+  admin_email: "{{ glpi_mailbox }}"
+  admin_email_name: Lab service desk
+  from_email: "{{ glpi_mailbox }}"
+  from_email_name: Lab service desk
+  replyto_email: "{{ glpi_mailbox }}"
+  replyto_email_name: Lab service desk
+  noreply_email: "{{ glpi_mailbox }}"
+  noreply_email_name: Lab service desk
+  # SMTP (1) on submission: Symfony Mailer upgrades to STARTTLS by itself.
+  smtp_mode: "1"
+  smtp_host: "{{ glpi_mail_server }}"
+  smtp_port: "587"
+  smtp_username: "{{ glpi_mailbox }}"
+  smtp_passwd: "{{ glpi_mail_password }}"
+  smtp_check_certificate: "1"
+
+# The one mail collector: IMAPS on ruby. Tickets are opened from what arrives,
+# and the processed mail is filed in the folders named here.
+glpi_collector:
+  name: "{{ glpi_mailbox }}"
+  host: "{{ '{' ~ glpi_mail_server ~ ':993/imap/ssl/validate-cert}INBOX' }}"
+  login: "{{ glpi_mailbox }}"
+  passwd: "{{ glpi_mail_password }}"
+  is_active: 1
+  accepted: Accepted
+  refused: Refused
+  collect_only_unread: 1
+  add_cc_to_observer: 1

@@ -1,0 +1,468 @@
+---
+- name: Check the host holds a certificate
+  ansible.builtin.stat:
+    path: /etc/homelab-tls/host.key
+  register: glpi_cert
+
+- name: Refuse a host that is not enrolled
+  ansible.builtin.assert:
+    that: glpi_cert.stat.exists
+    fail_msg: "Not enrolled: run enrol.yml for this host first"
+    quiet: true
+
+- name: Install the packages
+  ansible.builtin.apt:
+    name: "{{ glpi_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /opt/glpi, owner: root, group: root, mode: "0755" }
+    # GLPI writes config_db.php and glpicrypt.key here at installation.
+    - { path: /etc/glpi, owner: www-data, group: www-data, mode: "0750" }
+    # What the role generates: the database and automation passwords.
+    - { path: /etc/glpi-homelab, owner: root, group: root, mode: "0700" }
+    - { path: /var/lib/glpi, owner: www-data, group: www-data, mode: "0750" }
+    - { path: /var/lib/glpi/files, owner: www-data, group: www-data, mode: "0750" }
+    - { path: /var/lib/glpi/marketplace, owner: www-data, group: www-data, mode: "0750" }
+    - { path: /var/log/glpi, owner: www-data, group: www-data, mode: "0750" }
+
+- name: Create the data directories GLPI expects
+  ansible.builtin.file:
+    path: "/var/lib/glpi/files/{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0750"
+  loop: "{{ glpi_file_dirs }}"
+
+# ------------------------------------------------------------ the code -----
+
+- name: Download the pinned release
+  ansible.builtin.get_url:
+    url: "{{ glpi_url }}"
+    dest: "{{ glpi_release }}.tgz"
+    checksum: "sha256:{{ glpi_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the release directory
+  ansible.builtin.file:
+    path: "{{ glpi_release }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Owned by root: php-fpm runs as www-data and can write only where
+# local_define.php points, outside the code.
+- name: Unpack the release
+  ansible.builtin.unarchive:
+    src: "{{ glpi_release }}.tgz"
+    dest: "{{ glpi_release }}"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    owner: root
+    group: root
+    creates: "{{ glpi_release }}/version/{{ glpi_version }}"
+
+- name: Point the release at /etc/glpi
+  ansible.builtin.copy:
+    src: "{{ glpi_source }}/opt/glpi/downstream.php"
+    dest: "{{ glpi_release }}/inc/downstream.php"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart php-fpm
+
+# The web installer would let anyone who reaches it reinstall over the database.
+- name: Remove the web installer
+  ansible.builtin.file:
+    path: "{{ glpi_release }}/install/install.php"
+    state: absent
+
+- name: Install the directory settings
+  ansible.builtin.copy:
+    src: "{{ glpi_source }}/etc/glpi/local_define.php"
+    dest: /etc/glpi/local_define.php
+    owner: root
+    group: www-data
+    mode: "0640"
+  notify: Restart php-fpm
+
+- name: Install the PHP settings, for php-fpm and the CLI
+  ansible.builtin.copy:
+    src: "{{ glpi_source }}/etc/php/8.4/fpm/conf.d/90-glpi.ini"
+    dest: "/etc/php/8.4/{{ item }}/conf.d/90-glpi.ini"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [fpm, cli]
+  notify: Restart php-fpm
+
+# -------------------------------------------------------- the database -----
+
+- name: Keep MariaDB enabled and running
+  ansible.builtin.systemd_service:
+    name: mariadb
+    enabled: true
+    state: started
+
+# Made once on the host and kept: GLPI's config_db.php holds the same value.
+- name: Generate the passwords the role keeps on the host
+  ansible.builtin.shell:
+    cmd: umask 077; openssl rand -hex 24 > /etc/glpi-homelab/{{ item }}
+    creates: "/etc/glpi-homelab/{{ item }}"
+  loop: [db-password, automation-password]
+
+- name: Read them
+  ansible.builtin.slurp:
+    src: "/etc/glpi-homelab/{{ item }}"
+  loop: [db-password, automation-password]
+  register: glpi_generated
+  no_log: true
+
+- name: Name them
+  ansible.builtin.set_fact:
+    glpi_db_password: "{{ glpi_generated.results[0].content | b64decode | trim }}"
+    glpi_automation_password: "{{ glpi_generated.results[1].content | b64decode | trim }}"
+  no_log: true
+
+# Timezone data lets each user see dates in their own zone.
+- name: Load the timezone tables
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      [ "$(mariadb -N -e 'select count(*) from mysql.time_zone_name')" -gt 0 ] && exit 0
+      mariadb-tzinfo-to-sql /usr/share/zoneinfo 2>/dev/null | mariadb mysql
+      echo loaded
+  register: glpi_tz
+  changed_when: "'loaded' in glpi_tz.stdout"
+
+# Root reaches MariaDB over the socket with no password; GLPI's own account is
+# local only.
+- name: Create the database and its account
+  ansible.builtin.command:
+    argv:
+      - mariadb
+      - -e
+      - >-
+        CREATE DATABASE IF NOT EXISTS glpi CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CREATE USER IF NOT EXISTS 'glpi'@'localhost' IDENTIFIED BY '{{ glpi_db_password }}';
+        ALTER USER 'glpi'@'localhost' IDENTIFIED BY '{{ glpi_db_password }}';
+        GRANT ALL PRIVILEGES ON glpi.* TO 'glpi'@'localhost';
+        GRANT SELECT ON mysql.time_zone_name TO 'glpi'@'localhost';
+  changed_when: false
+  no_log: true
+
+# ------------------------------------------------ install or upgrade -----
+
+- name: Look for an installed GLPI
+  ansible.builtin.stat:
+    path: /etc/glpi/config_db.php
+  register: glpi_installed
+
+- name: Look at the release in use
+  ansible.builtin.stat:
+    path: /opt/glpi/current
+  register: glpi_current
+
+- name: Install GLPI
+  when: not glpi_installed.stat.exists
+  block:
+    - name: Use this release
+      ansible.builtin.file:
+        src: "{{ glpi_release }}"
+        dest: /opt/glpi/current
+        state: link
+        force: true
+
+    - name: Create the schema
+      ansible.builtin.command:
+        argv: "{{ glpi_console + ['db:install', '--db-host=localhost', '--db-name=glpi', '--db-user=glpi',
+                '--db-password=' ~ glpi_db_password, '--default-language=en_GB', '--no-telemetry'] }}"
+      changed_when: true
+      no_log: true
+
+    - name: Enable timezones
+      ansible.builtin.command:
+        argv: "{{ glpi_console + ['database:enable_timezones'] }}"
+      changed_when: true
+
+# A new pinned version: maintenance mode on the old code, switch, update the
+# schema, maintenance off. The old release stays in /opt/glpi.
+- name: Upgrade GLPI
+  when:
+    - glpi_installed.stat.exists
+    - glpi_current.stat.lnk_target | default('') != glpi_release
+  block:
+    - name: Enter maintenance mode
+      ansible.builtin.command:
+        argv: "{{ glpi_console + ['glpi:maintenance:enable'] }}"
+      changed_when: true
+
+    - name: Switch to this release
+      ansible.builtin.file:
+        src: "{{ glpi_release }}"
+        dest: /opt/glpi/current
+        state: link
+        force: true
+      notify: Restart php-fpm
+
+    - name: Update the schema
+      ansible.builtin.command:
+        argv: "{{ glpi_console + ['db:update', '--no-telemetry'] }}"
+      changed_when: true
+
+    - name: Leave maintenance mode
+      ansible.builtin.command:
+        argv: "{{ glpi_console + ['glpi:maintenance:disable'] }}"
+      changed_when: true
+
+# --------------------------------------------------------- web and cron -----
+
+- name: Install the site
+  ansible.builtin.copy:
+    src: "{{ glpi_source }}/etc/nginx/sites-available/glpi.conf"
+    dest: /etc/nginx/sites-available/glpi.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable the site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/glpi.conf
+    dest: /etc/nginx/sites-enabled/glpi.conf
+    state: link
+    force: "{{ ansible_check_mode }}"
+  notify: Reload nginx
+
+- name: Remove Debian's default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+# nginx's master process reads the key as root, so no tlscert membership.
+- name: Install the certificate renewal hook
+  ansible.builtin.copy:
+    src: "{{ glpi_source }}/etc/homelab-tls/post-renew.d/20-nginx"
+    dest: /etc/homelab-tls/post-renew.d/20-nginx
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the automatic actions
+  ansible.builtin.copy:
+    src: "{{ glpi_source }}/etc/systemd/system/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [glpi-cron.service, glpi-cron.timer]
+  notify: Reload systemd
+
+- name: Keep the services enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [php8.4-fpm, nginx]
+
+- name: Apply anything owed before configuring GLPI
+  ansible.builtin.meta: flush_handlers
+
+# By default GLPI runs its actions from page views; the timer runs them all
+# instead (mode 2, CLI), so mail is collected when nobody is logged in.
+- name: Run every automatic action from the timer
+  ansible.builtin.command:
+    argv: [mariadb, -N, glpi, -e, "UPDATE glpi_crontasks SET mode = 2 WHERE mode <> 2; SELECT ROW_COUNT();"]
+  register: glpi_cron_mode
+  changed_when: glpi_cron_mode.stdout | trim != '0'
+
+- name: Keep the timer enabled
+  ansible.builtin.systemd_service:
+    name: glpi-cron.timer
+    enabled: true
+    state: started
+
+# ------------------------------------------------------------- accounts -----
+
+- name: Find which accounts exist and are active
+  ansible.builtin.command:
+    argv: [mariadb, -N, glpi, -e, "SELECT name, is_active FROM glpi_users"]
+  register: glpi_users
+  changed_when: false
+  # A check run on a host not yet installed has no table to read.
+  failed_when: glpi_users.rc != 0 and not ansible_check_mode
+  check_mode: false
+
+- name: Read them
+  ansible.builtin.set_fact:
+    glpi_user_state: "{{ dict(glpi_users.stdout_lines | map('split', '\t')) }}"
+
+# The owner's password is set only here, at creation: afterwards it is theirs
+# to change in GLPI. The automation account's is the role's own.
+- name: Create the owner's and the automation accounts
+  ansible.builtin.command:
+    argv: "{{ glpi_console + ['user:create', item.name, '--password=' ~ item.password] }}"
+  loop:
+    - { name: "{{ glpi_owner }}", password: "{{ glpi_admin_password }}" }
+    - { name: "{{ glpi_automation_user }}", password: "{{ glpi_automation_password }}" }
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.name not in glpi_user_state
+  changed_when: true
+  no_log: true
+  register: glpi_created
+
+- name: Make them Super-Admin
+  ansible.builtin.command:
+    argv: "{{ glpi_console + ['user:grant', item, '--profile=' ~ glpi_super_admin_profile, '--entity=0', '--recursive'] }}"
+  loop: "{{ [glpi_owner, glpi_automation_user] | reject('in', glpi_user_state) | list }}"
+  changed_when: true
+
+- name: Keep the automation account's password the role's own
+  ansible.builtin.command:
+    argv: "{{ glpi_console + ['user:reset_password', glpi_automation_user, '--password=' ~ glpi_automation_password] }}"
+  when: glpi_automation_user in glpi_user_state
+  changed_when: false
+  no_log: true
+
+- name: Disable GLPI's default accounts
+  ansible.builtin.command:
+    argv: "{{ glpi_console + ['user:disable', item] }}"
+  loop: "{{ glpi_default_users }}"
+  when: glpi_user_state.get(item, '0') == '1'
+  changed_when: true
+
+# ------------------------------------------------------ settings, mail -----
+
+# config:set always writes, and the SMTP password cannot be read back to
+# compare, so a hash of what was last applied decides. The hash file is
+# root-only and says nothing a reader could use.
+- name: Hash the settings and the collector
+  ansible.builtin.set_fact:
+    glpi_settings_hash: "{{ glpi_settings | to_json | hash('sha256') }}"
+    glpi_collector_hash: "{{ glpi_collector | to_json | hash('sha256') }}"
+  no_log: true
+
+- name: Read what was last applied
+  ansible.builtin.slurp:
+    src: "/etc/glpi-homelab/{{ item }}.sha256"
+  loop: [settings, collector]
+  register: glpi_applied
+  failed_when: false
+
+- name: Compare
+  ansible.builtin.set_fact:
+    glpi_settings_due: "{{ (glpi_applied.results[0].content | default('') | b64decode | trim) != glpi_settings_hash }}"
+    glpi_collector_due: "{{ (glpi_applied.results[1].content | default('') | b64decode | trim) != glpi_collector_hash }}"
+
+- name: Apply the settings
+  when: glpi_settings_due
+  block:
+    - name: Set each one
+      ansible.builtin.command:
+        argv: "{{ glpi_console + ['config:set', item.key, item.value] }}"
+      loop: "{{ glpi_settings | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      changed_when: true
+      no_log: "{{ item.key == 'smtp_passwd' }}"
+
+    - name: Record them as applied
+      ansible.builtin.copy:
+        content: "{{ glpi_settings_hash }}\n"
+        dest: /etc/glpi-homelab/settings.sha256
+        owner: root
+        group: root
+        mode: "0600"
+
+# Mail collectors have no console command, so this goes through GLPI's REST
+# API on the loopback listener, which encrypts the password as the UI would.
+- name: Apply the mail collector
+  when: glpi_collector_due
+  block:
+    - name: Open an API session
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/apirest.php/initSession
+        url_username: "{{ glpi_automation_user }}"
+        url_password: "{{ glpi_automation_password }}"
+        force_basic_auth: true
+      register: glpi_session
+      no_log: true
+
+    - name: Find the collector
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/apirest.php/MailCollector?range=0-99
+        headers:
+          Session-Token: "{{ glpi_session.json.session_token }}"
+        status_code: [200, 206]
+      register: glpi_collectors
+      no_log: true
+
+    - name: Update it
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080/apirest.php/MailCollector/{{ glpi_existing[0].id }}"
+        method: PUT
+        headers:
+          Session-Token: "{{ glpi_session.json.session_token }}"
+        body_format: json
+        body: {input: "{{ glpi_collector }}"}
+      vars:
+        glpi_existing: "{{ glpi_collectors.json | selectattr('name', 'equalto', glpi_collector.name) | list }}"
+      when: glpi_existing | length > 0
+      changed_when: true
+      no_log: true
+
+    - name: Create it
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/apirest.php/MailCollector
+        method: POST
+        headers:
+          Session-Token: "{{ glpi_session.json.session_token }}"
+        body_format: json
+        body: {input: "{{ glpi_collector }}"}
+        status_code: [201]
+      when: glpi_collectors.json | selectattr('name', 'equalto', glpi_collector.name) | list | length == 0
+      changed_when: true
+      no_log: true
+
+    - name: Close the session
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/apirest.php/killSession
+        headers:
+          Session-Token: "{{ glpi_session.json.session_token }}"
+      no_log: true
+
+    - name: Record it as applied
+      ansible.builtin.copy:
+        content: "{{ glpi_collector_hash }}\n"
+        dest: /etc/glpi-homelab/collector.sha256
+        owner: root
+        group: root
+        mode: "0600"
+
+# ------------------------------------------------------------- the end -----
+
+- name: Wait for GLPI to answer
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}/status.php"
+    ca_path: /etc/homelab-tls/root_ca.crt
+    return_content: true
+  register: glpi_health
+  until: glpi_health.status == 200 and '"PROBLEM"' not in glpi_health.content
+  retries: 24
+  delay: 5
+  check_mode: false

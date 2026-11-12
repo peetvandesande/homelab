@@ -8,6 +8,7 @@ and sally together, and malware in the lab. Task 19 in `infra/README.md`.
 | lexie | `/home/shared/pictures`, `Giulia`, `videos` | about 27 GB |
 | moby | Nextcloud: a `pg_dump`, then the volume without previews or logs | about 19 GB |
 | forgejo | a `pg_dump`, then `/var/lib/forgejo` and `/etc/forgejo` | under 40 MB |
+| glpi | a `mariadb-dump`, then `/var/lib/glpi`, `/etc/glpi` and `/etc/glpi-homelab` | new, November 2026 |
 
 XWiki is left out for now, by choice. Everything else is rebuilt from this repo.
 
@@ -17,15 +18,15 @@ XWiki is left out for now, by choice. Everything else is rebuilt from this repo.
 installs it and says what each host backs up; it is **run by a person only**,
 because the secrets are in `homelab-restricted` (`infra/README.md`, "Secrets"),
 and `infra/scripts/apply.sh` lists any change here as needing one.
-`tests/` covers the lock renewal and runs in CI.
+`tests/` covers the lock renewal and the dump checks, and runs in CI.
 
 One script, `/usr/local/sbin/offsite`, does everything:
 
 | Command | Where, when | Does |
 |---|---|---|
-| `backup` | all three, nightly 03:30-04:00 UTC | the dumps, then the paths |
+| `backup` | all four, nightly 03:30-04:00 UTC | the dumps, then the paths |
 | `maintain` | lexie, Sundays 07:00 UTC | forget, prune without repacking, renew the locks, measure the bucket |
-| `test` | lexie, first Sunday 09:00 UTC | read 5 GB of packs, restore both dumps and 20 of lexie's files and compare them |
+| `test` | lexie, first Sunday 09:00 UTC | read 5 GB of packs, restore the three dumps and 20 of lexie's files and compare them |
 | `undelete --since T` | by a person | see "After a deletion" |
 
 Each writes `offsite_*.prom` into the textfile collector. `journalctl -u
@@ -88,7 +89,7 @@ rules treat NoData as alerting.
 From any machine with restic and the four secrets:
 
 ```
-restic snapshots                                   # --host lexie|moby|forgejo
+restic snapshots                                   # --host lexie|moby|forgejo|glpi
 restic restore <id> --target /restore --include /home/shared/pictures/2024
 restic dump <id> /nextcloud.sql > nextcloud.sql   # the dumps are tagged "dump"
 ```
@@ -101,7 +102,7 @@ than it is otherwise invisible.
 ## After a deletion
 
 Malware with the key can make the repository look empty by writing delete
-markers. The versions beneath stay locked. Stop the timers on all three hosts
+markers. The versions beneath stay locked. Stop the timers on all four hosts
 first, so nothing writes over the evidence, then:
 
 ```
@@ -136,7 +137,7 @@ As given by Hetzner on 10 November 2026, excluding VAT:
 1. **Uploads are not throttled for cost.** Ingress is free. If a cap is ever
    needed it is to spare the home uplink, and is set from a measurement.
 2. **Routine downloads are a fixed size, not a share**: the monthly `test`
-   reads 5 GB of packs plus two dumps and 20 files, well under 1% of what is
+   reads 5 GB of packs plus three dumps and 20 files, well under 1% of what is
    included, and cannot grow with the repository.
 3. **A restore by a person is never throttled.** Restoring everything is inside
    the included egress; a slower restore saves nothing.

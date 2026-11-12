@@ -118,6 +118,10 @@ after the table was numbered.
 
 **Where it stands, 12 November 2026** – pick up here:
 
+- **GLPI**, outside the task list: three PRs – the guest (CT 304, OpenTofu),
+  the service, and its public side on ruby. `glpi/CLAUDE.md`, "Building it",
+  has the order and the person-run steps between them.
+
 - **13 November:** read the first live night, `{identifier="homelab-action"} |=
   "reboot:security"`: ruby and jennie should each reach `succeeded` after their
   reboot; a `failed` names what did not come back.
@@ -185,7 +189,7 @@ ansible-playbook enrol.yml --limit <host>                      # certificate for
 ansible-playbook ca.yml --check --diff                         # the CA on pistis; a person runs this
 ansible-playbook monitoring.yml --check --diff                 # Prometheus, Loki, Grafana; a person runs this until task 13
 ansible-playbook dns.yml --check --diff                        # pythia, then delphi, then themis; a person runs this until task 13
-ansible-playbook apps.yml --check --diff                       # Jellyfin, Navidrome, moby, Forgejo; a person runs this until task 13
+ansible-playbook apps.yml --check --diff                       # Jellyfin, Navidrome, moby, GLPI, Forgejo; a person runs this until task 13
 ansible-playbook platform.yml --limit '!hermes' --check --diff # lenora, metis; hermes when a lab has it running
 ansible-playbook ci.yml --check --diff                         # lexie's and talos's runners, the responder; always a person
 ansible-playbook -i inventory/outside.yml outside.yml --ask-become-pass --check --diff --limit jennie  # then ruby; always a person, and log in first: see outside.yml
@@ -369,6 +373,8 @@ access the automation does not have.
 | `grafana/HEALTHCHECKS_PING_URL` | Healthchecks.io – *person* | `infra/ansible/monitoring.yml` |
 | `responder/RESPONDER_TOKEN` | Generate new | `infra/ansible/ci.yml` |
 | `n8n/SMTP_PASSWD`, `n8n-sogode/SMTP_PASSWD` | Mailbox on ruby – *person* | `infra/ansible/apps.yml` |
+| `glpi/MAIL_PASSWORD` | Mailbox `helpdesk@itsm.sogode.com` on ruby – *person* | `infra/ansible/deploy-access.yml`, then a merge touching `glpi/` or `apps.yml` |
+| `glpi/ADMIN_PASSWORD` | Generate new; used only when `peet` is created in GLPI | Nothing afterwards: GLPI holds it (`glpi/CLAUDE.md` invariant 2) |
 | `jobsearch/*` | n8n, Forgejo or Anthropic console, or the mailbox on ruby – *person* | `infra/ansible/ci.yml` |
 | `esp32/kitchen-api-key` | ESPHome config | Reflash the device |
 | `ca/*` | `ca/README.md` – *person* | `infra/ansible/ca.yml` |

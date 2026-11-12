@@ -1,4 +1,4 @@
-"""Tests for the off-site script's lock renewal. Run: python3 -m unittest discover -s offsite/tests"""
+"""Tests for the off-site script's lock renewal and dump checks. Run: python3 -m unittest discover -s offsite/tests"""
 import datetime as dt
 import importlib.machinery
 import importlib.util
@@ -84,6 +84,15 @@ class Timestamps(unittest.TestCase):
                          int(dt.datetime(2026, 11, 10, 9, tzinfo=dt.timezone.utc).timestamp()))
         self.assertEqual(offsite.whole_seconds("2026-11-10T09:00:00Z"),
                          int(dt.datetime(2026, 11, 10, 9, tzinfo=dt.timezone.utc).timestamp()))
+
+class DumpComplete(unittest.TestCase):
+    def test_postgres_and_mariadb(self):
+        self.assertTrue(offsite.dump_complete("forgejo", "...\n-- PostgreSQL database dump complete\n\n"))
+        self.assertTrue(offsite.dump_complete("glpi", "...\n-- Dump completed on 2026-11-13  3:30:01\n"))
+
+    def test_truncated(self):
+        self.assertFalse(offsite.dump_complete("glpi", "INSERT INTO `glpi_tickets` VALUES (1,"))
+        self.assertFalse(offsite.dump_complete("moby", "COPY public.oc_filecache"))
 
 
 if __name__ == "__main__":
