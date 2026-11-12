@@ -269,7 +269,7 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   **`ruby.peetvandesande.com`** is overridden to ruby's dummy0 addresses
   192.168.254.254 and `fd33:5692:1834:254::254`, so the LAN reaches ruby's
   nginx admin pages over the tunnel, where they are allowed.
-  **`git.` and `n8n.peetvandesande.com`, and `n8n.sogode.com`,** go the other way: publicly they are
+  **`git.sogode.com`, `n8n.peetvandesande.com` and `n8n.sogode.com`** go the other way: publicly they are
   ruby, which reverse-proxies them home, and inside they resolve to forgejo
   and moby directly. See "Public services" below.
 - **When you add a container, add its A and PTR records** to
@@ -360,7 +360,7 @@ works from both sides**:
 
 | Name | Origin | Public via ruby |
 |---|---|---|
-| `git.peetvandesande.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
+| `git.sogode.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
 | `n8n.peetvandesande.com` | n8n on moby | webhooks, forms and their assets; the editor only from `home-lan-allow.conf` ranges |
 | `n8n.sogode.com` | n8n-sogode on moby, for Sogode business use | the same as `n8n.peetvandesande.com`; also a mail domain on ruby (`moby/CLAUDE.md`, "n8n-sogode") |
 

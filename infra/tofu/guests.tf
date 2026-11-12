@@ -261,7 +261,6 @@ resource "proxmox_virtual_environment_vm" "hermes" {
   network_device {
     bridge       = "vmbr0"
     disconnected = false
-    enabled      = true
     firewall     = false
     mac_address  = "BC:24:11:1B:5D:14"
     model        = "virtio"
@@ -939,7 +938,6 @@ resource "proxmox_virtual_environment_vm" "homeassistant" {
   network_device {
     bridge       = "vmbr0"
     disconnected = false
-    enabled      = true
     firewall     = true
     mac_address  = "BC:24:11:A3:34:EA"
     model        = "virtio"
@@ -1108,7 +1106,6 @@ resource "proxmox_virtual_environment_vm" "metis" {
   network_device {
     bridge       = "vmbr0"
     disconnected = false
-    enabled      = true
     firewall     = false
     mac_address  = "BC:24:11:6E:7A:19"
     model        = "virtio"

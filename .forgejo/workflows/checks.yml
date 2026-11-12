@@ -16,7 +16,7 @@ jobs:
           rm -rf repo
           GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader \
           GIT_CONFIG_VALUE_0="Authorization: token $TOKEN" \
-            git clone -q https://git.peetvandesande.com/peet/homelab.git repo
+            git clone -q https://git.sogode.com/peet/homelab.git repo
           git -C repo checkout -q "${{ forgejo.sha }}"
       - name: Checks
         run: repo/infra/scripts/ci-checks.sh

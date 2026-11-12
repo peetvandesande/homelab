@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../ca/scripts/verify-lib.sh
 HOST=192.168.8.62
-NAME=git.peetvandesande.com
+NAME=git.sogode.com
 RUBY4=145.239.73.18
 PROM=192.168.8.53
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=5"

@@ -84,7 +84,7 @@ zones:
         records:
           - { name: jellyfin,      data: 192.168.8.60, data6: 'fd33:5692:1834:1000:be24:11ff:fee5:b13b' }
           - { name: navidrome,     data: 192.168.8.61, data6: 'fd33:5692:1834:1000:be24:11ff:fed8:d621' }
-          - { name: forgejo,       data: 192.168.8.62, data6: 'fd33:5692:1834:1000:be24:11ff:fe14:eca4', comment: 'git.peetvandesande.com' }
+          - { name: forgejo,       data: 192.168.8.62, data6: 'fd33:5692:1834:1000:be24:11ff:fe14:eca4', comment: 'git.sogode.com' }
           # No data6: HAOS has no global IPv6 at all. Its address is set inside
           # the appliance with `ha network update`, not by Proxmox, and nothing
           # answers on the ULA its MAC would produce
@@ -249,25 +249,23 @@ zones:
       - { name: "@", type: A,    data: 192.168.254.254,           comment: 'ruby, over wgclient1' }
       - { name: "@", type: AAAA, data: "fd33:5692:1834:254::254", comment: 'ruby''s dummy0, over wgclient1' }
 
-  - name: git.peetvandesande.com
+  - name: git.sogode.com
     kind: override
     backend: bind
     comment: |
-      Split-horizon zone for git.peetvandesande.com.
+      Split-horizon zone for git.sogode.com, Forgejo's name.
 
       Publicly a CNAME to ruby (vps-5ca50660.vps.ovh.net), which reverse-proxies
-      it to forgejo over wgclient1 - homelab/forgejo/ruby. Inside the lab it
-      resolves to forgejo itself, so the one URL Forgejo knows itself by
-      (ROOT_URL, clone URLs, SSH_DOMAIN) works from both sides and LAN traffic
-      never leaves the house. forgejo serves a lab-CA certificate carrying this
-      name, so a device that does not trust the lab CA warns here and not
-      outside.
+      it to forgejo over wgclient1 - homelab/forgejo/ruby - and passes its :22
+      to forgejo's sshd. Inside the lab it resolves to forgejo itself, so the
+      one URL Forgejo knows itself by (ROOT_URL, clone URLs, SSH_DOMAIN) works
+      from both sides and LAN traffic never leaves the house. forgejo serves a
+      lab-CA certificate carrying this name, so a device that does not trust
+      the lab CA warns here and not outside.
 
-      git over SSH works only on this side: off the LAN the name is ruby, whose
-      :22 is ruby's own sshd.
-
-      The zone is deliberately the SINGLE NAME, not peetvandesande.com, and needs a
-      matching addNTA() on Delphi or every lookup here SERVFAILs.
+      The zone is deliberately the SINGLE NAME, not sogode.com. sogode.com is
+      DNSSEC-signed, so this needs a matching addNTA() on Delphi or every
+      lookup here SERVFAILs.
     records:
       - { name: "@", type: A,    data: 192.168.8.62,                           comment: 'forgejo' }
       - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe14:eca4", comment: 'forgejo''s ULA' }

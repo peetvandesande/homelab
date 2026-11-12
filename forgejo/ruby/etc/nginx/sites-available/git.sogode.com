@@ -1,4 +1,4 @@
-# git.peetvandesande.com on ruby - the public face of Forgejo. Managed in
+# git.sogode.com on ruby - the public face of Forgejo. Managed in
 # homelab/forgejo/ruby; installed by infra/ansible/outside.yml.
 #
 # Publicly the name is a CNAME to this host; inside the lab and the VPN it
@@ -10,15 +10,15 @@
 server {
     listen 80;
     listen [::]:80;
-    server_name git.peetvandesande.com;
+    server_name git.sogode.com;
 
-    access_log /var/log/nginx/git.peetvandesande.com.access.log;
-    error_log  /var/log/nginx/git.peetvandesande.com.error.log;
+    access_log /var/log/nginx/git.sogode.com.access.log;
+    error_log  /var/log/nginx/git.sogode.com.error.log;
 
     # certbot's nginx plugin answers http-01 by injecting its own location for
     # the duration of the challenge; everything else goes to HTTPS.
     location / {
-        return 308 https://git.peetvandesande.com$request_uri;
+        return 308 https://git.sogode.com$request_uri;
     }
 }
 
@@ -26,13 +26,13 @@ server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name git.peetvandesande.com;
+    server_name git.sogode.com;
 
-    ssl_certificate     /etc/letsencrypt/live/git.peetvandesande.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/git.peetvandesande.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/git.sogode.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/git.sogode.com/privkey.pem;
 
-    access_log /var/log/nginx/git.peetvandesande.com.access.log;
-    error_log  /var/log/nginx/git.peetvandesande.com.error.log;
+    access_log /var/log/nginx/git.sogode.com.access.log;
+    error_log  /var/log/nginx/git.sogode.com.error.log;
 
     # Pushes and LFS objects come through here. Forgejo enforces its own
     # limits; nginx's 1m default would refuse an ordinary push.
@@ -65,9 +65,9 @@ server {
         proxy_ssl_trusted_certificate /etc/nginx/homelab-root-g2.crt;
         proxy_ssl_verify_depth        2;
         proxy_ssl_server_name         on;
-        proxy_ssl_name                git.peetvandesande.com;
+        proxy_ssl_name                git.sogode.com;
 
-        proxy_set_header Host              git.peetvandesande.com;
+        proxy_set_header Host              git.sogode.com;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Real-IP         $remote_addr;

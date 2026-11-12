@@ -24,7 +24,7 @@ import time
 import urllib.error
 import urllib.request
 
-FORGEJO = "https://git.peetvandesande.com"
+FORGEJO = "https://git.sogode.com"
 UPSTREAM = "peet/homelab"
 BOT = "responder-bot"
 TOKEN = os.environ["FORGEJO_TOKEN"]
@@ -183,7 +183,7 @@ def handle(p, now):
     paths = checked_paths(git("diff", "--cached", "--raw", "-z", "--no-renames").stdout)
 
     title = f"responder: {name}"[:100]
-    git("-c", f"user.name={BOT}", "-c", f"user.email={BOT}@noreply.git.peetvandesande.com",
+    git("-c", f"user.name={BOT}", "-c", f"user.email={BOT}@noreply.git.sogode.com",
         "commit", "-q", "-m", title, "-m", f"Proposed by the responder in {p.get('file', '?')}.")
     git("push", "-q", "fork", f"{branch}:refs/heads/{branch}")
 

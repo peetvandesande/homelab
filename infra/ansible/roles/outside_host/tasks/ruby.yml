@@ -115,8 +115,21 @@
   when: outside_host_vpn_only_ssh.stat.exists
   notify: Reload nginx
 
-- name: Remove the stream proxy's old name
+- name: Take retired sites down
   ansible.builtin.file:
-    path: /etc/nginx/stream.d/git.peetvandesande.com-ssh.conf
+    path: "/etc/nginx/{{ item[1] }}/{{ item[0] }}"
     state: absent
+  loop: "{{ outside_host_retired_vhosts | product(['sites-enabled', 'sites-available']) | list }}"
+  loop_control:
+    label: "{{ item[1] }}/{{ item[0] }}"
   notify: Reload nginx
+
+# After the reload, so nginx never points at a certificate that has gone.
+- name: Flush the reload before removing their certificates
+  ansible.builtin.meta: flush_handlers
+
+- name: Remove retired sites' certificates
+  ansible.builtin.command:
+    cmd: certbot delete -n --cert-name {{ item }}
+    removes: "/etc/letsencrypt/renewal/{{ item }}.conf"
+  loop: "{{ outside_host_retired_vhosts }}"

@@ -23,8 +23,7 @@ step_ca_reissue_excluded: [pistis, lenora, talos, lexie, hermes]
 # Public names a host may be re-issued with before they reach FLEET. A name is
 # approved here, and pistis learns it when a person runs ca.yml; the runner then
 # re-issues once FLEET carries it.
-step_ca_approved_sans:
-  forgejo: [git.sogode.com]
+step_ca_approved_sans: {}
 step_ca_packages:
   - name: step-ca
     version: 0.30.2-1
