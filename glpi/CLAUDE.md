@@ -122,7 +122,7 @@ In order:
    secrets filled and imported, and `deploy-access.yml` run so talos has them –
    from the branch that adds them, since `main` does not list them yet.
 4. The service: `FLEET`, DNS, the role, monitoring – one merge, applied by the
-   runner in the order enrol, fleet, monitoring, dns, apps.
+   runner in the order enrol, fleet, dns, monitoring, apps.
 5. **`ca.yml` by a person, then a re-run of that merge's job.** talos may mint
    a new host only its `.home` name and lab addresses; `itsm.sogode.com` is
    allowed once `ca.yml` has put glpi and its `FLEET` names on pistis's lists.
