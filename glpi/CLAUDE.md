@@ -69,7 +69,7 @@ Never as root: files it creates become unwritable to php-fpm.
 3. **The REST API answers this host only, for the role.** It is enabled, with
    password login, because mail collectors have no console command: the role
    writes the collector through it, as `homelab-automation`, a Super-Admin whose
-   password the role generates and resets on every run, at
+   password the role generates once into `/etc/glpi-homelab`, at
    `https://127.0.0.1/apirest.php`. Two locks keep it local: nginx admits
    `/apirest.php` however it is spelt from 127.0.0.1 and ::1 only, and GLPI's
    only API client is "full access from localhost". It has to be HTTPS: GLPI's

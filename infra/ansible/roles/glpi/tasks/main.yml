@@ -313,7 +313,9 @@
     glpi_user_state: "{{ dict(glpi_users.stdout_lines | map('split', '\t')) }}"
 
 # The owner's password is set only here, at creation: afterwards it is theirs
-# to change in GLPI. The automation account's is the role's own.
+# to change in GLPI. The automation account's is generated once on the host and
+# never changes; it cannot be reset to itself on later runs either, as GLPI
+# refuses a password it has used recently.
 - name: Create the owner's and the automation accounts
   ansible.builtin.command:
     argv: "{{ glpi_console + ['user:create', item.name, '--password=' ~ item.password] }}"
@@ -349,13 +351,6 @@
         AND profiles_id <> {{ glpi_super_admin_profile }}; SELECT ROW_COUNT();
   register: glpi_default_profile
   changed_when: glpi_default_profile.stdout | trim != '0'
-
-- name: Keep the automation account's password the role's own
-  ansible.builtin.command:
-    argv: "{{ glpi_console + ['user:reset_password', glpi_automation_user, '--password=' ~ glpi_automation_password] }}"
-  when: glpi_automation_user in glpi_user_state
-  changed_when: false
-  no_log: true
 
 - name: Disable GLPI's default accounts
   ansible.builtin.command:
