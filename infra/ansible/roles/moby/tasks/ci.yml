@@ -15,6 +15,9 @@
   delegate_to: lexie
   register: moby_runner_pub
   failed_when: false
+  # lexie is out of the deploy runner's reach by design, so on apply-on-merge
+  # this is skipped and the account is left as a person's run last made it.
+  ignore_unreachable: true
 
 - name: Create the account for that key
   when: moby_runner_pub.content is defined
