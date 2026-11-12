@@ -4,6 +4,7 @@ outside_host_repo: "{{ role_path }}/../../../.."
 outside_host_alloy_version: 1.19.2
 outside_host_vhosts:
   - { src: forgejo/ruby/etc/nginx/sites-available/git.peetvandesande.com, name: git.peetvandesande.com }
+  - { src: forgejo/ruby/etc/nginx/sites-available/git.sogode.com, name: git.sogode.com }
   - { src: moby/ruby/etc/nginx/sites-available/n8n.peetvandesande.com, name: n8n.peetvandesande.com }
   - { src: moby/ruby/etc/nginx/sites-available/n8n.sogode.com, name: n8n.sogode.com }
   - { src: moby/ruby/etc/nginx/sites-available/ntfy.sogode.com, name: ntfy.sogode.com }

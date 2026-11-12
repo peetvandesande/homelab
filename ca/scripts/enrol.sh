@@ -45,7 +45,7 @@ FLEET=(
   "192.168.8.27 moby n8n.home n8n.peetvandesande.com n8n.sogode.com ntfy.sogode.com"
   "192.168.8.60 jellyfin"
   "192.168.8.61 navidrome"
-  "192.168.8.62 forgejo git.peetvandesande.com"
+  "192.168.8.62 forgejo git.peetvandesande.com git.sogode.com"
   "192.168.8.57 hermes"
   "192.168.8.58 metis"
   "192.168.8.59 talos"

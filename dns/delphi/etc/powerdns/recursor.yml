@@ -133,6 +133,10 @@ recursor:
       recurse: false
       forwarders:
         - 192.168.8.52
+    - zone: git.sogode.com.
+      recurse: false
+      forwarders:
+        - 192.168.8.52
     - zone: n8n.peetvandesande.com.
       recurse: false
       forwarders:

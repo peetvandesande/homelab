@@ -272,6 +272,27 @@ zones:
       - { name: "@", type: A,    data: 192.168.8.62,                           comment: 'forgejo' }
       - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe14:eca4", comment: 'forgejo''s ULA' }
 
+  - name: git.sogode.com
+    kind: override
+    backend: bind
+    comment: |
+      Split-horizon zone for git.sogode.com, Forgejo's name.
+
+      Publicly a CNAME to ruby (vps-5ca50660.vps.ovh.net), which reverse-proxies
+      it to forgejo over wgclient1 - homelab/forgejo/ruby - and passes its :22
+      to forgejo's sshd. Inside the lab it resolves to forgejo itself, so the
+      one URL Forgejo knows itself by (ROOT_URL, clone URLs, SSH_DOMAIN) works
+      from both sides and LAN traffic never leaves the house. forgejo serves a
+      lab-CA certificate carrying this name, so a device that does not trust
+      the lab CA warns here and not outside.
+
+      The zone is deliberately the SINGLE NAME, not sogode.com. sogode.com is
+      DNSSEC-signed, so this needs a matching addNTA() on Delphi or every
+      lookup here SERVFAILs.
+    records:
+      - { name: "@", type: A,    data: 192.168.8.62,                           comment: 'forgejo' }
+      - { name: "@", type: AAAA, data: "fd33:5692:1834:1000:be24:11ff:fe14:eca4", comment: 'forgejo''s ULA' }
+
   - name: n8n.peetvandesande.com
     kind: override
     backend: bind
