@@ -129,10 +129,6 @@ recursor:
       forwarders:
         - 192.168.8.52
     # Forgejo and n8n: public via ruby, local direct. Each needs its addNTA().
-    - zone: git.peetvandesande.com.
-      recurse: false
-      forwarders:
-        - 192.168.8.52
     - zone: git.sogode.com.
       recurse: false
       forwarders:

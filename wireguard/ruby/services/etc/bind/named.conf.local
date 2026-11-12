@@ -169,12 +169,6 @@ view "wireguard" {
         notify no;
     };
 
-    zone "git.peetvandesande.com" {
-        type primary;
-        file "/etc/bind/wireguard/git.peetvandesande.com";
-        notify no;
-    };
-
     zone "n8n.peetvandesande.com" {
         type primary;
         file "/etc/bind/wireguard/n8n.peetvandesande.com";

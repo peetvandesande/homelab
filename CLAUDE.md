@@ -269,7 +269,7 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   **`ruby.peetvandesande.com`** is overridden to ruby's dummy0 addresses
   192.168.254.254 and `fd33:5692:1834:254::254`, so the LAN reaches ruby's
   nginx admin pages over the tunnel, where they are allowed.
-  **`git.` and `n8n.peetvandesande.com`, and `n8n.sogode.com`,** go the other way: publicly they are
+  **`git.sogode.com`, `n8n.peetvandesande.com` and `n8n.sogode.com`** go the other way: publicly they are
   ruby, which reverse-proxies them home, and inside they resolve to forgejo
   and moby directly. See "Public services" below.
 - **When you add a container, add its A and PTR records** to

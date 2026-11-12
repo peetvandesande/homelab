@@ -23,10 +23,27 @@
     mode: "0644"
   register: pushed_bindbackend
 
+# A zone dropped from the list leaves its file behind; remove it once the server
+# has stopped loading it, so a stale copy cannot come back on a later seed.
+- name: Find the zone files on the server
+  ansible.builtin.find:
+    paths: "{{ zone_dir }}"
+    patterns: "*.zone"
+  register: present_zone_files
+
 - name: Rediscover zones (one was added or removed)
   ansible.builtin.command: pdns_control rediscover
   when: pushed_bindbackend is changed
   changed_when: true
+
+- name: Remove the files of zones no longer listed
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ present_zone_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: (item.path | basename | regex_replace('\\.zone$', '')) not in (bind_zones | map(attribute='name') | list)
 
 - name: Reload the zones that changed
   ansible.builtin.command: "pdns_control bind-reload-now {{ item.item }}"
