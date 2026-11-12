@@ -64,6 +64,8 @@ if [[ ! -r $DEPLOY/key ]]; then
 fi
 export ANSIBLE_PRIVATE_KEY_FILE=$DEPLOY/key HOMELAB_PRIVATE=$DEPLOY/private
 export HOMELAB_DNS_SECRETS=$DEPLOY/private/dns/secrets.env
+# Tells a role it runs from here, so it skips what only a person's run can reach.
+export HOMELAB_APPLY_ON_MERGE=1
 export PATH=/opt/ci/bin:$PATH
 log=$PWD/infra/scripts/action-log
 cd infra/ansible || exit 1
