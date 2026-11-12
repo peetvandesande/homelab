@@ -1375,3 +1375,105 @@ resource "proxmox_virtual_environment_container" "prometheus" {
     ignore_changes = [operating_system[0].template_file_id, timeout_start]
   }
 }
+
+# GLPI, the lab's ITSM suite, at itsm.sogode.com – homelab/glpi. Created here
+# rather than imported: the first guest born in OpenTofu.
+#
+# The MAC is fixed so the router's reservation (192.168.8.63) can be made
+# before the guest first starts, and so its SLAAC ULA is known in advance.
+# The keys are written only at creation: two for the owner, and talos's deploy
+# key with the restrictions infra/ansible/deploy-access.yml would give it, so
+# apply-on-merge can reach the host from its first boot.
+resource "proxmox_virtual_environment_container" "glpi" {
+  delete_unreferenced_disks_on_destroy = false
+  description                          = "glpi - GLPI, see homelab/glpi\n"
+  environment_variables                = {}
+  migrate                              = false
+  node_name                            = "lenora"
+  pool_id                              = "Production"
+  protection                           = false
+  purge_on_destroy                     = true
+  start_on_boot                        = true
+  started                              = true
+  tags                                 = []
+  template                             = false
+  timeout_clone                        = 1800
+  timeout_create                       = 1800
+  timeout_delete                       = 60
+  timeout_migrate                      = 1800
+  timeout_update                       = 1800
+  unprivileged                         = true
+  vm_id                                = 304
+  console {
+    enabled   = true
+    tty_count = 2
+    type      = "tty"
+  }
+  cpu {
+    architecture = "amd64"
+    cores        = 2
+    limit        = 0
+  }
+  disk {
+    acl           = false
+    datastore_id  = "ssdpool"
+    mount_options = []
+    quota         = false
+    replicate     = false
+    size          = 16
+  }
+  features {
+    fuse    = false
+    keyctl  = false
+    mknod   = false
+    mount   = []
+    nesting = true
+  }
+  initialization {
+    hostname = "glpi"
+    dns {
+      domain = "home"
+    }
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+    user_account {
+      keys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOW5phwQWtosKuBdP6pzX6EwenL9jLuMTPWL0tq9tiii peet@mbp",
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGOdQ066rf4GAQliNffyKmUHRAKpnODAmZeE83yo7ybU peet@mba",
+        "from=\"192.168.8.59\",no-agent-forwarding,no-X11-forwarding,no-port-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIKVlnwYBn2FgNTyZF5/1hpSAbeMPhZToRotgm3bG8YG forgejo-runner@talos-deploy",
+      ]
+    }
+  }
+  memory {
+    dedicated = 2048
+    swap      = 512
+  }
+  network_interface {
+    bridge       = "vmbr0"
+    enabled      = true
+    firewall     = false
+    host_managed = false
+    mac_address  = "BC:24:11:47:4C:50"
+    mtu          = 0
+    name         = "eth0"
+    rate_limit   = 0
+    vlan_id      = 0
+  }
+  operating_system {
+    template_file_id = "local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
+    type             = "debian"
+  }
+  lifecycle {
+    prevent_destroy = true
+    # The template and the keys are only used at creation, and timeout_start
+    # is the provider's own setting; none of them reaches Proxmox's config.
+    ignore_changes = [
+      operating_system[0].template_file_id,
+      timeout_start,
+      initialization[0].user_account,
+    ]
+  }
+}
