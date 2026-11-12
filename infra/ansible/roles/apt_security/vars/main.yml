@@ -3,11 +3,11 @@ apt_security_source: "{{ role_path }}/../../../../apt/root"
 # Unattended reboots for security updates (homelab/apt, "Security reboots"), on
 # these three only: a container has no kernel of its own. `at` is Paris time and
 # staggered so no two are down together; `latest` is the last minute a reboot may
-# start. mode stays shadow – record what it would do, reboot nothing – until a
-# person switches a host to live.
+# start. mode is live – reboot when every condition holds – or shadow, which
+# records what it would do and reboots nothing.
 apt_security_reboot_hosts:
   lenora:
-    mode: shadow
+    mode: live
     at: "04:00"       # sally's backup runs 03:30-03:45; the off-site one starts 04:30 in winter
     latest: "04:20"
     backup: pve
@@ -15,7 +15,7 @@ apt_security_reboot_hosts:
       pve-cluster pvedaemon pveproxy pvestatd pve-guests zfs-zed nfs-server
       prometheus-node-exporter alloy
   ruby:
-    mode: shadow
+    mode: live
     at: "04:30"
     latest: "05:00"
     backup: ovh
@@ -25,7 +25,7 @@ apt_security_reboot_hosts:
       alloy prometheus-node-exporter prometheus-blackbox-exporter
     interfaces: wg0 wg1 wg2
   jennie:
-    mode: shadow
+    mode: live
     at: "05:10"
     latest: "05:50"
     backup: ovh

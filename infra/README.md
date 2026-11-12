@@ -113,19 +113,17 @@ PBS token.
 
 Each task ends with a checkpoint before the next begins.
 
-The order from here is 15's review, 16, 17, 22 going live, 20 and 21; task 22 was added
+The order from here is 15's review, 16, 17, 20 and 21; task 22 was added
 after the table was numbered.
 
-**Where it stands, 11 November 2026** – pick up here:
+**Where it stands, 12 November 2026** – pick up here:
 
-- **12 November:** read the first shadow night of security reboots,
-  `{identifier="homelab-action"} |= "reboot:security"`. ruby should record "would
-  reboot" for its new kernel (`linux-image-6.12.116+deb13-cloud-amd64`); lenora and
-  jennie nothing, unless an update arrived.
 - **16 November:** review task 15's shadow decisions, then start task 16.
 - **Around 18 November:** retire the old ruby report (a `propose` PR, then the owner
-  runs `outside.yml` for ruby); after a week of shadow nights, switch security reboots
-  to `live` one host at a time, each by PR for the owner.
+  runs `outside.yml` for ruby).
+- **13 November:** read the first live night, `{identifier="homelab-action"} |=
+  "reboot:security"`: ruby and jennie should each reach `succeeded` after their
+  reboot; a `failed` names what did not come back.
 - **Off-site:** check `lock-test/2026-11-10.txt` still cannot be deleted while
   locked, and expires when it should.
 
@@ -152,7 +150,7 @@ after the table was numbered.
 | 19 | Off-site copy of critical backups | Done: restic to Hetzner, first run 10 November 2026, `offsite/CLAUDE.md` |
 | 20 | Hands-off soak period: 30 days; each unplanned intervention adds 7; material changes approved by the owner do not count against it | Planned, starts after 16, 17, 18 and 22 |
 | 21 | Human takeover drill | |
-| 22 | Unattended security updates and reboots for lenora, ruby and jennie | Built 11 Nov 2026, in shadow: updates were already unattended; `homelab-security-reboot` reboots under the conditions above – `apt/CLAUDE.md`, "Security reboots". Shadow on all three since 11 Nov; the OVH key works from ruby and jennie. Next: a week of shadow nights, then each host to live by PR |
+| 22 | Unattended security updates and reboots for lenora, ruby and jennie | Done 12 Nov 2026: updates were already unattended; `homelab-security-reboot` reboots under the conditions above – `apt/CLAUDE.md`, "Security reboots". One shadow night (ruby and jennie would have rebooted for their kernel, lenora needed none), then live on all three |
 
 ## Cost
 

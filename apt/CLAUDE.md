@@ -146,8 +146,11 @@ start-at-boot guests running, no reboot still required. It writes the
 the responder looks.
 
 Each host has a `mode` in the role's vars: **`shadow` records "would reboot"
-and reboots nothing.** All three start there; switching one to `live` is a
-pull request for the owner. Settings, OVH key included, are in
+and reboots nothing.** All three started there and went `live` on
+12 November 2026, after the first shadow night: ruby and jennie each recorded
+"would reboot" for their new kernel and lenora needed none. Switching a host
+back to `shadow`, or anything else about this policy, is a pull request for the
+owner. Settings, OVH key included, are in
 `/etc/homelab/security-reboot.env`, root only. `tests/` covers each condition.
 
 ## Metrics
