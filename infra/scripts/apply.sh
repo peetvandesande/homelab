@@ -10,6 +10,10 @@
 # out of reach of this: pistis (the CA), lenora (the hypervisor), talos and lexie
 # (the runners and the responder), and ruby and jennie. A change to those is printed
 # for a person to apply.
+#
+# Certificates are the exception that proves it: enrol.yml re-issues a reachable
+# host whose names differ from FLEET, through talos's key on pistis, which only
+# allows the names a person approved there with ca.yml.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -31,6 +35,7 @@ matches() { printf '%s\n' "${changed[@]}" | grep -qE "$1"; }
 roles() { printf '^infra/ansible/roles/(%s)/' "$1"; }
 
 need=()
+matches "^ca/scripts/enrol\.sh$|$(roles 'enrol')|^infra/ansible/enrol\.yml" && need+=(enrol)
 matches "^(alloy/root|apt/|fleet/|node-exporter/)|$(roles 'node_exporter|hygiene|apt_security|alloy')|^infra/ansible/fleet\.yml" && need+=(fleet)
 matches "^(prometheus|loki|grafana)/root/|$(roles 'prometheus|loki|grafana')|^infra/ansible/monitoring\.yml" && need+=(monitoring)
 matches "^dns/(pythia|delphi|themis|ansible)/|$(roles 'dns_stack')|^infra/ansible/dns\.yml" && need+=(dns)
@@ -38,7 +43,8 @@ matches "^(jellyfin|navidrome|moby|forgejo)/root/|$(roles 'jellyfin|navidrome|mo
 matches "^metis/root/|$(roles 'metis')" && need+=(metis)
 
 person=$(printf '%s\n' "${changed[@]}" | grep -E \
-  "^(ca|responder|runbooks|offsite|forgejo-runner|talos|outside|estate-report|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|enrol|responder|runbook|offsite|estate_report|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|enrol|offsite|outside|platform|deploy-access)\.yml" || true)
+  "^(ca|responder|runbooks|offsite|forgejo-runner|talos|outside|estate-report|wireguard|router|wan-watchdog|wifi-watchdog|appletv-uk|proxmox|shared|hermes)/|^(forgejo|moby)/ruby/|^alloy/outside/|^(router-metrics|homeassistant|sally)/|$(roles 'step_ca|responder|runbook|offsite|estate_report|forgejo_runner|talos|outside_host|lenora|hermes')|^infra/ansible/(ca|ci|offsite|outside|platform|deploy-access)\.yml" \
+  | grep -vx 'ca/scripts/enrol\.sh' || true)
 if [[ -n $person ]]; then
   echo "== needs a person: these do not reach their hosts through CI"
   printf '%s\n' "$person" | sed 's/^/   /'
@@ -78,6 +84,8 @@ run() {
 }
 for item in "${need[@]}"; do
   case $item in
+    # pistis-mint is talos's forced-command key: the arguments are the request.
+    enrol) run enrol "$LIMIT" enrol.yml --limit "$LIMIT" -e '{"enrol_minter": ["ssh", "pistis-mint"]}' ;;
     fleet) run fleet "$LIMIT" fleet.yml --limit "$LIMIT" ;;
     monitoring) run monitoring prometheus,loki,grafana monitoring.yml ;;
     dns) run dns pythia,delphi,themis dns.yml ;;
