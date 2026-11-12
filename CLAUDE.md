@@ -270,9 +270,10 @@ A three-container PowerDNS stack lives in `dns/` — see `dns/CLAUDE.md` and
   **`ruby.peetvandesande.com`** is overridden to ruby's dummy0 addresses
   192.168.254.254 and `fd33:5692:1834:254::254`, so the LAN reaches ruby's
   nginx admin pages over the tunnel, where they are allowed.
-  **`git.sogode.com`, `n8n.peetvandesande.com` and `n8n.sogode.com`** go the other way: publicly they are
-  ruby, which reverse-proxies them home, and inside they resolve to forgejo
-  and moby directly. See "Public services" below.
+  **`git.sogode.com`, `itsm.sogode.com`, `n8n.peetvandesande.com` and
+  `n8n.sogode.com`** go the other way: publicly they are ruby, which
+  reverse-proxies them home, and inside they resolve to forgejo, glpi and
+  moby directly. See "Public services" below.
 - **When you add a container, add its A and PTR records** to
   `dns/pythia/var/lib/powerdns/zones/`, bump both serials, and run
   `infra/ansible/dns.yml`.
@@ -356,7 +357,7 @@ service for Instance AI, which runs a privileged Docker-in-Docker runner.
 
 ## Public services
 
-Two lab services are reachable from the internet, each by **one name that
+These lab services are published through ruby, each by **one name that
 works from both sides**:
 
 | Name | Origin | Public via ruby |
@@ -364,6 +365,7 @@ works from both sides**:
 | `git.sogode.com` | forgejo (CT 303, `forgejo.home`) | everything but `/metrics`; :22 is forgejo's sshd via a stream proxy |
 | `n8n.peetvandesande.com` | n8n on moby | webhooks, forms and their assets; the editor only from `home-lan-allow.conf` ranges |
 | `n8n.sogode.com` | n8n-sogode on moby, for Sogode business use | the same as `n8n.peetvandesande.com`; also a mail domain on ruby (`moby/CLAUDE.md`, "n8n-sogode") |
+| `itsm.sogode.com` | GLPI on glpi (CT 304, `glpi.home`) | nothing: the UI only from `home-lan-allow.conf` ranges, `status.php` for jennie's prober; also a mail domain on ruby (`glpi/CLAUDE.md`) |
 
 Publicly each name is a CNAME to ruby, whose nginx terminates TLS with a Let's
 Encrypt certificate and proxies over wg1 to the origin, verifying the origin's
@@ -377,11 +379,11 @@ directly and n8n's editor is open to them. The services have to know themselves
 by one URL (Forgejo's `ROOT_URL`, n8n's `WEBHOOK_URL`), which is why it is
 this rather than separate `.home` and public names.
 
-The ruby half lives with each service (`forgejo/ruby/`, `moby/ruby/`) and is
+The ruby half lives with each service (`forgejo/ruby/`, `moby/ruby/`, `glpi/ruby/`) and is
 installed by `infra/ansible/outside.yml`, listed in `outside_host_vhosts`, which
 also issues each site's certificate. Because ruby's public :22 is
 Forgejo's (`forgejo/CLAUDE.md` invariant 8), **ruby itself takes SSH over the
-VPN only**. Neither service has a backup yet.
+VPN only**. Forgejo and GLPI are backed up off-site (`offsite/`); n8n is not.
 
 ## ITSM
 

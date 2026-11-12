@@ -14,6 +14,7 @@ is the mailbox `helpdesk@itsm.sogode.com` on ruby.
 | Version | `glpi_version` and `glpi_sha256` in the role's `vars/main.yml` |
 | Secrets | `homelab-private/glpi/secrets.env`: `ADMIN_PASSWORD`, `MAIL_PASSWORD` |
 | Backups | sally nightly (the whole guest); off-site by `offsite.yml` |
+| Public side | `ruby/`, the vhost on ruby, installed by `outside.yml` |
 
 ```
 /opt/glpi/glpi-<version>/        each release, root-owned; current -> the one in use
@@ -99,6 +100,37 @@ Never as root: files it creates become unwritable to php-fpm.
    checked by `shared/ruby-mail-domain.sh itsm.sogode.com helpdesk@itsm.sogode.com`
    on ruby.
 
+## The public side
+
+`itsm.sogode.com` resolves three ways, like `git.sogode.com`:
+
+| From | Answer | Path |
+|---|---|---|
+| The internet | A/AAAA to ruby | ruby's nginx: **403 for everything**, except home and VPN ranges |
+| The LAN | glpi (Pythia's split-horizon zone, Delphi's forward and NTA) | direct |
+| The VPN | glpi (ruby's and jennie's tunnel BIND, `sogode.com` zone) | over the tunnel |
+
+So the vhost on ruby (`ruby/etc/nginx/sites-available/itsm.sogode.com`) only
+ever serves a client in an allowed range that resolved the public answer. It
+verifies glpi's lab certificate over wg1. Its one other opening is
+`/status.php` for jennie's public addresses, so jennie's prober can prove the
+whole path from outside.
+
+**Public DNS**, at sogode.com's provider – an A/AAAA, not a CNAME, because the
+name also carries the mail domain:
+
+| Name | Type | Value |
+|---|---|---|
+| `itsm` | A | `145.239.73.18` |
+| `itsm` | AAAA | `2001:41d0:305:2100::1:3a0e` |
+| `itsm` | MX | `10 vps-5ca50660.vps.ovh.net.` |
+| `itsm` | TXT | `"v=spf1 mx -all"` |
+| `mail._domainkey.itsm` | TXT | the DKIM key `shared/ruby-mail-domain.sh` prints |
+
+No DMARC record of its own: sogode.com's `p=reject` applies, and SPF and DKIM
+alignment satisfy it. The A/AAAA must exist before `outside.yml` runs for ruby,
+or Let's Encrypt cannot issue the certificate.
+
 ## Monitoring
 
 - `node` and `alloy` jobs as every enrolled host; nginx logs to the journal,
@@ -108,6 +140,9 @@ Never as root: files it creates become unwritable to php-fpm.
   directories, cron and the mail collector, and alerts as `lab-service-unhealthy`
   on any `PROBLEM`.
 - Its certificate is probed with the rest (`lab-tls-failing`, `lab-cert-expiring`).
+- From outside, jennie probes ruby for `status.php` (`check="itsm.sogode.com"`)
+  and asserts the UI answers 403 (`check="itsm-ui-closed"`): a 200 there would
+  mean GLPI is public. Both alert as `outside-probe-failing`.
 
 ## Building it
 
@@ -129,3 +164,5 @@ In order:
    The first apply was refused for exactly that on 12 November 2026. Running
    `ca.yml` from the branch before merging avoids the re-run.
 6. `offsite.yml --limit glpi`, by a person.
+7. The public side: the DNS records above, then `outside.yml` for jennie and
+   ruby, by a person.
