@@ -13,6 +13,18 @@ step_ca_root_fingerprint: >-
 step_ca_ulas: >-
   {{ lookup('ansible.builtin.file', role_path ~ '/../../../../dns/ansible/group_vars/all.yml')
      | regex_findall("data6: '(fd33:[0-9a-f:]+)'") }}
+# Each host's ULA by name, from the same records, for the re-issue list.
+step_ca_ula_by_host: >-
+  {{ dict(lookup('ansible.builtin.file', role_path ~ '/../../../../dns/ansible/group_vars/all.yml')
+     | regex_findall("name: ([a-z0-9-]+), +data: [0-9.]+, +data6: '(fd33:[0-9a-f:]+)'")) }}
+# The hosts talos may re-issue: those its deploy key already reaches as root
+# (deploy-access.yml, apply.sh), so a re-issue gives it nothing it lacks.
+step_ca_reissue_excluded: [pistis, lenora, talos, lexie, hermes]
+# Public names a host may be re-issued with before they reach FLEET. A name is
+# approved here, and pistis learns it when a person runs ca.yml; the runner then
+# re-issues once FLEET carries it.
+step_ca_approved_sans:
+  forgejo: [git.sogode.com]
 step_ca_packages:
   - name: step-ca
     version: 0.30.2-1

@@ -72,6 +72,10 @@ It can only reach the services whose roles are safe to run unattended. `pistis`,
 `lenora`, `talos`, `lexie`, `ruby` and `jennie` are out of its reach, and a change to
 any of them is printed for a person.
 
+A change to `FLEET` runs `enrol.yml`, which re-issues any reachable host whose
+certificate names differ, through talos's restricted key on pistis. pistis allows
+only the names a person approved there with `ca.yml` – `ca/CLAUDE.md`.
+
 `infra/scripts/tofu-apply.sh` does the same for OpenTofu, when a merge changes
 `infra/tofu`. A guest changed by hand is reported as drift, not overwritten. It refuses
 any plan that deletes or replaces something, so a person applies those. Its Proxmox

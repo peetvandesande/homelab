@@ -33,7 +33,8 @@ checks, so a person can run them without the runner.
    repository's workflow use the GitHub key.
 
 3. **The only write access here is the GitHub key, OpenTofu's state and minting
-   tokens for new hosts.** `verify.sh` asserts those two keys are the only ones.
+   tokens for new hosts or re-issuing the reachable ones with approved names.**
+   `verify.sh` asserts those two keys are the only ones.
    The keys never leave this host, and the runner's own secret is made here too,
    so none is in Bitwarden: a rebuild makes new ones. The minting key is forced to
    `homelab-mint-token --restricted` on pistis (`ca/CLAUDE.md`). `/etc/forgejo-runner/tofu.env` holds the state

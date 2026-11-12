@@ -4,15 +4,23 @@
 #   homelab-mint-token <name>.home [san ...]              as root, for a person
 #   homelab-mint-token --restricted                       forced by talos's SSH key
 #
-# With --restricted the arguments come from SSH_ORIGINAL_COMMAND and may only ask
-# for a NEW host: a .home name and lab addresses, none of them in use. So a
-# compromised talos cannot impersonate a host that exists, nor obtain a public
-# name. Re-enrolling an existing host, or any public name, takes a person.
+# With --restricted the arguments come from SSH_ORIGINAL_COMMAND and may ask for
+# one of two things:
+#
+# - a NEW host: a .home name and lab addresses, none of them in use;
+# - a re-issue for a host on /etc/step-ca/mint-reissue, with no name or address
+#   beyond those listed for it there.
+#
+# mint-reissue holds only the hosts talos's deploy key already reaches as root,
+# so a re-issue gives it nothing it could not take anyway. It cannot impersonate
+# pistis, lenora, lexie or hermes, nor obtain a public name no person approved:
+# the list is written by ca.yml, which a person runs.
 #
 # Every request is logged, and the journal ships to Loki.
 set -euo pipefail
 
 PROTECTED=/etc/step-ca/mint-protected
+REISSUE=/etc/step-ca/mint-reissue
 CA_URL=https://192.168.8.55:8443
 LOG_TAG=homelab-mint-token
 
@@ -45,6 +53,24 @@ sys.exit(1)
 PY
 }
 
+# True if the SAN is one of the allowed ones. Addresses are compared parsed, so
+# another spelling of an approved address passes and nothing else does.
+san_allowed() {
+  python3 -I - "$@" <<'PY'
+import ipaddress
+import sys
+
+def parse(value):
+    try:
+        return ipaddress.ip_address(value)
+    except ValueError:
+        return value
+
+wanted = parse(sys.argv[1])
+sys.exit(0 if any(parse(a) == wanted for a in sys.argv[2:]) else 1)
+PY
+}
+
 clean() { printf '%s' "$*" | tr -c 'A-Za-z0-9.:_ -' '_'; }
 refuse() {
   logger -t "$LOG_TAG" "refused restricted=$restricted request=[$(clean "${args[*]:-}")] reason=[$1]"
@@ -56,29 +82,40 @@ refuse() {
 name=${args[0]}
 sans=("${args[@]:1}")
 
+reissue=0
 if ((restricted)); then
   [[ $name =~ ^[a-z0-9-]+\.home$ ]] || refuse "only a .home name may be requested"
   short=${name%.home}
   [[ -r $PROTECTED ]] || refuse "no protected list"
-  grep -qxF "$short" "$PROTECTED" && refuse "$name already exists"
-  for san in "${sans[@]}"; do
-    case $san in
-      "$name" | "$short" | localhost | 127.0.0.1) ;;
-      *)
-        if [[ $san =~ ^192\.168\.8\.[0-9]{1,3}$ || $san =~ ^fd33:5692:1834:1000:[0-9a-f:]+$ ]]; then
-          address_protected "$san" && refuse "$san is in use"
-        else
-          refuse "$san is not a lab address or this host's name"
-        fi
-        ;;
-    esac
-  done
+  if grep -qxF "$short" "$PROTECTED"; then
+    allowed=()
+    read -ra allowed < <(awk -v h="$short" '$1 == h { $1 = ""; print; exit }' "$REISSUE" 2>/dev/null) || true
+    ((${#allowed[@]})) || refuse "$name already exists and may not be re-issued"
+    for san in "${sans[@]}"; do
+      san_allowed "$san" "${allowed[@]}" || refuse "$san is not approved for $name"
+    done
+    reissue=1
+  fi
+  if ! ((reissue)); then
+    for san in "${sans[@]}"; do
+      case $san in
+        "$name" | "$short" | localhost | 127.0.0.1) ;;
+        *)
+          if [[ $san =~ ^192\.168\.8\.[0-9]{1,3}$ || $san =~ ^fd33:5692:1834:1000:[0-9a-f:]+$ ]]; then
+            address_protected "$san" && refuse "$san is in use"
+          else
+            refuse "$san is not a lab address or this host's name"
+          fi
+          ;;
+      esac
+    done
+  fi
 fi
 
 sanargs=()
 for san in "${sans[@]}"; do sanargs+=(--san "$san"); done
 
-logger -t "$LOG_TAG" "minted restricted=$restricted name=[$(clean "$name")] sans=[$(clean "${sans[*]:-}")]"
+logger -t "$LOG_TAG" "minted restricted=$restricted reissue=$reissue name=[$(clean "$name")] sans=[$(clean "${sans[*]:-}")]"
 exec step ca token "$name" "${sanargs[@]}" \
   --provisioner admin --provisioner-password-file /etc/step-ca/secrets/jwk-password \
   --ca-url "$CA_URL" --root /etc/step-ca/certs/root_ca.crt

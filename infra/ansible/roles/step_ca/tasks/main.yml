@@ -211,7 +211,25 @@
     group: root
     mode: "0644"
 
-- name: Let talos mint tokens for new hosts, and nothing else
+# Every name and address each host talos may re-issue is allowed to carry: what
+# FLEET gives it now, plus anything approved ahead of FLEET.
+- name: Write the re-issue list
+  vars:
+    step_ca_reissue_hosts: "{{ groups['fleet'] | difference(step_ca_reissue_excluded) | sort }}"
+  ansible.builtin.copy:
+    content: |
+      {% for h in step_ca_reissue_hosts %}
+      {{ ([h, h ~ '.home', h, hostvars[h].ansible_host, 'localhost', '127.0.0.1']
+          + ([step_ca_ula_by_host[h]] if h in step_ca_ula_by_host else [])
+          + (hostvars[h].extra_sans | default([]))
+          + step_ca_approved_sans.get(h, [])) | join(' ') }}
+      {% endfor %}
+    dest: /etc/step-ca/mint-reissue
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Let talos mint tokens for new hosts and re-issue the listed ones, and nothing else
   ansible.builtin.lineinfile:
     path: /root/.ssh/authorized_keys
     line: >-

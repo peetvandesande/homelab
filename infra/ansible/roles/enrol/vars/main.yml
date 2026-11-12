@@ -5,3 +5,15 @@ enrol_step_version: 0.30.6-1
 enrol_step_url: "https://github.com/smallstep/cli/releases/download/v0.30.6/step-cli_{{ enrol_step_version }}_amd64.deb"
 enrol_step_sha256: 5845c181251ffe43ca2331bc171e0b92324a71be9cf4ef76cd6fbbba4f2a3cc6
 enrol_fqdn: "{{ inventory_hostname }}.home"
+# Exits 0 if host.crt carries exactly the names given as arguments.
+enrol_compare_sans: |
+  import ipaddress, subprocess, sys
+  def norm(value):
+      try:
+          return str(ipaddress.ip_address(value.strip()))
+      except ValueError:
+          return value.strip()
+  out = subprocess.run(["openssl", "x509", "-in", "/etc/homelab-tls/host.crt", "-noout",
+                        "-ext", "subjectAltName"], capture_output=True, text=True, check=True).stdout
+  have = {norm(e.split(":", 1)[1]) for e in out.split("\n", 1)[1].split(",") if ":" in e}
+  sys.exit(0 if have == {norm(v) for v in sys.argv[1:]} else 1)
