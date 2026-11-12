@@ -12,7 +12,14 @@ what belongs where; this repo is public, so it holds names and never values.
   vault.py pull      rebuild the local files from Bitwarden
   vault.py pull --dest DIR    the same, into an empty directory instead
 
-Every command except check needs BWS_ACCESS_TOKEN in the environment. Output
+Every command except check needs BWS_ACCESS_TOKEN in the environment or, on a
+Mac, in the login keychain as `homelab-bws`, stored with no trusted apps so
+macOS asks before every read:
+
+  security add-generic-password -a "$USER" -s homelab-bws -T "" -w
+
+Allow it once each time; never Always Allow, or anything running as you could
+read it unasked. Output
 is names only. `import` passes values to bws as arguments, because that is the
 only way bws accepts them, so run it on a machine nobody else is logged in to.
 """
@@ -125,10 +132,25 @@ class Local:
         return self.env[path][entry.var]
 
 
+KEYCHAIN_ITEM = "homelab-bws"
+
+
+def token_from_keychain():
+    """The access token from the macOS keychain, after macOS has asked; or None."""
+    if sys.platform != "darwin" or not shutil.which("security"):
+        return None
+    result = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_ITEM, "-w"],
+                            capture_output=True, text=True, timeout=300)
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
 class Bws:
     def __init__(self):
         if not os.environ.get("BWS_ACCESS_TOKEN"):
-            die("BWS_ACCESS_TOKEN is not set")
+            token = token_from_keychain()
+            if not token:
+                die(f"BWS_ACCESS_TOKEN is not set, and the keychain has no {KEYCHAIN_ITEM} item")
+            os.environ["BWS_ACCESS_TOKEN"] = token  # for bws, which this runs
         if not shutil.which("bws"):
             die("bws is not on PATH; run infra/scripts/install-bws.sh")
 

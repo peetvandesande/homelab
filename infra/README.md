@@ -285,6 +285,7 @@ create a machine account with access to both projects and copy its access token.
 ```sh
 scripts/install-bws.sh
 export BWS_ACCESS_TOKEN=...          # from a password prompt or clipboard, not typed into history
+                                     # or, on a Mac, once into the keychain – vault.py's docstring
 scripts/vault.py pull                # rebuild every local file, mode 600
 scripts/vault.py verify              # names only; exits non-zero on any difference
 ```
