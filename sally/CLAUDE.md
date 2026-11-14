@@ -5,7 +5,8 @@ the lab; `infra/README.md` holds the decisions, including that it stays out of
 reach of anything automated that could destroy backups.
 
 `scripts/deploy.sh` puts the proxy on the lab CA and `scripts/verify.sh` checks
-it. `scripts/backups.sh` sets up retention, the token and the job. `root/`
+it. `scripts/backups.sh` sets up retention, the token and the storage; the
+nightly jobs belong to the `lenora` role (`infra/ansible/platform.yml`). `root/`
 mirrors the files this repo owns on the host, and `lenora/` those on lenora.
 
 ## How a night goes
@@ -13,7 +14,7 @@ mirrors the files this repo owns on the host, and `lenora/` those on lenora.
 | When | What |
 |---|---|
 | 01:00 UTC | The BIOS powers sally on (Power Management, Auto On Time). Its clock is UTC |
-| 03:30 local | lenora's job `sally-nightly` backs up every guest but the 9xxx lab VMs |
+| 03:30 local | lenora's jobs `sally-infrastructure`, `sally-production` and `sally-non-production` back up their pools, one after another. The lab pools are left out |
 | 04:30, 04:45 | Prune (7 daily, 4 weekly, 6 monthly), then garbage collection |
 | Sun 05:00 | Verify |
 | 2nd Sun 05:05 | Scrub |
@@ -77,5 +78,12 @@ reconnects lenora using that key and makes a new token.
 
 7. **A missed backup is detected on lenora, not here.** sally is off for most
    of the day, so its `sally` Prometheus job is outside the target-down rules.
-   `homelab-backup-hook` publishes each guest's last good backup, and a guest not
-   in `GUESTS` in `backups.sh` reads as never backed up, which alerts.
+   `homelab-backup-hook` publishes each guest's last good backup at the start
+   and end of every job, and a guest below 9000 in none of the three pools reads
+   as never backed up, which alerts. CT 199, the restore test's temporary copy,
+   is left out.
+
+8. **Guests are backed up by pool, not by a list of ids.** A new guest is in a
+   job because `--pool` put it in one, so nothing needs editing when it is made.
+   Until 14 November 2026 the job named its guests, and glpi went two days
+   unprotected because nobody added it.

@@ -18,7 +18,7 @@ groups:
         annotations:
           summary: "{{ $labels.guest }} has not been backed up in over 36h"
           description: >-
-            The nightly job on lenora writes this metric as each guest finishes. Check that sally came on (BIOS schedule), then the sally-nightly task log on lenora. A new guest reads as never backed up until it is added to GUESTS in sally/scripts/backups.sh. NoData means no job has published since node-exporter last had the file.
+            The nightly jobs on lenora, one per pool, write this metric as each guest finishes. Check that sally came on (BIOS schedule), then the sally-* task logs on lenora. A guest in none of the Infrastructure, Production and Non-Production pools is never backed up and reads as such. NoData means no job has published since node-exporter last had the file.
         noDataState: Alerting
         execErrState: Alerting
         isPaused: false

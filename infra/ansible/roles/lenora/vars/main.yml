@@ -14,6 +14,19 @@ lenora_tools:
   - { src: homeassistant/haos/ha-tls.py, dest: /usr/local/share/homelab/ha-tls.py, mode: "0644" }
   - { src: sally/lenora/usr/local/bin/homelab-backup-hook, dest: /usr/local/bin/homelab-backup-hook, mode: "0755" }
   - { src: sally/lenora/usr/local/bin/homelab-backup-restore-test, dest: /usr/local/bin/homelab-backup-restore-test, mode: "0755" }
+# The nightly backups to sally, one job per pool, so a guest is backed up because
+# of the pool it is in and a new one needs no edit here. The lab pools
+# (openstack-lab, uc1-lab) are left out: those VMs are disposable.
+lenora_backup_pools: [Infrastructure, Production, Non-Production]
+lenora_backup_job:
+  schedule: "03:30"
+  storage: sally
+  mode: snapshot
+  enabled: 1
+  script: /usr/local/bin/homelab-backup-hook
+  mailnotification: failure
+# The single job with a fixed list of guests that the pool jobs replaced.
+lenora_backup_retired_jobs: [sally-nightly]
 lenora_units:
   - { src: router-metrics/lenora, name: homelab-router-metrics.service }
   - { src: router-metrics/lenora, name: homelab-router-metrics.timer }

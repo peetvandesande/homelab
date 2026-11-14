@@ -109,6 +109,54 @@
     daemon_reload: true
   loop: "{{ lenora_timers }}"
 
+# The storage, token and encryption key stay with sally/scripts/backups.sh: making
+# them needs sally, which nothing automated may reach. The jobs only need lenora.
+- name: Read the backup jobs
+  ansible.builtin.command: pvesh get /cluster/backup --output-format json
+  register: lenora_backup_jobs_raw
+  changed_when: false
+  check_mode: false
+
+- name: Index the backup jobs by id
+  ansible.builtin.set_fact:
+    lenora_backup_jobs: >-
+      {{ dict(lenora_backup_jobs_raw.stdout | from_json | map(attribute='id')
+              | zip(lenora_backup_jobs_raw.stdout | from_json)) }}
+
+# Up to date means every setting matches and the job selects by pool alone.
+- name: Create or correct a job per pool
+  vars:
+    lenora_job_id: "sally-{{ item | lower }}"
+    lenora_job_want: "{{ lenora_backup_job | combine({'pool': item}) }}"
+    lenora_job_have: >-
+      {{ dict(lenora_job_want.keys() | zip_longest([], fillvalue=''))
+         | combine(lenora_backup_jobs.get(lenora_job_id, {})) }}
+    lenora_job_ok: >-
+      {{ lenora_job_id in lenora_backup_jobs
+         and 'vmid' not in lenora_job_have
+         and (lenora_job_have.get('all', 0) | int) == 0
+         and (lenora_job_want.values() | map('string') | list)
+             == (lenora_job_want.keys() | map('extract', lenora_job_have) | map('string') | list) }}
+    lenora_job_cmd: >-
+      {{ ['pvesh', 'set', '/cluster/backup/' ~ lenora_job_id]
+         if lenora_job_id in lenora_backup_jobs
+         else ['pvesh', 'create', '/cluster/backup', '--id', lenora_job_id] }}
+    lenora_job_args: >-
+      {{ lenora_job_want.keys() | map('regex_replace', '^', '--')
+         | zip(lenora_job_want.values() | map('string')) | flatten }}
+  ansible.builtin.command:
+    argv: "{{ lenora_job_cmd + lenora_job_args + (['--delete', 'vmid'] if 'vmid' in lenora_job_have else []) }}"
+  when: not (lenora_job_ok | bool)
+  changed_when: true
+  loop: "{{ lenora_backup_pools }}"
+
+# Only once the pool jobs exist, so there is never a night with neither.
+- name: Remove the jobs the pool jobs replaced
+  ansible.builtin.command: pvesh delete /cluster/backup/{{ item }}
+  when: item in lenora_backup_jobs
+  changed_when: true
+  loop: "{{ lenora_backup_retired_jobs }}"
+
 # Its authorized_keys line on the router is added by router-metrics/scripts/deploy.sh.
 - name: Generate the key that reads the router, once
   ansible.builtin.command:

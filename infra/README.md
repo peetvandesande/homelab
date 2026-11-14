@@ -250,7 +250,8 @@ or `""`, and `units = 0`, `servers = []` and `mac_addresses`. For a container ad
 `template_file_id` under `operating_system`. Copy the `lifecycle` block from a
 guest of the same kind, including `prevent_destroy`. Run `scripts/tofu.sh plan`
 until it reads "1 to import, 0 to add, 0 to change", apply, and delete `import.tf`.
-Remember `GUESTS` in `sally/scripts/backups.sh`.
+Give it a `pool_id` of Infrastructure, Production or Non-Production: that is what
+puts it in the nightly backups to sally.
 
 ## Host keys
 

@@ -1,6 +1,7 @@
 #!/bin/bash
-# vzdump hook for the nightly backup to sally. Runs on lenora and publishes each
-# guest's last good backup through node-exporter's textfile collector.
+# vzdump hook for the nightly backups to sally, one job per pool. Runs on lenora
+# and publishes each guest's last good backup through node-exporter's textfile
+# collector.
 #
 # The figures come from lenora because sally is powered off most of the day:
 # only something that stays up can say a backup did not happen.
@@ -11,6 +12,10 @@ vmid=${3:-}
 [[ ${STOREID:-} == sally ]] || exit 0
 
 STATE=/var/lib/homelab-backup
+# homelab-backup-restore-test restores into this one and destroys it again. It
+# can exist while a later job starts, and is never backed up.
+RESTORE_TEST_CT=199
+RESTORE_TEST_SOURCE=107
 TEXTFILE=/var/lib/node_exporter/textfile/backup.prom
 
 publish() {
@@ -20,7 +25,7 @@ publish() {
   # with no backup yet, so one added and never scheduled reports a stamp of zero.
   { pct list | awk 'NR>1 {print $1, $NF}'; qm list | awk 'NR>1 {print $1, $2}'; } | sort -n |
     while read -r id name; do
-      ((id < 9000)) || continue
+      ((id < 9000 && id != RESTORE_TEST_CT)) || continue
       stamp=$(cat "$STATE/$id" 2>/dev/null || echo 0)
       echo "homelab_backup_last_success_timestamp_seconds{vmid=\"$id\",guest=\"$name\"} $stamp"
     done > "$tmp"
@@ -38,13 +43,18 @@ case $phase in
     ;;
   backup-end)
     date +%s > "$STATE/$vmid"
+    [[ $vmid == "$RESTORE_TEST_SOURCE" ]] && touch "$STATE/restore-test-due"
     ;;
   job-end)
     publish
-    # The first Sunday of the month, straight after the backups: sally stays on
-    # while a restore is reading from it.
-    if [[ $(date +%u) == 7 && $(date +%-d) -le 7 ]]; then
-      systemd-run --no-block --collect --unit=homelab-backup-restore-test /usr/local/bin/homelab-backup-restore-test
+    # The first Sunday of the month, at the end of the job that backed up the
+    # guest the test restores, so it runs once a night: sally stays on while a
+    # restore is reading from it.
+    if [[ -e $STATE/restore-test-due ]]; then
+      rm -f "$STATE/restore-test-due"
+      if [[ $(date +%u) == 7 && $(date +%-d) -le 7 ]]; then
+        systemd-run --no-block --collect --unit=homelab-backup-restore-test /usr/local/bin/homelab-backup-restore-test
+      fi
     fi
     ;;
 esac

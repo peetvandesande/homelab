@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Backups from lenora to sally: retention and maintenance on sally, a backup-only
-# token, encrypted storage and the nightly job on lenora. Safe to re-run.
+# token and encrypted storage on lenora. Safe to re-run. The nightly jobs, one
+# per pool, belong to the lenora role in infra/ansible/platform.yml.
 #
 # lenora's token can add backups but cannot delete them, so pruning happens on
 # sally. The encryption key is made on lenora and copied to the private cache,
@@ -18,9 +19,6 @@ STORE=hddpool
 AUTH='lenora-backup@pbs'
 TOKEN="$AUTH!nightly"
 KEY_COPY=${HOMELAB_PRIVATE:-$HOME/projects/homelab-private}/pbs/sally-encryption.enc
-# Every guest but the disposable lab VMs. A new guest must be added here;
-# homelab-backup-hook publishes a zero for one that is not, and that alerts.
-GUESTS=100,101,102,103,104,105,106,107,108,109,110,111,300,301,302,303
 
 echo "== sally: retention and maintenance"
 $SSH "root@$SALLY" "store=$STORE auth='$AUTH' token='$TOKEN'"'
@@ -35,7 +33,7 @@ $SSH "root@$SALLY" "store=$STORE auth='$AUTH' token='$TOKEN'"'
 '
 echo "   prune 7/4/6, garbage collection, weekly verify"
 
-echo "== lenora: storage, hook and job"
+echo "== lenora: storage and hook"
 push "$LENORA" lenora
 $SSH "root@$LENORA" 'install -d -m 0755 /var/lib/homelab-backup; chmod +x /usr/local/bin/homelab-backup-hook /usr/local/bin/homelab-backup-restore-test'
 
@@ -79,14 +77,3 @@ else
   echo "   encryption key copied to the private cache; run infra/scripts/vault.py import"
 fi
 
-$SSH "root@$LENORA" "guests=$GUESTS"'
-  set -e
-  args=(--schedule 03:30 --storage sally --vmid "$guests" --mode snapshot --enabled 1
-        --script /usr/local/bin/homelab-backup-hook --mailnotification failure)
-  if pvesh get /cluster/backup/sally-nightly >/dev/null 2>&1; then
-    pvesh set /cluster/backup/sally-nightly "${args[@]}"
-  else
-    pvesh create /cluster/backup --id sally-nightly "${args[@]}"
-  fi
-'
-echo "   nightly job set for 03:30"
