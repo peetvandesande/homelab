@@ -145,7 +145,7 @@
       {{ lenora_job_want.keys() | map('regex_replace', '^', '--')
          | zip(lenora_job_want.values() | map('string')) | flatten }}
   ansible.builtin.command:
-    argv: "{{ lenora_job_cmd + lenora_job_args + (['--delete', 'vmid'] if 'vmid' in lenora_job_have else []) }}"
+    argv: "{{ [lenora_job_cmd, lenora_job_args, ['--delete', 'vmid'] if 'vmid' in lenora_job_have else []] | flatten }}"
   when: not (lenora_job_ok | bool)
   changed_when: true
   loop: "{{ lenora_backup_pools }}"
