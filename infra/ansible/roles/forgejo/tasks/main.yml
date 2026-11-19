@@ -85,6 +85,15 @@
     mode: "0644"
   notify: Restart Forgejo
 
+- name: Make Postgres wait for its LAN address at boot
+  ansible.builtin.copy:
+    src: "{{ forgejo_source }}/etc/systemd/system/postgresql@.service.d/wait-for-address.conf"
+    dest: /etc/systemd/system/postgresql@.service.d/wait-for-address.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
 - name: Install the configuration
   vars:
     SMTP_PASSWD: "{{ forgejo_smtp_passwd }}"  # noqa: var-naming[pattern]

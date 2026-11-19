@@ -89,6 +89,16 @@ ssh root@forgejo.home runuser -u git -- forgejo admin user create \
    the VPN only (`ssh 192.168.254.254`); OVH's KVM console is the way in if
    the tunnels are down.
 
+9. **Postgres waits for its LAN address.** It listens on the LAN as well as
+   loopback, for OpenTofu's state (`conf.d/tofu-state.conf`, built by
+   `infra/scripts/state-db.sh`). Started before `eth0` has its address, it
+   binds loopback only and says nothing: Forgejo keeps working and every
+   OpenTofu run, so every CI run, fails with "connection refused". That
+   happened after the power cut of 19 November 2026. The drop-in
+   `postgresql@.service.d/wait-for-address.conf` waits up to 60 seconds and
+   then starts anyway, so a missing address costs the state database and not
+   Forgejo's. `ss -ltn | grep 5432` should show the LAN address.
+
 ## Mail
 
 Forgejo sends as **`forgejo@peetvandesande.com`**, a mailbox on ruby, through
