@@ -69,7 +69,8 @@ groups:
           description: >-
             Mass encryption looks like this: almost everything new, nothing deduplicated. Check the host's files before anything else; if they are damaged, stop offsite-backup.timer everywhere and follow offsite/CLAUDE.md, "After a deletion". A large legitimate import also fires it once. The first run of a host is excluded.
         noDataState: OK
-        execErrState: Alerting
+        # A failed query is not a measurement: an unreachable Prometheus must alert as that, via its own rules, not under this title.
+        execErrState: OK
         isPaused: false
         data:
           - refId: A
@@ -169,7 +170,8 @@ groups:
           description: >-
             offsite-maintain renews every current file to 90 days whenever under 80 remain, so this means renewal is failing or being refused. journalctl -u offsite-maintain on lexie.
         noDataState: OK
-        execErrState: Alerting
+        # A failed query is not a measurement: an unreachable Prometheus must alert as that, via its own rules, not under this title.
+        execErrState: OK
         isPaused: false
         data:
           - refId: A
@@ -269,7 +271,8 @@ groups:
           description: >-
             Beyond 1 TB Hetzner bills extra storage (offsite/CLAUDE.md, "Pricing"). Locked versions count until their lock expires. Measured weekly by offsite-maintain.
         noDataState: OK
-        execErrState: Alerting
+        # A failed query is not a measurement: an unreachable Prometheus must alert as that, via its own rules, not under this title.
+        execErrState: OK
         isPaused: false
         data:
           - refId: A
