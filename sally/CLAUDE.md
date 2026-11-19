@@ -20,6 +20,11 @@ mirrors the files this repo owns on the host, and `lenora/` those on lenora.
 | 2nd Sun 05:05 | Scrub |
 | After 05:15 | Power-off, once nothing has been busy for 20 minutes |
 
+**sally is meant to be down for most of the day.** An unanswered ping, a failed
+scrape of its `sally` job or a failed reachability check outside that window is
+expected, not an outage. What counts as a fault is a night's backups not running
+(invariant 7) or sally being off between 01:00 and about 05:30 UTC.
+
 Keep it on: log in, or `touch /run/sally-hold`. `scripts/power-schedule.sh off`
 stops the power-off altogether.
 
