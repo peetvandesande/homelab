@@ -936,7 +936,8 @@ resource "proxmox_virtual_environment_vm" "homeassistant" {
   Home Assistant OS. 192.168.8.90 static,
   IPv6 SLAAC (set inside HAOS).
   
-  https://homeassistant.home/\n\nhttps://homeassistant.local/
+  https://homeassistant.home/
+  https://homeassistant.local/
   EOF
   keyboard_layout                      = "en-us"
   machine                              = "q35"
