@@ -3,7 +3,7 @@
 
 resource "proxmox_virtual_environment_container" "themis" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "themis - see homelab/dns\n"
+  description                          = "themis - see homelab/dns\n\nhttps://themis.home:8083/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -80,7 +80,7 @@ resource "proxmox_virtual_environment_container" "themis" {
 
 resource "proxmox_virtual_environment_container" "delphi" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "delphi - see homelab/dns\n"
+  description                          = "delphi - see homelab/dns\n\nhttps://delphi.home:8082/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -162,6 +162,7 @@ resource "proxmox_virtual_environment_container" "delphi" {
 
 resource "proxmox_virtual_environment_container" "navidrome" {
   delete_unreferenced_disks_on_destroy = false
+  description                          = "navidrome - see homelab/navidrome\n\nhttp://navidrome.home:4533/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -253,7 +254,7 @@ resource "proxmox_virtual_environment_vm" "hermes" {
   bios                                 = "seabios"
   boot_order                           = ["scsi0"]
   delete_unreferenced_disks_on_destroy = true
-  description                          = "hermes - mailcow for the Proxmox labs, see homelab/hermes"
+  description                          = "hermes - mailcow for the Proxmox labs, see homelab/hermes\n\nhttps://hermes.home/SOGo/\n\nhttps://hermes.home/"
   keyboard_layout                      = "en-us"
   machine                              = "q35"
   migrate                              = false
@@ -363,6 +364,7 @@ resource "proxmox_virtual_environment_vm" "hermes" {
 
 resource "proxmox_virtual_environment_container" "jellyfin" {
   delete_unreferenced_disks_on_destroy = false
+  description                          = "jellyfin - see homelab/jellyfin\n\nhttp://jellyfin.home:8096/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -451,7 +453,7 @@ resource "proxmox_virtual_environment_container" "jellyfin" {
 
 resource "proxmox_virtual_environment_container" "pistis" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "pistis - smallstep CA, see homelab/ca\n"
+  description                          = "pistis - smallstep CA, see homelab/ca\n\nhttps://pistis.home:8443/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -532,7 +534,7 @@ resource "proxmox_virtual_environment_container" "pistis" {
 
 resource "proxmox_virtual_environment_container" "loki" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "loki - Loki log store, see homelab/loki\n"
+  description                          = "loki - Loki log store, see homelab/loki\n\nhttps://loki.home:3100/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -613,7 +615,7 @@ resource "proxmox_virtual_environment_container" "loki" {
 
 resource "proxmox_virtual_environment_container" "pythia" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "pythia - see homelab/dns\n"
+  description                          = "pythia - see homelab/dns\n\nhttps://pythia.home:8081/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -690,7 +692,7 @@ resource "proxmox_virtual_environment_container" "pythia" {
 
 resource "proxmox_virtual_environment_container" "moby" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "moby - Docker container host, see homelab/moby\n"
+  description                          = "moby - Docker container host, see homelab/moby\n\nhttps://n8n.peetvandesande.com/\n\nhttps://n8n.sogode.com/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -768,7 +770,7 @@ resource "proxmox_virtual_environment_container" "moby" {
 
 resource "proxmox_virtual_environment_container" "forgejo" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "forgejo - Forgejo, see homelab/forgejo\n"
+  description                          = "forgejo - Forgejo, see homelab/forgejo\n\nhttps://git.sogode.com/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -930,7 +932,7 @@ resource "proxmox_virtual_environment_vm" "homeassistant" {
   bios                                 = "ovmf"
   boot_order                           = ["scsi0"]
   delete_unreferenced_disks_on_destroy = true
-  description                          = "Home Assistant OS 18.3. 192.168.1.90 static, IPv6 SLAAC (set inside HAOS)."
+  description                          = "Home Assistant OS 18.3. 192.168.1.90 static, IPv6 SLAAC (set inside HAOS).\n\nhttps://homeassistant.home/"
   keyboard_layout                      = "en-us"
   machine                              = "q35"
   migrate                              = false
@@ -1023,6 +1025,7 @@ resource "proxmox_virtual_environment_vm" "homeassistant" {
 
 resource "proxmox_virtual_environment_container" "grafana" {
   delete_unreferenced_disks_on_destroy = false
+  description                          = "grafana - see homelab/grafana\n\nhttps://grafana.home:3000/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -1098,7 +1101,7 @@ resource "proxmox_virtual_environment_vm" "metis" {
   bios                                 = "seabios"
   boot_order                           = ["scsi0"]
   delete_unreferenced_disks_on_destroy = true
-  description                          = "metis - Ollama on the Quadro P2200 for the job search pipelines, see homelab/metis"
+  description                          = "metis - Ollama on the Quadro P2200 for the job search pipelines, see homelab/metis\n\nhttp://ollama.home:11434/"
   keyboard_layout                      = "en-us"
   machine                              = "q35"
   migrate                              = false
@@ -1301,6 +1304,7 @@ resource "proxmox_virtual_environment_container" "lexie" {
 
 resource "proxmox_virtual_environment_container" "prometheus" {
   delete_unreferenced_disks_on_destroy = false
+  description                          = "prometheus - see homelab/prometheus\n\nhttps://prometheus.home:9090/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"
@@ -1386,7 +1390,7 @@ resource "proxmox_virtual_environment_container" "prometheus" {
 # apply-on-merge can reach the host from its first boot.
 resource "proxmox_virtual_environment_container" "glpi" {
   delete_unreferenced_disks_on_destroy = false
-  description                          = "glpi - GLPI, see homelab/glpi\n"
+  description                          = "glpi - GLPI, see homelab/glpi\n\nhttps://itsm.sogode.com/\n"
   environment_variables                = {}
   migrate                              = false
   node_name                            = "lenora"

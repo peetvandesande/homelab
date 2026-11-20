@@ -233,6 +233,9 @@ scripts/tofu.sh plan
 The token can only read until task 13, so nothing here can change a guest yet.
 Every push runs the plan on `talos` and fails if a guest differs from `guests.tf`.
 
+Each guest's `description` (the Proxmox notes) names the guest and carries the URL of
+every web page it serves, admin pages included – add one when a service gains a UI.
+
 To bring in a new guest, read-only, with `<type>` being `container` or `vm`:
 
 ```sh
