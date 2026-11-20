@@ -932,7 +932,12 @@ resource "proxmox_virtual_environment_vm" "homeassistant" {
   bios                                 = "ovmf"
   boot_order                           = ["scsi0"]
   delete_unreferenced_disks_on_destroy = true
-  description                          = "Home Assistant OS 18.3. 192.168.1.90 static, IPv6 SLAAC (set inside HAOS).\n\nhttps://homeassistant.home/"
+  description                          = <<-EOF
+  Home Assistant OS. 192.168.8.90 static,
+  IPv6 SLAAC (set inside HAOS).
+  
+  https://homeassistant.home/\n\nhttps://homeassistant.local/
+  EOF
   keyboard_layout                      = "en-us"
   machine                              = "q35"
   migrate                              = false
