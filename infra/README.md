@@ -61,6 +61,91 @@ that is up to date with `main`. No approval is required, so automation can merge
 own work. A change that exposes a service or touches an outward-facing path still
 waits for a person, even when the checks pass.
 
+## Landing a change
+
+Every change, to a guest or anything else, follows these steps. Push to Forgejo
+(`origin`), never to GitHub.
+
+```sh
+cd ~/projects/homelab
+git status                      # must be clean, on main
+git switch main
+git pull origin main
+git switch -c short-branch-name
+```
+
+Make the change, then check it locally and commit:
+
+```sh
+infra/scripts/ci-checks.sh      # the same checks CI runs
+git add -A
+git status                      # read what is staged; no secrets, no stray files
+git commit -m "area: what changed and why"
+git push -u origin short-branch-name
+```
+
+Then, in the Forgejo web UI at `https://git.sogode.com/peet/homelab`:
+
+1. Open **Pull requests**, then **New pull request**, with `main` as the base and your
+   branch as the compare. Forgejo also offers a link right after the push.
+2. Give it a title and a short description: what changed and what the runner will do
+   on merge.
+3. Wait for `checks / checks (push)` to pass. If the branch is behind `main`, use
+   **Update branch** and wait for the checks again.
+4. Merge with **Rebase and merge**, and tick **Delete branch after merge**. If the
+   change exposes a service or touches an outward-facing path, wait for the owner.
+
+Or do the same from the terminal, through Forgejo's API. Create an access token in
+Forgejo (Settings, Applications) with the `write:repository` scope, and put it in
+`FORGEJO_TOKEN` without typing it into shell history – from a password prompt, for
+example. The helper sends it in a curl config on stdin, so it never appears in a
+process list. Run from the repo root, where the CA certificate path resolves:
+
+```sh
+read -rs FORGEJO_TOKEN && export FORGEJO_TOKEN     # paste the token, press Enter
+API=https://git.sogode.com/api/v1/repos/peet/homelab
+fj() {
+  curl -sS --fail-with-body --cacert ca/rootca/certs/root.crt -K - "$@" <<EOF
+header = "Authorization: token $FORGEJO_TOKEN"
+EOF
+}
+
+# open the PR from the branch you pushed
+BRANCH=$(git branch --show-current)
+PR=$(fj -X POST "$API/pulls" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg h "$BRANCH" --arg t "$(git log -1 --format=%s)" \
+        '{head:$h, base:"main", title:$t, body:"What changed, and what the runner does on merge."}')" \
+  | jq -r .number)
+echo "PR #$PR"
+
+# wait for the checks: prints pending, then success or failure
+until [ "$(fj "$API/commits/$(git rev-parse HEAD)/status" | jq -r .state)" != pending ]; do sleep 10; done
+fj "$API/commits/$(git rev-parse HEAD)/status" | jq -r .state
+
+# only if the branch is behind main: rebase it, push nothing, then wait for the checks again
+fj -X POST "$API/pulls/$PR/update?style=rebase"
+
+# merge, and delete the branch afterwards (skip this for a change that waits for the owner)
+fj -X POST "$API/pulls/$PR/merge" -H 'Content-Type: application/json' \
+  -d '{"Do":"rebase","delete_branch_after_merge":true}'
+```
+
+The merge is refused until the checks have passed and the branch is up to date with
+`main`, so a failed or stale run stops it rather than landing.
+
+Back in the terminal:
+
+```sh
+git switch main
+git pull origin main
+git branch -d short-branch-name
+```
+
+Then confirm the runner applied it: `Actions` in Forgejo shows the apply run, and the
+host itself shows the result. `infra/scripts/apply.sh --plan <old> <new>` says what a
+merge would run. A change to a host out of the runner's reach is printed in the run
+for a person, who runs the named playbook from the checkout, after `git pull`.
+
 ## Apply on merge
 
 After the checks and the GitHub publish, `infra/scripts/apply.sh` runs the playbooks
@@ -255,6 +340,69 @@ guest of the same kind, including `prevent_destroy`. Run `scripts/tofu.sh plan`
 until it reads "1 to import, 0 to add, 0 to change", apply, and delete `import.tf`.
 Give it a `pool_id` of Infrastructure, Production or Non-Production: that is what
 puts it in the nightly backups to sally.
+
+## Adding or changing a VM or container
+
+Everything lands by pull request. OpenTofu makes the guest, Ansible configures it,
+and the runners apply both on merge – nothing is created or edited by hand in
+Proxmox. Read the "Container defaults" and "Pools, IDs and addresses" sections of
+the top-level `CLAUDE.md` first: they hold the conventions this relies on.
+
+### Adding a guest
+
+1. **Reserve the address.** On the router, add a DHCP reservation keyed by MAC,
+   below .100 and within the pool's range, before the guest first starts. A person
+   does this. Choose the MAC now and set it in `guests.tf`, so the reservation and
+   the guest's SLAAC address are known in advance.
+2. **Describe it in `tofu/guests.tf`.** Copy the `glpi` container (the first guest
+   born in OpenTofu) or, for a VM, a `proxmox_virtual_environment_vm` of similar
+   shape. Set `vm_id` and `pool_id` from the pool table, `datastore_id = "ssdpool"`,
+   `ip_config` to `dhcp`, the fixed `mac_address`, and keep `prevent_destroy`. The
+   `pool_id` is also what puts it in the nightly backup to sally. Include talos's
+   restricted deploy key in `user_account.keys`, so apply-on-merge can reach it from
+   its first boot.
+3. **Add its records.** A and PTR records in `dns/pythia/var/lib/powerdns/zones/`,
+   with both serials bumped; `apply.sh` runs `dns.yml` on merge.
+4. **Add it to `FLEET`** in `ca/scripts/enrol.sh`. A change to `FLEET` runs
+   `enrol.yml` on merge. If the line carries a public name, a person runs `ca.yml`
+   first, as above.
+5. **Pin its host key** in `ansible/known_hosts`, read through Proxmox as under
+   "Host keys" below.
+6. **Give it a role.** Add `infra/ansible/roles/<name>/`, sourcing files from
+   `<service>/root/`, and list the host in the playbook that matches its trust
+   boundary (`apps.yml`, `monitoring.yml`, `dns.yml`, and so on). Check that
+   `scripts/apply.sh` runs that playbook for the role's sources; if the host is one
+   of those out of its reach, name the person-run playbook in the PR instead.
+7. **Monitor it** in the same change: a `node` and an `alloy` target in
+   `prometheus/root/etc/prometheus/prometheus.yml`, plus any service job and alert.
+8. **Document it** in the service's `CLAUDE.md`, and add a task row or a line under
+   "Where it stands" here if it is part of the programme.
+
+Land it as under "Landing a change". Once the PR is merged,
+`tofu-apply.sh` creates the guest and `apply.sh` configures it. If the guest exposes
+a service or touches an outward-facing path, the PR waits for a person.
+
+### Changing a guest
+
+- **Its Proxmox settings** (cores, memory, disk size, NIC, pool, onboot): edit its
+  block in `guests.tf`. Run `scripts/tofu.sh plan` first and expect only the change
+  you meant. A merge applies it through `tofu-apply.sh`.
+- **A destroy or replace** is refused by `tofu-apply.sh`, so a person runs
+  `scripts/tofu.sh apply` for it. Check the plan names what you expect, and that a
+  backup of the guest has succeeded first. `prevent_destroy` stays on, and is
+  lifted only for that run.
+- **Drift:** a guest changed by hand is reported, not overwritten. Either put the
+  change in `guests.tf` or revert it in Proxmox.
+- **What is on it:** edit the role or the files under `<service>/root/`. Run
+  `ansible-playbook <playbook>.yml --limit <host> --check --diff` to see the effect;
+  the merge applies it.
+- **After a rebuild,** the host key changes: replace its line in
+  `ansible/known_hosts`. Keep the MAC, or the router reservation, the certificate
+  addresses and any by-MAC DNS exemption stop matching.
+
+### Bringing in a guest that already exists
+
+Use the import steps above, then follow steps 3 to 8 for whatever it lacks.
 
 ## Host keys
 
