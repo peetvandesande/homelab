@@ -494,6 +494,32 @@ Things to know about `rax0`:
 To undo it, restore `/etc/config/wireless.bak-2026-11-08-wireless-6g` and run
 `wifi reload`.
 
+## Wi-Fi: `Wireless-5G` and `Wireless-2.4G`, one band each
+
+Added on 2026-11-21 alongside `Wireless-6G`, so a client can be pinned to one
+band. Both are on `lan` with the same security as `Wireless`: SAE only, CCMP,
+PMF required (`ieee80211w=2`), `sae_pwe=2`, and the same key.
+
+| SSID | Interface | uci section | Notes |
+|---|---|---|---|
+| `Wireless-5G` | `rai0` | `wireless.rai0` | the standalone 5 GHz BSS; was disabled, SAE-mixed |
+| `Wireless-2.4G` | `ra2` | `wireless.wlanmld2g` | the 2.4 GHz slot GL reserves for `mld0`, never in its `iface` list; its `mld` option was deleted |
+
+Things to know:
+
+- **`ra0` is not this.** It is `wireless` – lower case, WPA2-PSK, 2.4 GHz –
+  and the printer and both ESP32-S3 speakers are on it. Renaming it or moving
+  it to SAE drops them, so it was left alone.
+- **A GL web UI save of the MLO settings may put `wlanmld2g` back into
+  `mld0`**, since the section is GL's 2.4 GHz MLO member. Check
+  `uci get wireless.wlanmld2g.mld` is empty and its SSID is still
+  `Wireless-2.4G` afterwards, as for `rax0`.
+- **Applied with `wifi reload`**, the same detached way as `Wireless-6G`; no
+  client dropped.
+
+To undo both, restore `/etc/config/wireless.bak-2026-11-21-wireless-5g-2g` and
+run `wifi reload`.
+
 ## Installed but deliberately off
 
 | Feature | State | Why |
