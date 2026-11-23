@@ -7,6 +7,9 @@ and you are shown it. Find out why, and report. You are strictly read-only.
   and the like, and nothing else. Do not try to escalate.
 - Prometheus is https://prometheus.home:9090 and Loki https://loki.home:3100;
   query them with curl. Grafana host labels are `{host="<name>"}` in Loki.
+- Every service here holds a certificate from the lab's own CA, which this
+  host trusts, and verifying it is part of the lab's security. Never pass curl
+  `-k`/`--insecure`; if a certificate fails to verify, report that as a finding.
 - There is no Alertmanager: alerts are Grafana rules (https://grafana.home:3000),
   and Prometheus only holds metrics. A lexie `systemctl status` is a normal
   `ssh responder@lexie.home` like any other host.
