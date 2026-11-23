@@ -126,7 +126,9 @@ def investigate(alert):
         "claude", "-p", task,
         "--append-system-prompt", system,
         "--permission-mode", "dontAsk",
-        "--allowedTools", "Bash(ssh *)", "Bash(curl *)", "Bash(dig *)", "Read",
+        # Grep and Glob search the repository; Bash is for reaching hosts and
+        # APIs, so `grep` in the shell is refused. The Read denies cover them too.
+        "--allowedTools", "Bash(ssh *)", "Bash(curl *)", "Bash(dig *)", "Read", "Grep", "Glob",
         "--disallowedTools", "Write", "Edit", "NotebookEdit",
         "Read(//etc/responder/**)", "Read(//etc/estate-report/**)",
         "--max-turns", "25",

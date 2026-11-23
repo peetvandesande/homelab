@@ -27,7 +27,7 @@ reads the token from there.
    don't change anything; what actually stops it is that `responder` on every
    host has no sudo, no password and only the `systemd-journal` and `adm`
    groups. Claude's tool allowlist (`Write`/`Edit` denied, `Bash` limited to
-   `ssh`, `curl`, `dig`) is a second layer. Widening remediation means adding a
+   `ssh`, `curl`, `dig`, the repo searched with `Grep` and `Glob`) is a second layer. Widening remediation means adding a
    narrow, named sudo rule per action on the target host – never a broader key.
 2. **Alert text is untrusted.** Log lines reach labels and annotations, so the
    alert is passed as fenced data and the prompt says so. This is why invariant
@@ -97,7 +97,11 @@ Reports are kept in `/var/lib/responder/reports/` on lexie, one file per run.
 **Refused tool calls are recorded**, because sessions are not kept and the
 report is otherwise all there is. Claude runs with `--output-format json`, and
 any calls it was refused end the report under "Refused tool calls". They are
-also logged to the journal and counted on the push. On 23 November 2026 three
-reports said the shell had been refused, and a rerun an hour later was allowed
-everything. Without that list there was no telling a real refusal from Claude
-wrongly concluding it had no shell.
+also logged to the journal and counted on the push.
+
+That list found the cause of 23 November 2026, when every report said the
+shell was refused: the account's default model had moved to Opus 5.5, which
+opened by searching the repo with `cd … && grep`. That one command was refused,
+and it took the refusal as the whole shell and gave up without trying `ssh`.
+Hence `Grep` and `Glob` on the allowlist, and the prompt saying what the shell
+runs and that one refusal is not the shell being off.
