@@ -132,14 +132,39 @@ def investigate(alert):
         "--max-turns", "25",
         "--max-budget-usd", "1",
         "--no-session-persistence",
+        "--output-format", "json",
     ]
     # Its own token and the webhook stay out of Claude's environment.
     env = {k: v for k, v in os.environ.items() if not k.startswith("RESPONDER_")}
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT,
                        cwd=f"{HOME}/work", stdin=subprocess.DEVNULL, env=env)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude exited {r.returncode}: {r.stderr.strip()[-500:]}")
-    return r.stdout.strip()
+    return parse_result(r.returncode, r.stdout, r.stderr)
+
+
+def parse_result(code, stdout, stderr):
+    """(report, refused tool calls) from `claude -p --output-format json`.
+
+    Sessions are not kept, so the refusals are the only record of what Claude
+    was stopped from doing – the difference between "no shell" and "concluded
+    it had no shell". A failed run raises, naming them."""
+    try:
+        d = json.loads(stdout)
+    except ValueError:
+        raise RuntimeError(f"claude exited {code}: {(stderr or stdout).strip()[-500:]}")
+    denied = [describe(x) for x in d.get("permission_denials") or []]
+    if code != 0 or d.get("is_error") or "result" not in d:
+        why = f"claude failed ({d.get('subtype') or f'exit {code}'})"
+        raise RuntimeError(why + "".join(f"; refused {x}" for x in denied[:3]))
+    return d["result"].strip(), denied
+
+
+def describe(denial):
+    """One refused tool call as `Tool: input`, short enough for a log line."""
+    tool = denial.get("tool_name", "?")
+    given = denial.get("tool_input") or {}
+    arg = given.get("command") or given.get("file_path") or json.dumps(given)
+    arg = " ".join(str(arg).split())
+    return f"{tool}: {arg[:150]}"
 
 
 def split_verdict(report):
@@ -177,15 +202,22 @@ def worker():
             name = f"{name}: {labels['key']}"[:90]
         try:
             refresh_checkout()
-            report = investigate(alert)
+            report, denied = investigate(alert)
             verdict, text = split_verdict(report)
             os.makedirs(REPORTS, exist_ok=True)
             safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", name)[:80]   # label text is untrusted
             base = f"{time.strftime('%Y%m%dT%H%M%S')}-{safe}-{verdict}.md"
             with open(f"{REPORTS}/{base}", "w") as f:
                 f.write(report + "\n")
+                if denied:
+                    f.write("\n## Refused tool calls\n\n"
+                            + "".join(f"- `{x}`\n" for x in denied))
             log(f"investigated {name!r} ({verdict}) -> {REPORTS}/{base}")
+            for x in denied:
+                log(f"refused while investigating {name!r}: {x}")
             text = DIFF.sub("", text).strip()
+            if denied:
+                text += f"\n{len(denied)} tool call(s) refused; listed in the report."
             if verdict == "action-needed":
                 try:
                     if propose(name, base, report):

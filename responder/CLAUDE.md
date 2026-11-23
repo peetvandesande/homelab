@@ -93,3 +93,11 @@ reads the token from there.
    public GitHub mirror in `/var/lib/responder/repo`, refreshed before each run.
 
 Reports are kept in `/var/lib/responder/reports/` on lexie, one file per run.
+
+**Refused tool calls are recorded**, because sessions are not kept and the
+report is otherwise all there is. Claude runs with `--output-format json`, and
+any calls it was refused end the report under "Refused tool calls". They are
+also logged to the journal and counted on the push. On 23 November 2026 three
+reports said the shell had been refused, and a rerun an hour later was allowed
+everything. Without that list there was no telling a real refusal from Claude
+wrongly concluding it had no shell.
