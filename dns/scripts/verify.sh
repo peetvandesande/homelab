@@ -153,6 +153,7 @@ check_vpn_name() {
 }
 check_vpn_name bbc.co.uk
 check_vpn_name www.itv.com
+check_vpn_name www.channel4.com
 # Shunted names bypass Delphi entirely, which is what keeps the ads feed from
 # blocking a telemetry name the routing policy itself lists.
 check_eq "bbc-reporting-api.app is not filtered" "NOERROR" "$(status bbc-reporting-api.app A)"
