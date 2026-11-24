@@ -161,7 +161,7 @@ So nothing needs translating, and an ISP renumbering doesn't affect the VPN. One
 
 **On home:** wg3's peer allows `0.0.0.0/0, ::/0`, and that's intentional. The router's GL route policy decides what goes into wg3, not the WireGuard config. The main routing table only holds routes to jennie's own addresses (`172.31.1.9`, `192.168.254.2`, `fd33:5692:1834:ff03::1`, `fd33:5692:1834:254::2`). Table 1002 has a default route via wg3, but only traffic the policy marks (`0x2000`) uses it, so home traffic isn't sent to jennie by default.
 
-Today the policy is the `UK` rule (tunnel 6611). Its targets are in `/etc/domain_mac_list/dst_net6611_manual`: 28 BBC domains, resolved by the router's dnsmasq, plus jennie's `192.168.254.2` and `fd33:5692:1834:254::2`. **Domain-based policy only sees DNS that goes through the router.** A device using its own DNS (browser DNS-over-HTTPS, iCloud Private Relay, a hard-coded resolver) gets BBC addresses dnsmasq never sees, so that traffic isn't marked and leaves via the ISP. If BBC checks fail on one device, check its DNS first.
+Today the policy is the `UK` rule (tunnel 6611). Its targets are in `/etc/domain_mac_list/dst_net6611_manual`: the BBC's and ITV's domains, resolved by the router's dnsmasq, plus jennie's `192.168.254.2` and `fd33:5692:1834:254::2`. **Domain-based policy only sees DNS that goes through the router.** A device using its own DNS (browser DNS-over-HTTPS, iCloud Private Relay, a hard-coded resolver) gets BBC or ITV addresses dnsmasq never sees, so that traffic isn't marked and leaves via the ISP. If BBC or ITV checks fail on one device, check its DNS first.
 
 ***
 

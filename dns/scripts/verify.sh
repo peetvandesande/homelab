@@ -122,13 +122,18 @@ echo "== VPN policy domains: resolved by the router, not Delphi"
 # The set name comes from the router, which owns the policy - there is no
 # committed copy to read since the sync took over.
 vpn_set=$($RSSH 'awk -F/ "{print \$3}" /var/run/dnsmasq/via_domain | cut -d, -f1 | sort -u' 2>/dev/null | head -1)
-vpn_ips=$($DIG bbc.co.uk A +short | grep -E '^[0-9.]+$')
-if [[ -z "$vpn_ips" ]]; then
-  bad "bbc.co.uk resolves through Themis" "empty"
-elif [[ -z "$vpn_set" ]]; then
-  bad "vpn-domains.conf names an ipset" "no set found - was it generated?"
-else
-  miss=0
+# One name per service in the UK policy, so a service dropped from it shows
+# here rather than as a programme that will not play.
+check_vpn_name() {
+  local name=$1 vpn_ips miss=0 ip _ tf tbl set
+  vpn_ips=$($DIG "$name" A +short | grep -E '^[0-9.]+$')
+  if [[ -z "$vpn_ips" ]]; then
+    bad "$name resolves through Themis" "empty"
+    return
+  elif [[ -z "$vpn_set" ]]; then
+    bad "vpn-domains.conf names an ipset" "no set found - was it generated?"
+    return
+  fi
   for ip in $vpn_ips; do
     # Since firmware 4.11 (fw4) the set is an nft set, named in via_domain as
     # <family>#<table-family>#<table>#<set>; the legacy form is a bare ipset.
@@ -140,12 +145,14 @@ else
     fi
   done
   if (( miss )); then
-    bad "every address returned for bbc.co.uk is in $vpn_set" \
+    bad "every address returned for $name is in $vpn_set" \
         "$miss of $(echo "$vpn_ips" | wc -w | tr -d ' ') missing - the shunt is not reaching the tunnel's dnsmasq"
   else
-    pass "every address returned for bbc.co.uk is in $vpn_set (policy routing will fire)"
+    pass "every address returned for $name is in $vpn_set (policy routing will fire)"
   fi
-fi
+}
+check_vpn_name bbc.co.uk
+check_vpn_name www.itv.com
 # Shunted names bypass Delphi entirely, which is what keeps the ads feed from
 # blocking a telemetry name the routing policy itself lists.
 check_eq "bbc-reporting-api.app is not filtered" "NOERROR" "$(status bbc-reporting-api.app A)"
