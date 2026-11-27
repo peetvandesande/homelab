@@ -105,6 +105,7 @@ echo "   default set - applies to every client"
 check_feed malware "NXDOMAIN" "blocks its canary"
 check_feed ads     "NXDOMAIN" "blocks its canary"
 check_feed doh     "NXDOMAIN" "blocks its canary"
+check_eq "allowlist un-blocks plausible.io (ads feed lists it)" "NOERROR" "$(status plausible.io A)"
 
 echo "   kids set - must NOT apply to this workstation"
 echo "   (if this host is in client-policies.conf these will read NXDOMAIN)"
